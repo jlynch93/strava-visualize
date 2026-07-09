@@ -5,7 +5,8 @@
   "description": "A local web dashboard for visualizing Strava running trends over time.",
   "scripts": {
     "start": "node server.js",
-    "deploy": "wrangler pages deploy public --project-name strava-visualize"
+    "deploy": "wrangler deploy",
+    "deploy:pages": "wrangler pages deploy public --project-name strava-visualize"
   },
   "engines": {
     "node": ">=18"

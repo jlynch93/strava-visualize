@@ -999,7 +999,7 @@ async function fetchActivities() {
   if (start) params.set("after", Math.floor(start.getTime() / 1000));
   if (end) params.set("before", Math.floor(end.getTime() / 1000));
   const response = await fetch(`/api/activities?${params}`);
-  const data = await response.json();
+  const data = await readApiJson(response);
   if (!response.ok) throw new Error(data.error || "Unable to fetch Strava activities.");
   state.rawActivities = data.activities;
   syncRangeInputs();
@@ -1007,9 +1007,29 @@ async function fetchActivities() {
   render();
 }
 
+async function readApiJson(response) {
+  const text = await response.text();
+  if (text) {
+    try {
+      return JSON.parse(text);
+    } catch {
+      return { error: text };
+    }
+  }
+  if (response.status === 404) {
+    return { error: "Cloudflare API routes are not deployed. Redeploy as a Worker with assets, then add Strava secrets." };
+  }
+  return { error: `Request failed with HTTP ${response.status}.` };
+}
+
 async function checkStatus() {
   const response = await fetch("/api/status");
-  const data = await response.json();
+  const data = await readApiJson(response);
+  if (!response.ok) {
+    els.connectButton.disabled = true;
+    setStatus(data.error || "Unable to reach the Strava API route.", true);
+    return;
+  }
   if (!data.configured) {
     els.connectButton.disabled = true;
     els.connectButton.title = "Add Strava API credentials to .env and restart the server.";

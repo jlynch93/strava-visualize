@@ -12,20 +12,26 @@ npm start
 
 Open `http://localhost:4173`.
 
-## Cloudflare Pages
+## Cloudflare Workers
 
-The static app lives in `public/`. Strava API routes are implemented as Cloudflare Pages Functions in `functions/`.
+The app deploys as a Cloudflare Worker with static assets. Static files live in `public/`; Strava API routes are handled by `src/worker.js`.
 
-Set these Cloudflare Pages environment variables:
+Set these Worker secrets or environment variables:
 
 ```text
 STRAVA_CLIENT_ID
 STRAVA_CLIENT_SECRET
-STRAVA_REDIRECT_URI=https://your-pages-domain.pages.dev/auth/callback
+STRAVA_REDIRECT_URI=https://your-domain.example/auth/callback
 ```
 
 Then deploy:
 
 ```powershell
-npx wrangler pages deploy public --project-name strava-visualize
+npx wrangler deploy
 ```
+
+If `/api/status` returns `404`, Cloudflare is only serving static assets. Redeploy from this repo with `wrangler deploy` so `src/worker.js` is included.
+
+## Cloudflare Pages
+
+The repo also includes Pages Functions in `functions/` if you prefer a Pages project through Git integration. Use `public` as the output directory and leave the build command blank.
