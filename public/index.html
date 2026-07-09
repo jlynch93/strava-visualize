@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Strava Run Trends</title>
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <main class="app">
+      <section class="topbar" aria-label="Controls">
+        <div>
+          <p class="eyebrow">Strava Run Trends</p>
+          <h1>Training signal over time</h1>
+        </div>
+        <div class="actions">
+          <button id="connectButton" class="primary">Connect Strava</button>
+          <label class="file-button">
+            Import JSON/CSV
+            <input id="fileInput" type="file" accept=".json,.csv,text/csv,application/json">
+          </label>
+          <button id="demoButton">Demo data</button>
+        </div>
+      </section>
+
+      <section class="toolbar" aria-label="Time and metric filters">
+        <div class="control">
+          <label for="rangeSelect">Range</label>
+          <select id="rangeSelect">
+            <option value="90">Last 90 days</option>
+            <option value="180">Last 6 months</option>
+            <option value="365" selected>Last year</option>
+            <option value="730">Last 2 years</option>
+            <option value="all">All time</option>
+            <option value="custom">Custom</option>
+          </select>
+        </div>
+        <div class="control">
+          <label for="startDate">Start</label>
+          <input id="startDate" type="date">
+        </div>
+        <div class="control">
+          <label for="endDate">End</label>
+          <input id="endDate" type="date">
+        </div>
+        <div class="control">
+          <label for="bucketSelect">Group by</label>
+          <select id="bucketSelect">
+            <option value="week" selected>Week</option>
+            <option value="month">Month</option>
+          </select>
+        </div>
+        <div class="control">
+          <label for="metricSelect">Main chart</label>
+          <select id="metricSelect">
+            <option value="distance" selected>Mileage</option>
+            <option value="runs">Run count</option>
+            <option value="avgRun">Average run</option>
+            <option value="longRun">Long run</option>
+            <option value="pace">Pace</option>
+            <option value="elevation">Elevation</option>
+            <option value="elevationDensity">Elevation density</option>
+            <option value="heartrate">Heart rate</option>
+            <option value="load">Training load</option>
+            <option value="loadPerMile">Load per mile</option>
+            <option value="efficiency">Aerobic efficiency</option>
+          </select>
+        </div>
+      </section>
+
+      <section id="status" class="status" role="status"></section>
+
+      <section class="kpis" aria-label="Runner trend summary">
+        <article>
+          <span>Total distance</span>
+          <strong id="totalDistance">-</strong>
+          <small id="totalDistanceDelta"></small>
+        </article>
+        <article>
+          <span>Average pace</span>
+          <strong id="averagePace">-</strong>
+          <small id="averagePaceDelta"></small>
+        </article>
+        <article>
+          <span>Long run</span>
+          <strong id="longRun">-</strong>
+          <small id="longRunDelta"></small>
+        </article>
+        <article>
+          <span>Consistency</span>
+          <strong id="consistency">-</strong>
+          <small id="consistencyDelta"></small>
+        </article>
+        <article>
+          <span>Avg HR</span>
+          <strong id="averageHr">-</strong>
+          <small id="averageHrDelta"></small>
+        </article>
+      </section>
+
+      <section class="runner-intel" aria-label="Runner intelligence">
+        <div class="panel-heading">
+          <h2>Runner intelligence</h2>
+          <span id="intelSubtitle">Training signals for the selected window</span>
+        </div>
+        <div id="intelGrid" class="intel-grid"></div>
+      </section>
+
+      <section class="dashboard">
+        <div class="chart-panel wide">
+          <div class="panel-heading">
+            <h2 id="mainChartTitle">Mileage trend</h2>
+            <span id="mainChartSubtitle"></span>
+          </div>
+          <div id="mainChart" class="chart"></div>
+        </div>
+        <div class="chart-panel">
+          <div class="panel-heading">
+            <h2>Volume vs pace</h2>
+            <span>Bubble size is run count</span>
+          </div>
+          <div id="scatterChart" class="chart"></div>
+        </div>
+        <div class="chart-panel">
+          <div class="panel-heading">
+            <h2>Week structure</h2>
+            <span>Runs, long run share, elevation</span>
+          </div>
+          <div id="structureChart" class="chart"></div>
+        </div>
+        <div class="chart-panel wide">
+          <div class="panel-heading">
+            <h2>Training calendar</h2>
+            <span id="heatmapSubtitle">Daily miles by week</span>
+          </div>
+          <div id="heatmapChart" class="chart compact-chart"></div>
+        </div>
+        <div class="chart-panel wide">
+          <div class="panel-heading">
+            <h2>Rolling workload</h2>
+            <span>7-day volume vs 28-day baseline</span>
+          </div>
+          <div id="rollingChart" class="chart compact-chart"></div>
+        </div>
+        <div class="chart-panel">
+          <div class="panel-heading">
+            <h2>Run distance mix</h2>
+            <span>Easy volume vs long-run load</span>
+          </div>
+          <div id="distanceMixChart" class="chart"></div>
+        </div>
+        <div class="chart-panel">
+          <div class="panel-heading">
+            <h2>Pace zones</h2>
+            <span>Distribution of run paces</span>
+          </div>
+          <div id="paceZoneChart" class="chart"></div>
+        </div>
+      </section>
+
+      <section class="table-section">
+        <div class="panel-heading">
+          <h2>Recent runs</h2>
+          <span id="activityCount">No activities loaded</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Name</th>
+                <th>Distance</th>
+                <th>Pace</th>
+                <th>Elev.</th>
+                <th>HR</th>
+                <th>Load</th>
+              </tr>
+            </thead>
+            <tbody id="activityRows"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+    <div id="chartTooltip" class="chart-tooltip" role="status" aria-live="polite"></div>
+    <script src="/script.js?v=tooltip-data-2"></script>
+  </body>
+</html>
