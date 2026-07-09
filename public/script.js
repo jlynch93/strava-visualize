@@ -2,7 +2,10 @@ const state = {
   rawActivities: [],
   filteredRuns: [],
   buckets: [],
-  status: null
+  status: null,
+  stravaReady: false,
+  stravaConnected: false,
+  stravaError: ""
 };
 
 const els = {
@@ -1026,16 +1029,28 @@ async function checkStatus() {
   const response = await fetch("/api/status");
   const data = await readApiJson(response);
   if (!response.ok) {
-    els.connectButton.disabled = true;
-    setStatus(data.error || "Unable to reach the Strava API route.", true);
+    state.stravaReady = false;
+    state.stravaConnected = false;
+    state.stravaError = data.error || "Unable to reach the Strava API route.";
+    els.connectButton.disabled = false;
+    els.connectButton.textContent = "Connect Strava";
+    els.connectButton.title = state.stravaError;
+    setStatus(state.stravaError, true);
     return;
   }
   if (!data.configured) {
-    els.connectButton.disabled = true;
-    els.connectButton.title = "Add Strava API credentials to .env and restart the server.";
-    setStatus(`${data.error} You can still import an export file or use demo data.`, true);
+    state.stravaReady = false;
+    state.stravaConnected = false;
+    state.stravaError = data.error || "Add Strava credentials before connecting.";
+    els.connectButton.disabled = false;
+    els.connectButton.textContent = "Connect Strava";
+    els.connectButton.title = state.stravaError;
+    setStatus(`${state.stravaError} You can still import an export file or use demo data.`, true);
     return;
   }
+  state.stravaReady = true;
+  state.stravaConnected = Boolean(data.connected);
+  state.stravaError = "";
   els.connectButton.disabled = false;
   els.connectButton.title = "";
   if (data.connected) {
@@ -1096,7 +1111,10 @@ function makeDemoData() {
 }
 
 els.connectButton.addEventListener("click", () => {
-  if (els.connectButton.textContent.includes("Refresh")) {
+  if (!state.stravaReady) {
+    setStatus(state.stravaError || "Strava is not configured yet.", true);
+    if (!state.stravaError) window.location.href = "/auth/login";
+  } else if (state.stravaConnected || els.connectButton.textContent.includes("Refresh")) {
     fetchActivities().catch((error) => setStatus(error.message, true));
   } else {
     window.location.href = "/auth/login";
