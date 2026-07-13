@@ -4,14 +4,18 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Strava Run Trends</title>
-    <link rel="stylesheet" href="/styles.css">
+    <link rel="stylesheet" href="/styles.css?v=ux-4">
   </head>
   <body>
     <main class="app">
-      <section class="topbar" aria-label="Controls">
-        <div>
-          <p class="eyebrow">Strava Run Trends</p>
-          <h1>Training signal over time</h1>
+      <section class="topbar" aria-label="Dashboard header">
+        <div class="brand-lockup">
+          <span class="brand-mark" aria-hidden="true"></span>
+          <div>
+            <p class="eyebrow">Stride / run intelligence</p>
+            <h1>Training, in context.</h1>
+            <p class="topbar-copy">The shape, rhythm, and signal behind every mile.</p>
+          </div>
         </div>
         <div class="actions">
           <button id="connectButton" class="primary">Connect Strava</button>
@@ -24,47 +28,53 @@
       </section>
 
       <section class="toolbar" aria-label="Time and metric filters">
-        <div class="control">
-          <label for="rangeSelect">Range</label>
-          <select id="rangeSelect">
-            <option value="90">Last 90 days</option>
-            <option value="180">Last 6 months</option>
-            <option value="365" selected>Last year</option>
-            <option value="730">Last 2 years</option>
-            <option value="all">All time</option>
-            <option value="custom">Custom</option>
-          </select>
+        <div class="toolbar-title">
+          <span>Analysis window</span>
+          <strong>Shape the view</strong>
         </div>
-        <div class="control">
-          <label for="startDate">Start</label>
-          <input id="startDate" type="date">
-        </div>
-        <div class="control">
-          <label for="endDate">End</label>
-          <input id="endDate" type="date">
-        </div>
-        <div class="control">
-          <label for="bucketSelect">Group by</label>
-          <select id="bucketSelect">
-            <option value="week" selected>Week</option>
-            <option value="month">Month</option>
-          </select>
-        </div>
-        <div class="control">
-          <label for="metricSelect">Main chart</label>
-          <select id="metricSelect">
-            <option value="distance" selected>Mileage</option>
-            <option value="runs">Run count</option>
-            <option value="avgRun">Average run</option>
-            <option value="longRun">Long run</option>
-            <option value="pace">Pace</option>
-            <option value="elevation">Elevation</option>
-            <option value="elevationDensity">Elevation density</option>
-            <option value="heartrate">Heart rate</option>
-            <option value="load">Training load</option>
-            <option value="loadPerMile">Load per mile</option>
-            <option value="efficiency">Aerobic efficiency</option>
-          </select>
+        <div class="toolbar-controls">
+          <div class="control">
+            <label for="rangeSelect">Range</label>
+            <select id="rangeSelect">
+              <option value="90">Last 90 days</option>
+              <option value="180">Last 6 months</option>
+              <option value="365" selected>Last year</option>
+              <option value="730">Last 2 years</option>
+              <option value="all">All time</option>
+              <option value="custom">Custom</option>
+            </select>
+          </div>
+          <div class="control">
+            <label for="startDate">Start</label>
+            <input id="startDate" type="date">
+          </div>
+          <div class="control">
+            <label for="endDate">End</label>
+            <input id="endDate" type="date">
+          </div>
+          <div class="control">
+            <label for="bucketSelect">Group by</label>
+            <select id="bucketSelect">
+              <option value="week" selected>Week</option>
+              <option value="month">Month</option>
+            </select>
+          </div>
+          <div class="control metric-control">
+            <label for="metricSelect">Main chart</label>
+            <select id="metricSelect">
+              <option value="distance" selected>Mileage</option>
+              <option value="runs">Run count</option>
+              <option value="avgRun">Average run</option>
+              <option value="longRun">Long run</option>
+              <option value="pace">Pace</option>
+              <option value="elevation">Elevation</option>
+              <option value="elevationDensity">Elevation density</option>
+              <option value="heartrate">Heart rate</option>
+              <option value="load">Training load</option>
+              <option value="loadPerMile">Load per mile</option>
+              <option value="efficiency">Aerobic efficiency</option>
+            </select>
+          </div>
         </div>
       </section>
 
@@ -100,7 +110,7 @@
 
       <section class="runner-intel" aria-label="Runner intelligence">
         <div class="panel-heading">
-          <h2>Runner intelligence</h2>
+          <h2>Training pulse</h2>
           <span id="intelSubtitle">Training signals for the selected window</span>
         </div>
         <div id="intelGrid" class="intel-grid"></div>
@@ -189,6 +199,6 @@
         <div id="workoutModalContent"></div>
       </section>
     </div>
-    <script src="/script.js?v=tooltip-data-2"></script>
+    <script src="/script.js?v=ux-4"></script>
   </body>
 </html>

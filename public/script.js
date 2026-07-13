@@ -5,7 +5,8 @@ const state = {
   status: null,
   stravaReady: false,
   stravaConnected: false,
-  stravaError: ""
+  stravaError: "",
+  modalTrigger: null
 };
 
 const els = {
@@ -83,8 +84,9 @@ function paceSeconds(activity) {
 
 function formatPace(seconds) {
   if (!Number.isFinite(seconds) || seconds <= 0) return "-";
-  const minutes = Math.floor(seconds / 60);
-  const remainder = Math.round(seconds % 60).toString().padStart(2, "0");
+  const rounded = Math.round(seconds);
+  const minutes = Math.floor(rounded / 60);
+  const remainder = (rounded % 60).toString().padStart(2, "0");
   return `${minutes}:${remainder}/mi`;
 }
 
@@ -133,7 +135,10 @@ function normalizeActivity(activity) {
     suffer_score: Number(activity.suffer_score || activity["Relative Effort"] || 0),
     kudos_count: Number(activity.kudos_count || activity.Kudos || 0),
     achievement_count: Number(activity.achievement_count || activity.Achievements || 0),
-    pr_count: Number(activity.pr_count || activity.PRs || 0)
+    pr_count: Number(activity.pr_count || activity.PRs || 0),
+    workout_type: Number(activity.workout_type || activity["Workout Type"] || 0),
+    device_name: activity.device_name || activity["Device Name"] || "",
+    description: activity.description || activity.Description || ""
   };
 }
 
@@ -1056,9 +1061,12 @@ function buildWorkoutDigest(run) {
   const bucket = state.buckets.find((candidate) => candidate.key === bucketKey(parseActivityDate(run), els.bucketSelect.value));
   const previousGap = daysBetween(previousRun, run);
   const nextGap = daysBetween(run, nextRun);
+  const contextStart = Math.max(0, Math.min(index - 3, runs.length - 7));
+  const neighboringRuns = runs.slice(contextStart, contextStart + 7);
+  const runType = classifyRun(run, distance, pace, distanceRank, paceRank);
   const signals = [
     {
-      label: classifyRun(run, distance, pace, distanceRank, paceRank),
+      label: runType,
       value: `${formatOrdinal(distanceRank)} distance pct.`,
       detail: `${paceRank ? `Faster than ${paceRank}% of runs in range` : "Pace rank needs duration data"}`
     },
@@ -1103,6 +1111,8 @@ function buildWorkoutDigest(run) {
     nextRun,
     previousGap,
     nextGap,
+    runType,
+    neighboringRuns,
     signals
   };
 }
@@ -1115,61 +1125,153 @@ function signalMarkup(signal) {
   return `<article class="workout-signal"><span>${escapeHtml(signal.label)}</span><strong>${escapeHtml(signal.value)}</strong><small>${escapeHtml(signal.detail)}</small></article>`;
 }
 
+function profileMarkup(label, percentile) {
+  const value = Math.max(2, Math.min(100, Number(percentile) || 0));
+  return `
+    <div class="profile-row">
+      <span>${escapeHtml(label)}</span>
+      <div class="profile-track" aria-hidden="true"><i class="profile-fill" style="width: ${value}%"></i></div>
+      <strong>${escapeHtml(formatOrdinal(percentile || 0))}</strong>
+    </div>
+  `;
+}
+
+function workoutNarrative(digest) {
+  const headlines = {
+    Race: "A performance-first effort with the needle pushed forward.",
+    Quality: "Speed was the defining signal in this session.",
+    Long: "Durability was the point, and the run delivered.",
+    Easy: "Aerobic work without forcing the pace.",
+    Steady: "Balanced volume in a controlled middle gear."
+  };
+  const strain = digest.similarLoadPerMile
+    ? `${digest.loadPerMile > digest.similarLoadPerMile * 1.15 ? "More" : "Less"} load per mile than comparable runs.`
+    : `${formatOrdinal(digest.loadRank)} percentile for total load.`;
+  return {
+    headline: headlines[digest.runType] || headlines.Steady,
+    detail: `${formatOrdinal(digest.distanceRank)} distance percentile, ${formatOrdinal(digest.paceRank)} pace percentile. ${strain}`
+  };
+}
+
+function neighboringRunsChart(digest) {
+  const runs = digest.neighboringRuns;
+  if (!runs.length) return "";
+  const width = 640;
+  const height = 170;
+  const pad = { top: 28, right: 10, bottom: 34, left: 10 };
+  const plotHeight = height - pad.top - pad.bottom;
+  const step = (width - pad.left - pad.right) / runs.length;
+  const barWidth = Math.min(52, step * 0.56);
+  const maxDistance = Math.max(...runs.map((item) => miles(item.distance)), 1);
+  const marks = runs.map((item, index) => {
+    const distance = miles(item.distance);
+    const selected = String(item.id) === String(digest.run.id);
+    const barHeight = Math.max(4, (distance / maxDistance) * plotHeight);
+    const x = pad.left + index * step + (step - barWidth) / 2;
+    const y = pad.top + plotHeight - barHeight;
+    const date = parseActivityDate(item).toLocaleDateString(undefined, { month: "numeric", day: "numeric" });
+    return `
+      <g aria-label="${escapeHtml(`${date}: ${distance.toFixed(1)} miles at ${formatPace(paceSeconds(item))}`)}">
+        <rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barWidth.toFixed(1)}" height="${barHeight.toFixed(1)}" rx="3" fill="${selected ? "var(--orange)" : "var(--teal)"}" opacity="${selected ? "1" : "0.5"}"></rect>
+        <text x="${(x + barWidth / 2).toFixed(1)}" y="${Math.max(14, y - 7).toFixed(1)}" text-anchor="middle" fill="var(--ink)" font-size="11" font-weight="${selected ? "800" : "600"}">${distance.toFixed(1)}</text>
+        <text x="${(x + barWidth / 2).toFixed(1)}" y="${height - 10}" text-anchor="middle" fill="var(--muted)" font-size="11">${escapeHtml(date)}</text>
+      </g>
+    `;
+  }).join("");
+  return `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Distance across this run and its neighboring runs">${marks}</svg>`;
+}
+
 function nearbyRunText(run, gap) {
   if (!run) return "None in range";
   const prefix = gap === null ? "" : `${gap}d `;
   return `${prefix}${formatNumber(miles(run.distance), 1)} mi at ${formatPace(paceSeconds(run))}`;
 }
 
-function showWorkoutModal(runId) {
+function showWorkoutModal(runId, trigger = document.activeElement) {
   const run = state.filteredRuns.find((candidate) => String(candidate.id) === String(runId));
   if (!run) return;
   const digest = buildWorkoutDigest(run);
+  const narrative = workoutNarrative(digest);
   const averageHr = Number(run.average_heartrate) || 0;
   const maxHr = Number(run.max_heartrate) || 0;
-  const cadence = Number(run.average_cadence) || 0;
+  const rawCadence = Number(run.average_cadence) || 0;
+  const cadence = rawCadence && rawCadence < 120 ? rawCadence * 2 : rawCadence;
   const watts = Number(run.average_watts) || 0;
   const maxSpeedPace = run.max_speed ? formatPace(1609.344 / run.max_speed) : "-";
   const bucketLabelText = digest.bucket ? `${digest.bucket.label}: ${digest.bucket.distanceMiles.toFixed(1)} mi, ${digest.bucket.runs} runs` : "No group context";
   const similarPaceText = digest.similarPace ? `${formatPace(digest.similarPace)} across ${digest.similarCount} similar` : "Needs more similar runs";
   const hrCompare = averageHr && digest.similarHr ? `${Math.round(averageHr - digest.similarHr) >= 0 ? "+" : ""}${Math.round(averageHr - digest.similarHr)} bpm vs similar` : "HR comparison unavailable";
+  const socialText = `${run.kudos_count || 0} kudos · ${run.achievement_count || 0} achievements · ${run.pr_count || 0} PRs`;
 
   els.workoutModalContent.innerHTML = `
     <header class="workout-header">
-      <p>${escapeHtml(digest.date.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric", year: "numeric" }))}</p>
+      <p class="workout-kicker">${escapeHtml(digest.date.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric", year: "numeric" }))}</p>
       <h2 id="workoutModalTitle">${escapeHtml(run.name)}</h2>
-      <span id="workoutModalMeta">${escapeHtml(bucketLabelText)}</span>
+      <div class="workout-header-meta">
+        <span class="workout-type">${escapeHtml(digest.runType)} run</span>
+        <span id="workoutModalMeta">${escapeHtml(bucketLabelText)}</span>
+        <span>${escapeHtml(socialText)}</span>
+      </div>
     </header>
-    <div class="workout-stats">
-      ${statMarkup("Distance", `${digest.distance.toFixed(2)} mi`, `${formatOrdinal(digest.distanceRank)} percentile in range`)}
-      ${statMarkup("Pace", formatPace(digest.pace), similarPaceText)}
-      ${statMarkup("Moving time", formatDuration(digest.moving), digest.stopped ? `${formatDuration(digest.stopped)} stopped` : "No stopped time")}
-      ${statMarkup("Elevation", `${Math.round(digest.elevation).toLocaleString()} ft`, `${Math.round(digest.elevationDensity)} ft/mi`)}
-      ${statMarkup("Heart rate", averageHr ? `${Math.round(averageHr)} bpm` : "-", maxHr ? `Max ${Math.round(maxHr)} bpm` : hrCompare)}
-      ${statMarkup("Load", `${Math.round(digest.load).toLocaleString()}`, `${formatNumber(digest.loadPerMile, 1)} per mile`)}
-      ${statMarkup("Cadence", cadence ? `${Math.round(cadence)} spm` : "-", watts ? `${Math.round(watts)} avg watts` : "Cadence not in data")}
-      ${statMarkup("Top speed", maxSpeedPace, `${run.pr_count || 0} PRs, ${run.achievement_count || 0} achievements`)}
+    <div class="workout-body">
+      <section class="workout-lead" aria-label="Workout summary">
+        <div class="workout-lead-metrics">
+          <article class="workout-lead-metric"><span>Distance</span><strong>${digest.distance.toFixed(2)} mi</strong><small>${formatOrdinal(digest.distanceRank)} percentile</small></article>
+          <article class="workout-lead-metric"><span>Average pace</span><strong>${escapeHtml(formatPace(digest.pace))}</strong><small>${escapeHtml(similarPaceText)}</small></article>
+          <article class="workout-lead-metric"><span>Moving time</span><strong>${escapeHtml(formatDuration(digest.moving))}</strong><small>${digest.stopped ? `${escapeHtml(formatDuration(digest.stopped))} stopped` : "Continuous effort"}</small></article>
+        </div>
+        <aside class="workout-read">
+          <span>The read</span>
+          <strong>${escapeHtml(narrative.headline)}</strong>
+          <p>${escapeHtml(narrative.detail)}</p>
+        </aside>
+      </section>
+      <div class="workout-grid">
+        <div>
+          <section class="workout-section">
+            <div class="workout-section-heading"><h3>Effort profile</h3><span>Percentile within selected range</span></div>
+            <div class="effort-profile">
+              ${profileMarkup("Distance", digest.distanceRank)}
+              ${profileMarkup("Pace", digest.paceRank)}
+              ${profileMarkup("Load", digest.loadRank)}
+            </div>
+          </section>
+          <section class="workout-section">
+            <div class="workout-section-heading"><h3>Neighboring runs</h3><span>Miles · selected run in orange</span></div>
+            <div class="neighbor-chart">${neighboringRunsChart(digest)}</div>
+          </section>
+          <section class="workout-section">
+            <h3>Signals</h3>
+            <div class="workout-signals">${digest.signals.map(signalMarkup).join("")}</div>
+          </section>
+        </div>
+        <aside>
+          <section class="workout-section">
+            <h3>Run details</h3>
+            <div class="workout-stats">
+              ${statMarkup("Elevation", `${Math.round(digest.elevation).toLocaleString()} ft`, `${Math.round(digest.elevationDensity)} ft/mi`)}
+              ${statMarkup("Heart rate", averageHr ? `${Math.round(averageHr)} bpm` : "-", maxHr ? `Max ${Math.round(maxHr)} bpm` : hrCompare)}
+              ${statMarkup("Training load", `${Math.round(digest.load).toLocaleString()}`, `${formatNumber(digest.loadPerMile, 1)} per mile`)}
+              ${statMarkup("Cadence", cadence ? `${Math.round(cadence)} spm` : "-", watts ? `${Math.round(watts)} avg watts` : "From activity data")}
+              ${statMarkup("Top speed", maxSpeedPace, run.pr_count ? `${run.pr_count} personal record${run.pr_count === 1 ? "" : "s"}` : "No PR recorded")}
+              ${statMarkup("Elapsed time", formatDuration(digest.elapsed), digest.stopped ? `${formatDuration(digest.stopped)} not moving` : "Matches moving time")}
+            </div>
+          </section>
+          <section class="workout-section">
+            <h3>Context</h3>
+            <dl class="context-list">
+              <dt>Benchmark</dt><dd>${escapeHtml(similarPaceText)}</dd>
+              <dt>Heart rate</dt><dd>${escapeHtml(hrCompare)}</dd>
+              <dt>Previous</dt><dd>${escapeHtml(nearbyRunText(digest.previousRun, digest.previousGap))}</dd>
+              <dt>Next</dt><dd>${escapeHtml(nearbyRunText(digest.nextRun, digest.nextGap))}</dd>
+              <dt>Device</dt><dd>${escapeHtml(run.device_name || "Not included in activity data")}</dd>
+            </dl>
+          </section>
+        </aside>
+      </div>
     </div>
-    <section class="workout-section">
-      <h3>Signals</h3>
-      <div class="workout-signals">${digest.signals.map(signalMarkup).join("")}</div>
-    </section>
-    <section class="workout-section workout-compare">
-      <h3>Context</h3>
-      <dl>
-        <dt>Similar run benchmark</dt>
-        <dd>${escapeHtml(similarPaceText)}</dd>
-        <dt>Heart-rate signal</dt>
-        <dd>${escapeHtml(hrCompare)}</dd>
-        <dt>Previous run</dt>
-        <dd>${escapeHtml(nearbyRunText(digest.previousRun, digest.previousGap))}</dd>
-        <dt>Next run</dt>
-        <dd>${escapeHtml(nearbyRunText(digest.nextRun, digest.nextGap))}</dd>
-        <dt>Social / awards</dt>
-        <dd>${escapeHtml(`${run.kudos_count || 0} kudos, ${run.achievement_count || 0} achievements, ${run.pr_count || 0} PRs`)}</dd>
-      </dl>
-    </section>
   `;
+  state.modalTrigger = trigger instanceof HTMLElement ? trigger : null;
   els.workoutModal.hidden = false;
   document.body.classList.add("modal-open");
   els.workoutModalClose.focus();
@@ -1179,6 +1281,8 @@ function closeWorkoutModal() {
   els.workoutModal.hidden = true;
   document.body.classList.remove("modal-open");
   els.workoutModalContent.replaceChildren();
+  if (state.modalTrigger?.isConnected) state.modalTrigger.focus();
+  state.modalTrigger = null;
 }
 
 function renderTable() {
@@ -1195,7 +1299,7 @@ function renderTable() {
     action.className = "row-detail-button";
     action.dataset.activityId = run.id;
     action.setAttribute("aria-label", `Open details for ${run.name}`);
-    action.textContent = "View";
+    action.textContent = "→";
     actionCell.appendChild(action);
     row.appendChild(actionCell);
     const values = [
@@ -1214,7 +1318,7 @@ function renderTable() {
     });
     row.addEventListener("click", (event) => {
       if (event.target.closest("button")) return;
-      showWorkoutModal(run.id);
+      showWorkoutModal(run.id, action);
     });
     return row;
   }));
@@ -1368,7 +1472,7 @@ els.fileInput.addEventListener("change", (event) => {
 
 els.activityRows.addEventListener("click", (event) => {
   const button = event.target.closest(".row-detail-button");
-  if (button) showWorkoutModal(button.dataset.activityId);
+  if (button) showWorkoutModal(button.dataset.activityId, button);
 });
 
 els.workoutModalClose.addEventListener("click", closeWorkoutModal);
@@ -1378,7 +1482,21 @@ els.workoutModal.addEventListener("click", (event) => {
 });
 
 document.addEventListener("keydown", (event) => {
-  if (event.key === "Escape" && !els.workoutModal.hidden) closeWorkoutModal();
+  if (els.workoutModal.hidden) return;
+  if (event.key === "Escape") closeWorkoutModal();
+  if (event.key === "Tab") {
+    const focusable = [els.workoutModalClose, ...els.workoutModalContent.querySelectorAll("button, a, input, select, textarea")]
+      .filter((element) => !element.disabled && element.offsetParent !== null);
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  }
 });
 
 els.rangeSelect.addEventListener("change", () => {
