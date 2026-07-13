@@ -167,6 +167,7 @@
           <table>
             <thead>
               <tr>
+                <th aria-label="Open details"></th>
                 <th>Date</th>
                 <th>Name</th>
                 <th>Distance</th>
@@ -182,6 +183,12 @@
       </section>
     </main>
     <div id="chartTooltip" class="chart-tooltip" role="status" aria-live="polite"></div>
+    <div id="workoutModal" class="modal-backdrop" hidden>
+      <section class="workout-modal" role="dialog" aria-modal="true" aria-labelledby="workoutModalTitle" aria-describedby="workoutModalMeta">
+        <button id="workoutModalClose" class="modal-close" type="button" aria-label="Close workout details">&times;</button>
+        <div id="workoutModalContent"></div>
+      </section>
+    </div>
     <script src="/script.js?v=tooltip-data-2"></script>
   </body>
 </html>

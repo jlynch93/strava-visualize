@@ -42,7 +42,10 @@ const els = {
   intelSubtitle: document.querySelector("#intelSubtitle"),
   intelGrid: document.querySelector("#intelGrid"),
   activityRows: document.querySelector("#activityRows"),
-  activityCount: document.querySelector("#activityCount")
+  activityCount: document.querySelector("#activityCount"),
+  workoutModal: document.querySelector("#workoutModal"),
+  workoutModalClose: document.querySelector("#workoutModalClose"),
+  workoutModalContent: document.querySelector("#workoutModalContent")
 };
 
 const METRICS = {
@@ -120,9 +123,17 @@ function normalizeActivity(activity) {
     start_date_local: activity.start_date_local || activity.start_date,
     distance: Number(activity.distance || activity.Distance || 0),
     moving_time: Number(activity.moving_time || activity["Moving Time"] || activity.elapsed_time || 0),
+    elapsed_time: Number(activity.elapsed_time || activity["Elapsed Time"] || activity.moving_time || 0),
     total_elevation_gain: Number(activity.total_elevation_gain || activity["Elevation Gain"] || 0),
     average_heartrate: Number(activity.average_heartrate || activity["Average Heart Rate"] || 0),
-    suffer_score: Number(activity.suffer_score || activity["Relative Effort"] || 0)
+    max_heartrate: Number(activity.max_heartrate || activity["Max Heart Rate"] || 0),
+    average_cadence: Number(activity.average_cadence || activity["Average Cadence"] || 0),
+    average_watts: Number(activity.average_watts || activity["Average Watts"] || 0),
+    max_speed: Number(activity.max_speed || activity["Max Speed"] || 0),
+    suffer_score: Number(activity.suffer_score || activity["Relative Effort"] || 0),
+    kudos_count: Number(activity.kudos_count || activity.Kudos || 0),
+    achievement_count: Number(activity.achievement_count || activity.Achievements || 0),
+    pr_count: Number(activity.pr_count || activity.PRs || 0)
   };
 }
 
@@ -972,11 +983,221 @@ function renderHorizontalBars(container, bins, valueKey, formatter, color) {
   container.replaceChildren(root);
 }
 
+function formatNumber(value, digits = 1) {
+  if (!Number.isFinite(value)) return "-";
+  return value.toFixed(digits);
+}
+
+function formatOrdinal(value) {
+  const rounded = Math.round(value);
+  const lastTwo = rounded % 100;
+  if (lastTwo >= 11 && lastTwo <= 13) return `${rounded}th`;
+  const suffix = rounded % 10 === 1 ? "st" : rounded % 10 === 2 ? "nd" : rounded % 10 === 3 ? "rd" : "th";
+  return `${rounded}${suffix}`;
+}
+
+function activityLoad(run) {
+  return Number(run.suffer_score) || runMinutes(run) * effortMultiplier(run);
+}
+
+function daysBetween(left, right) {
+  if (!left || !right) return null;
+  return Math.round((parseActivityDate(right) - parseActivityDate(left)) / 86400000);
+}
+
+function average(values) {
+  const clean = values.filter((value) => Number.isFinite(value) && value > 0);
+  return clean.length ? clean.reduce((sum, value) => sum + value, 0) / clean.length : 0;
+}
+
+function percentileRank(values, value, higherIsBetter = true) {
+  const clean = values.filter((candidate) => Number.isFinite(candidate) && candidate > 0);
+  if (!clean.length || !Number.isFinite(value) || value <= 0) return 0;
+  const count = clean.filter((candidate) => higherIsBetter ? candidate <= value : candidate >= value).length;
+  return Math.round((count / clean.length) * 100);
+}
+
+function classifyRun(run, distanceMiles, pace, distanceRank, paceRank) {
+  const name = run.name.toLowerCase();
+  if (name.includes("race")) return "Race";
+  if (name.includes("tempo") || name.includes("interval") || name.includes("workout") || paceRank >= 75) return "Quality";
+  if (distanceRank >= 85 || distanceMiles >= 10) return "Long";
+  if (pace && pace >= 600) return "Easy";
+  return "Steady";
+}
+
+function buildWorkoutDigest(run) {
+  const runs = [...state.filteredRuns].sort((a, b) => parseActivityDate(a) - parseActivityDate(b));
+  const index = runs.findIndex((candidate) => String(candidate.id) === String(run.id));
+  const previousRun = index > 0 ? runs[index - 1] : null;
+  const nextRun = index >= 0 && index < runs.length - 1 ? runs[index + 1] : null;
+  const distance = miles(run.distance);
+  const pace = paceSeconds(run);
+  const elevation = feet(run.total_elevation_gain);
+  const elevationDensity = distance ? elevation / distance : 0;
+  const load = activityLoad(run);
+  const loadPerMile = distance ? load / distance : 0;
+  const moving = Number(run.moving_time) || 0;
+  const elapsed = Number(run.elapsed_time) || moving;
+  const stopped = Math.max(0, elapsed - moving);
+  const similar = runs.filter((candidate) => {
+    const candidateDistance = miles(candidate.distance);
+    return candidate.id !== run.id && candidateDistance >= distance * 0.8 && candidateDistance <= distance * 1.2;
+  });
+  const similarPace = average(similar.map(paceSeconds));
+  const similarHr = average(similar.map((candidate) => Number(candidate.average_heartrate) || 0));
+  const similarLoadPerMile = average(similar.map((candidate) => {
+    const candidateMiles = miles(candidate.distance);
+    return candidateMiles ? activityLoad(candidate) / candidateMiles : 0;
+  }));
+  const distanceRank = percentileRank(runs.map((candidate) => miles(candidate.distance)), distance, true);
+  const paceRank = percentileRank(runs.map(paceSeconds), pace, false);
+  const loadRank = percentileRank(runs.map(activityLoad), load, true);
+  const bucket = state.buckets.find((candidate) => candidate.key === bucketKey(parseActivityDate(run), els.bucketSelect.value));
+  const previousGap = daysBetween(previousRun, run);
+  const nextGap = daysBetween(run, nextRun);
+  const signals = [
+    {
+      label: classifyRun(run, distance, pace, distanceRank, paceRank),
+      value: `${formatOrdinal(distanceRank)} distance pct.`,
+      detail: `${paceRank ? `Faster than ${paceRank}% of runs in range` : "Pace rank needs duration data"}`
+    },
+    {
+      label: loadPerMile > similarLoadPerMile * 1.2 && similarLoadPerMile ? "High strain" : "Load check",
+      value: `${Math.round(load).toLocaleString()} load`,
+      detail: similarLoadPerMile ? `${formatNumber(loadPerMile, 1)} /mi vs ${formatNumber(similarLoadPerMile, 1)} /mi for similar runs` : `${formatOrdinal(loadRank)} load pct. in range`
+    },
+    {
+      label: previousGap !== null && previousGap <= 1 ? "Tight recovery" : "Recovery space",
+      value: previousGap === null ? "First in range" : `${previousGap} days since prior`,
+      detail: nextGap === null ? "No later run in range" : `${nextGap} days until next run`
+    },
+    {
+      label: elevationDensity >= 100 ? "Hilly profile" : "Terrain",
+      value: `${Math.round(elevationDensity)} ft/mi`,
+      detail: `${Math.round(elevation).toLocaleString()} ft total gain`
+    }
+  ];
+
+  return {
+    run,
+    date: parseActivityDate(run),
+    distance,
+    pace,
+    elevation,
+    elevationDensity,
+    load,
+    loadPerMile,
+    moving,
+    elapsed,
+    stopped,
+    similarCount: similar.length,
+    similarPace,
+    similarHr,
+    similarLoadPerMile,
+    distanceRank,
+    paceRank,
+    loadRank,
+    bucket,
+    previousRun,
+    nextRun,
+    previousGap,
+    nextGap,
+    signals
+  };
+}
+
+function statMarkup(label, value, detail = "") {
+  return `<article class="workout-stat"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong><small>${escapeHtml(detail)}</small></article>`;
+}
+
+function signalMarkup(signal) {
+  return `<article class="workout-signal"><span>${escapeHtml(signal.label)}</span><strong>${escapeHtml(signal.value)}</strong><small>${escapeHtml(signal.detail)}</small></article>`;
+}
+
+function nearbyRunText(run, gap) {
+  if (!run) return "None in range";
+  const prefix = gap === null ? "" : `${gap}d `;
+  return `${prefix}${formatNumber(miles(run.distance), 1)} mi at ${formatPace(paceSeconds(run))}`;
+}
+
+function showWorkoutModal(runId) {
+  const run = state.filteredRuns.find((candidate) => String(candidate.id) === String(runId));
+  if (!run) return;
+  const digest = buildWorkoutDigest(run);
+  const averageHr = Number(run.average_heartrate) || 0;
+  const maxHr = Number(run.max_heartrate) || 0;
+  const cadence = Number(run.average_cadence) || 0;
+  const watts = Number(run.average_watts) || 0;
+  const maxSpeedPace = run.max_speed ? formatPace(1609.344 / run.max_speed) : "-";
+  const bucketLabelText = digest.bucket ? `${digest.bucket.label}: ${digest.bucket.distanceMiles.toFixed(1)} mi, ${digest.bucket.runs} runs` : "No group context";
+  const similarPaceText = digest.similarPace ? `${formatPace(digest.similarPace)} across ${digest.similarCount} similar` : "Needs more similar runs";
+  const hrCompare = averageHr && digest.similarHr ? `${Math.round(averageHr - digest.similarHr) >= 0 ? "+" : ""}${Math.round(averageHr - digest.similarHr)} bpm vs similar` : "HR comparison unavailable";
+
+  els.workoutModalContent.innerHTML = `
+    <header class="workout-header">
+      <p>${escapeHtml(digest.date.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric", year: "numeric" }))}</p>
+      <h2 id="workoutModalTitle">${escapeHtml(run.name)}</h2>
+      <span id="workoutModalMeta">${escapeHtml(bucketLabelText)}</span>
+    </header>
+    <div class="workout-stats">
+      ${statMarkup("Distance", `${digest.distance.toFixed(2)} mi`, `${formatOrdinal(digest.distanceRank)} percentile in range`)}
+      ${statMarkup("Pace", formatPace(digest.pace), similarPaceText)}
+      ${statMarkup("Moving time", formatDuration(digest.moving), digest.stopped ? `${formatDuration(digest.stopped)} stopped` : "No stopped time")}
+      ${statMarkup("Elevation", `${Math.round(digest.elevation).toLocaleString()} ft`, `${Math.round(digest.elevationDensity)} ft/mi`)}
+      ${statMarkup("Heart rate", averageHr ? `${Math.round(averageHr)} bpm` : "-", maxHr ? `Max ${Math.round(maxHr)} bpm` : hrCompare)}
+      ${statMarkup("Load", `${Math.round(digest.load).toLocaleString()}`, `${formatNumber(digest.loadPerMile, 1)} per mile`)}
+      ${statMarkup("Cadence", cadence ? `${Math.round(cadence)} spm` : "-", watts ? `${Math.round(watts)} avg watts` : "Cadence not in data")}
+      ${statMarkup("Top speed", maxSpeedPace, `${run.pr_count || 0} PRs, ${run.achievement_count || 0} achievements`)}
+    </div>
+    <section class="workout-section">
+      <h3>Signals</h3>
+      <div class="workout-signals">${digest.signals.map(signalMarkup).join("")}</div>
+    </section>
+    <section class="workout-section workout-compare">
+      <h3>Context</h3>
+      <dl>
+        <dt>Similar run benchmark</dt>
+        <dd>${escapeHtml(similarPaceText)}</dd>
+        <dt>Heart-rate signal</dt>
+        <dd>${escapeHtml(hrCompare)}</dd>
+        <dt>Previous run</dt>
+        <dd>${escapeHtml(nearbyRunText(digest.previousRun, digest.previousGap))}</dd>
+        <dt>Next run</dt>
+        <dd>${escapeHtml(nearbyRunText(digest.nextRun, digest.nextGap))}</dd>
+        <dt>Social / awards</dt>
+        <dd>${escapeHtml(`${run.kudos_count || 0} kudos, ${run.achievement_count || 0} achievements, ${run.pr_count || 0} PRs`)}</dd>
+      </dl>
+    </section>
+  `;
+  els.workoutModal.hidden = false;
+  document.body.classList.add("modal-open");
+  els.workoutModalClose.focus();
+}
+
+function closeWorkoutModal() {
+  els.workoutModal.hidden = true;
+  document.body.classList.remove("modal-open");
+  els.workoutModalContent.replaceChildren();
+}
+
 function renderTable() {
   const recent = [...state.filteredRuns].sort((a, b) => parseActivityDate(b) - parseActivityDate(a)).slice(0, 15);
   els.activityCount.textContent = `${state.filteredRuns.length} runs in range`;
   els.activityRows.replaceChildren(...recent.map((run) => {
     const row = document.createElement("tr");
+    row.className = "activity-row";
+    row.dataset.activityId = run.id;
+    row.title = "Open workout details";
+    const actionCell = document.createElement("td");
+    const action = document.createElement("button");
+    action.type = "button";
+    action.className = "row-detail-button";
+    action.dataset.activityId = run.id;
+    action.setAttribute("aria-label", `Open details for ${run.name}`);
+    action.textContent = "View";
+    actionCell.appendChild(action);
+    row.appendChild(actionCell);
     const values = [
       parseActivityDate(run).toLocaleDateString(),
       run.name,
@@ -990,6 +1211,10 @@ function renderTable() {
       const cell = document.createElement("td");
       cell.textContent = value;
       row.appendChild(cell);
+    });
+    row.addEventListener("click", (event) => {
+      if (event.target.closest("button")) return;
+      showWorkoutModal(run.id);
     });
     return row;
   }));
@@ -1095,16 +1320,24 @@ function makeDemoData() {
     const distanceMiles = baseMiles * trend;
     const pace = 520 - (390 - i) * 0.16 + Math.random() * 45;
     const hr = 136 + Math.random() * 24 + (longRun ? 4 : 0);
+    const movingTime = Math.round(distanceMiles * pace);
     activities.push({
       id: `demo-${i}`,
       name: longRun ? "Long run" : ["Easy run", "Workout", "Steady run"][Math.floor(Math.random() * 3)],
       sport_type: "Run",
       start_date_local: date.toISOString(),
       distance: distanceMiles * 1609.344,
-      moving_time: Math.round(distanceMiles * pace),
+      moving_time: movingTime,
+      elapsed_time: movingTime + Math.round(Math.random() * 180),
       total_elevation_gain: (40 + Math.random() * 95) * distanceMiles / 3.28084,
       average_heartrate: Math.round(hr),
-      suffer_score: Math.round(distanceMiles * (hr / 18))
+      max_heartrate: Math.round(hr + 18 + Math.random() * 18),
+      average_cadence: Math.round(160 + Math.random() * 18),
+      max_speed: 1609.344 / Math.max(300, pace - 75 - Math.random() * 30),
+      suffer_score: Math.round(distanceMiles * (hr / 18)),
+      kudos_count: Math.floor(Math.random() * 18),
+      achievement_count: Math.random() > 0.78 ? Math.ceil(Math.random() * 4) : 0,
+      pr_count: Math.random() > 0.9 ? 1 : 0
     });
   }
   return activities;
@@ -1131,6 +1364,21 @@ els.demoButton.addEventListener("click", () => {
 els.fileInput.addEventListener("change", (event) => {
   const [file] = event.target.files;
   if (file) importFile(file).catch((error) => setStatus(error.message, true));
+});
+
+els.activityRows.addEventListener("click", (event) => {
+  const button = event.target.closest(".row-detail-button");
+  if (button) showWorkoutModal(button.dataset.activityId);
+});
+
+els.workoutModalClose.addEventListener("click", closeWorkoutModal);
+
+els.workoutModal.addEventListener("click", (event) => {
+  if (event.target === els.workoutModal) closeWorkoutModal();
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && !els.workoutModal.hidden) closeWorkoutModal();
 });
 
 els.rangeSelect.addEventListener("change", () => {
