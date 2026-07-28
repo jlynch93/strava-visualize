@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Strava Run Trends</title>
-    <link rel="stylesheet" href="/styles.css?v=ux-4">
+    <link rel="stylesheet" href="/styles.css?v=ai-1">
   </head>
   <body>
     <main class="app">
@@ -116,6 +116,36 @@
         <div id="intelGrid" class="intel-grid"></div>
       </section>
 
+      <section class="ai-insights" aria-labelledby="aiInsightsTitle">
+        <div class="ai-insights-intro">
+          <div>
+            <p class="ai-kicker"><span class="ai-status-dot" aria-hidden="true"></span> Local model insight</p>
+            <h2 id="aiInsightsTitle">Ask your training data a better question.</h2>
+            <p>A compact training summary goes to your Ollama model. Route coordinates and the full Strava response stay out of the prompt.</p>
+          </div>
+          <div class="ai-controls">
+            <label for="aiFocus">Insight focus</label>
+            <select id="aiFocus">
+              <option value="balanced" selected>Balanced review</option>
+              <option value="progression">Fitness progression</option>
+              <option value="recovery">Recovery &amp; load</option>
+              <option value="consistency">Consistency</option>
+            </select>
+            <button id="aiAnalyzeButton" class="ai-action" type="button" disabled>Analyze selected window</button>
+          </div>
+          <p class="ai-model-note">Ollama · qwen3:0.6b · compact context · analysis runs only when you ask</p>
+        </div>
+        <div id="aiInsightContent" class="ai-insight-content" aria-live="polite">
+          <div class="ai-empty">
+            <span aria-hidden="true">01</span>
+            <div>
+              <strong>Load running data to begin</strong>
+              <p>Connect Strava, import a file, or try the demo. Then choose a window and ask for an analysis.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <section class="dashboard">
         <div class="chart-panel wide">
           <div class="panel-heading">
@@ -199,6 +229,6 @@
         <div id="workoutModalContent"></div>
       </section>
     </div>
-    <script src="/script.js?v=ux-4"></script>
+    <script src="/script.js?v=ai-1"></script>
   </body>
 </html>

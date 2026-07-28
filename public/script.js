@@ -6,7 +6,9 @@ const state = {
   stravaReady: false,
   stravaConnected: false,
   stravaError: "",
-  modalTrigger: null
+  modalTrigger: null,
+  insightFingerprint: "",
+  renderedInsightFingerprint: ""
 };
 
 const els = {
@@ -42,6 +44,9 @@ const els = {
   paceZoneChart: document.querySelector("#paceZoneChart"),
   intelSubtitle: document.querySelector("#intelSubtitle"),
   intelGrid: document.querySelector("#intelGrid"),
+  aiFocus: document.querySelector("#aiFocus"),
+  aiAnalyzeButton: document.querySelector("#aiAnalyzeButton"),
+  aiInsightContent: document.querySelector("#aiInsightContent"),
   activityRows: document.querySelector("#activityRows"),
   activityCount: document.querySelector("#activityCount"),
   workoutModal: document.querySelector("#workoutModal"),
@@ -376,6 +381,11 @@ function render() {
     })
     .sort((a, b) => parseActivityDate(a) - parseActivityDate(b));
   state.buckets = buildBuckets(state.filteredRuns);
+  state.insightFingerprint = JSON.stringify({
+    range: [els.startDate.value, els.endDate.value],
+    grouping: els.bucketSelect.value,
+    runs: state.filteredRuns.map((run) => [run.id, run.start_date_local || run.start_date])
+  });
 
   const summary = summarize(state.filteredRuns, state.buckets);
   const previous = summarizePreviousPeriod(normalized, start, end);
@@ -391,6 +401,7 @@ function render() {
   renderDelta(els.averageHrDelta, summary.averageHr, previous.averageHr, "bpm", false, true);
 
   renderIntel(summary, previous, start, end);
+  renderAiState();
   renderMainChart();
   renderScatter();
   renderStructure();
@@ -399,6 +410,184 @@ function render() {
   renderDistanceMix();
   renderPaceZones();
   renderTable();
+}
+
+function renderAiState() {
+  els.aiAnalyzeButton.disabled = !state.filteredRuns.length;
+  if (state.renderedInsightFingerprint === state.insightFingerprint) return;
+  state.renderedInsightFingerprint = "";
+  els.aiInsightContent.removeAttribute("aria-busy");
+  const wrapper = document.createElement("div");
+  wrapper.className = "ai-empty";
+  const index = document.createElement("span");
+  index.setAttribute("aria-hidden", "true");
+  index.textContent = state.filteredRuns.length ? "02" : "01";
+  const copy = document.createElement("div");
+  const title = document.createElement("strong");
+  title.textContent = state.filteredRuns.length ? "Your selected window is ready" : "Load running data to begin";
+  const detail = document.createElement("p");
+  detail.textContent = state.filteredRuns.length
+    ? `${state.filteredRuns.length} runs will be summarized for Ollama. No route coordinates or raw activity payloads are included.`
+    : "Connect Strava, import a file, or try the demo. Then choose a window and ask for an analysis.";
+  copy.append(title, detail);
+  wrapper.append(index, copy);
+  els.aiInsightContent.replaceChildren(wrapper);
+}
+
+function buildInsightPayload() {
+  const summary = summarize(state.filteredRuns, state.buckets);
+  const recentRuns = state.filteredRuns.slice(-12).reverse().map((run) => ({
+    date: localDateValue(parseActivityDate(run)),
+    name: String(run.name || "Run").slice(0, 80),
+    distanceMiles: Number(miles(run.distance).toFixed(2)),
+    paceSecondsPerMile: Math.round(paceSeconds(run)),
+    elevationFeet: Math.round(feet(run.total_elevation_gain)),
+    averageHr: run.average_heartrate ? Math.round(run.average_heartrate) : null,
+    trainingLoad: Math.round(activityLoad(run))
+  }));
+  const buckets = state.buckets.slice(-8).map((bucket) => ({
+    period: bucket.label,
+    runs: bucket.runs,
+    miles: Number(bucket.distanceMiles.toFixed(1)),
+    averagePaceSeconds: Math.round(bucket.averagePace || 0),
+    longRunMiles: Number(bucket.longRunMiles.toFixed(1)),
+    averageHr: bucket.averageHr ? Math.round(bucket.averageHr) : null,
+    trainingLoad: Math.round(bucket.trainingLoad)
+  }));
+  return {
+    focus: els.aiFocus.value,
+    range: {
+      start: els.startDate.value || null,
+      end: els.endDate.value || null,
+      grouping: els.bucketSelect.value
+    },
+    summary: {
+      runCount: summary.runCount,
+      activeDays: summary.activeDays,
+      totalMiles: Number(summary.totalMiles.toFixed(1)),
+      averagePaceSeconds: Math.round(summary.averagePace || 0),
+      averageWeeklyMiles: Number(summary.averageWeeklyMiles.toFixed(1)),
+      averageRunsPerWeek: Number(summary.averageRunsPerWeek.toFixed(1)),
+      averageRunMiles: Number(summary.averageRunMiles.toFixed(1)),
+      longRunMiles: Number(summary.longRun.toFixed(1)),
+      longRunSharePercent: Math.round(summary.longRunShare * 100),
+      peakWeekMiles: Number(summary.peakWeek.toFixed(1)),
+      consistencyPercent: Math.round(summary.consistency * 100),
+      rampRatePercent: Math.round(summary.rampRate),
+      averageHr: summary.averageHr ? Math.round(summary.averageHr) : null,
+      elevationFeetPerMile: Math.round(summary.elevationPerMile),
+      trainingLoad: Math.round(summary.totalLoad),
+      loadPerMile: Number(summary.averageLoadPerMile.toFixed(1)),
+      longestRestGapDays: summary.longestRestGap
+    },
+    buckets,
+    recentRuns
+  };
+}
+
+function renderAiLoading() {
+  els.aiInsightContent.setAttribute("aria-busy", "true");
+  const wrapper = document.createElement("div");
+  wrapper.className = "ai-loading";
+  const index = document.createElement("span");
+  index.setAttribute("aria-hidden", "true");
+  index.textContent = "···";
+  const copy = document.createElement("div");
+  const title = document.createElement("strong");
+  title.textContent = "Reading the shape of your training";
+  const detail = document.createElement("p");
+  detail.textContent = "The local model is comparing volume, pace, load, recovery gaps, and recent run patterns. This can take a minute if the model is waking up.";
+  copy.append(title, detail);
+  wrapper.append(index, copy);
+  els.aiInsightContent.replaceChildren(wrapper);
+}
+
+function renderAiError(message) {
+  els.aiInsightContent.removeAttribute("aria-busy");
+  const wrapper = document.createElement("div");
+  wrapper.className = "ai-error";
+  const index = document.createElement("span");
+  index.setAttribute("aria-hidden", "true");
+  index.textContent = "!";
+  const copy = document.createElement("div");
+  const title = document.createElement("strong");
+  title.textContent = "The model did not return an analysis";
+  const detail = document.createElement("p");
+  detail.textContent = message;
+  copy.append(title, detail);
+  wrapper.append(index, copy);
+  els.aiInsightContent.replaceChildren(wrapper);
+}
+
+function renderAiInsight(insight) {
+  els.aiInsightContent.removeAttribute("aria-busy");
+  const header = document.createElement("div");
+  header.className = "ai-result-header";
+  const label = document.createElement("span");
+  label.textContent = "Selected-window read";
+  const headline = document.createElement("h3");
+  headline.textContent = insight.headline;
+  const summary = document.createElement("p");
+  summary.textContent = insight.summary;
+  header.append(label, headline, summary);
+
+  const observations = document.createElement("div");
+  observations.className = "ai-observations";
+  (insight.observations || []).slice(0, 4).forEach((observation, index) => {
+    const card = document.createElement("article");
+    const tone = ["positive", "neutral", "caution"].includes(observation.tone) ? observation.tone : "neutral";
+    card.className = `ai-observation ${tone}`;
+    const cardLabel = document.createElement("span");
+    cardLabel.textContent = `Signal ${String(index + 1).padStart(2, "0")}`;
+    const title = document.createElement("strong");
+    title.textContent = observation.title;
+    const detail = document.createElement("p");
+    detail.textContent = observation.detail;
+    card.append(cardLabel, title, detail);
+    observations.append(card);
+  });
+
+  const nextStep = document.createElement("div");
+  nextStep.className = "ai-next-step";
+  const nextLabel = document.createElement("span");
+  nextLabel.textContent = "Try next";
+  const nextCopy = document.createElement("strong");
+  nextCopy.textContent = insight.nextStep;
+  nextStep.append(nextLabel, nextCopy);
+
+  const caution = document.createElement("p");
+  caution.className = "ai-caution";
+  caution.textContent = insight.caution || "Treat this as a training pattern review, not medical advice.";
+  els.aiInsightContent.replaceChildren(header, observations, nextStep, caution);
+}
+
+async function analyzeWithOllama() {
+  if (!state.filteredRuns.length) return;
+  const requestedFingerprint = state.insightFingerprint;
+  els.aiAnalyzeButton.disabled = true;
+  els.aiAnalyzeButton.textContent = "Analyzing…";
+  renderAiLoading();
+  try {
+    const response = await fetch("/api/insights", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(buildInsightPayload())
+    });
+    const data = await readApiJson(response);
+    if (!response.ok) throw new Error(data.error || "Ollama could not analyze this training window.");
+    if (requestedFingerprint !== state.insightFingerprint) {
+      renderAiState();
+      return;
+    }
+    state.renderedInsightFingerprint = requestedFingerprint;
+    renderAiInsight(data.insight);
+  } catch (error) {
+    state.renderedInsightFingerprint = "";
+    renderAiError(error.message || "Check that the Ollama URL is reachable and try again.");
+  } finally {
+    els.aiAnalyzeButton.disabled = !state.filteredRuns.length;
+    els.aiAnalyzeButton.textContent = "Analyze selected window";
+  }
 }
 
 function renderIntel(summary, previous, start, end) {
@@ -1463,6 +1652,13 @@ els.demoButton.addEventListener("click", () => {
   syncRangeInputs();
   setStatus("Loaded demo running history.");
   render();
+});
+
+els.aiAnalyzeButton.addEventListener("click", analyzeWithOllama);
+
+els.aiFocus.addEventListener("change", () => {
+  state.renderedInsightFingerprint = "";
+  renderAiState();
 });
 
 els.fileInput.addEventListener("change", (event) => {

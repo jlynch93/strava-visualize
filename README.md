@@ -22,7 +22,16 @@ Set these Worker secrets or environment variables:
 STRAVA_CLIENT_ID
 STRAVA_CLIENT_SECRET
 STRAVA_REDIRECT_URI=https://your-domain.example/auth/callback
+OLLAMA_BASE_URL=https://ollama.jeer.rest
+OLLAMA_MODEL=qwen3:0.6b
 ```
+
+The Ollama integration sends a compact summary of the selected training window
+through the app's `/api/insights` route. It does not send route coordinates or
+the complete Strava activity payload. The URL and model above are the defaults,
+so the Ollama variables only need to be set when you want to override them. The
+prompt is capped at the 12 most recent runs and 8 latest grouped periods to keep
+the context small and fast for the 0.6B model.
 
 Then deploy:
 

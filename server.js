@@ -9,6 +9,30 @@ const PUBLIC_DIR = path.join(__dirname, "public");
 const TOKEN_FILE = path.join(__dirname, ".strava-token.json");
 const STRAVA_API = "https://www.strava.com/api/v3";
 const STRAVA_OAUTH_TOKEN = "https://www.strava.com/oauth/token";
+const DEFAULT_OLLAMA_URL = "https://ollama.jeer.rest";
+const DEFAULT_OLLAMA_MODEL = "qwen3:0.6b";
+
+const INSIGHT_SCHEMA = {
+  type: "object",
+  properties: {
+    summary: { type: "string" },
+    observations: {
+      type: "array",
+      minItems: 3,
+      maxItems: 4,
+      items: {
+        type: "object",
+        properties: {
+          title: { type: "string" },
+          detail: { type: "string" },
+          tone: { type: "string", enum: ["positive", "neutral", "caution"] }
+        },
+        required: ["title", "detail", "tone"]
+      }
+    }
+  },
+  required: ["summary", "observations"]
+};
 
 loadLocalEnv();
 
@@ -94,6 +118,121 @@ function requestJson(url, options = {}, body = null) {
     if (body) request.write(body);
     request.end();
   });
+}
+
+function readRequestJson(req, limit = 64_000) {
+  return new Promise((resolve, reject) => {
+    let raw = "";
+    req.setEncoding("utf8");
+    req.on("data", (chunk) => {
+      raw += chunk;
+      if (raw.length > limit) reject(new Error("The training summary is too large."));
+    });
+    req.on("end", () => {
+      try {
+        resolve(JSON.parse(raw || "{}"));
+      } catch {
+        reject(new Error("The training summary is not valid JSON."));
+      }
+    });
+    req.on("error", reject);
+  });
+}
+
+function buildInsightPrompt(input) {
+  const summary = input.summary || {};
+  const pace = (seconds) => {
+    const value = Math.max(0, Math.round(Number(seconds) || 0));
+    return value ? `${Math.floor(value / 60)}:${String(value % 60).padStart(2, "0")}/mi` : "n/a";
+  };
+  const periods = (input.buckets || []).map((period) =>
+    `${period.period}: ${period.runs} runs, ${period.miles} mi, ${pace(period.averagePaceSeconds)}, long ${period.longRunMiles} mi, HR ${period.averageHr ?? "n/a"}, load ${period.trainingLoad}`
+  );
+  const runs = (input.recentRuns || []).map((run) =>
+    `${run.date}: ${run.distanceMiles} mi, ${pace(run.paceSecondsPerMile)}, ${run.elevationFeet} ft, HR ${run.averageHr ?? "n/a"}, load ${run.trainingLoad}`
+  );
+  return [
+    `Focus: ${input.focus || "balanced"}. Window: ${input.range?.start || "unknown"} to ${input.range?.end || "unknown"}.`,
+    `Totals: ${summary.runCount} runs, ${summary.totalMiles} mi, average pace ${pace(summary.averagePaceSeconds)}, average ${summary.averageWeeklyMiles} mi/week and ${summary.averageRunsPerWeek} runs/week.`,
+    `Signals: long run ${summary.longRunMiles} mi (${summary.longRunSharePercent}% of mileage), peak week ${summary.peakWeekMiles} mi, consistency ${summary.consistencyPercent}%, ramp ${summary.rampRatePercent}%, average HR ${summary.averageHr ?? "n/a"}, load ${summary.trainingLoad}, longest rest gap ${summary.longestRestGapDays} days.`,
+    `Recent periods:\n${periods.join("\n")}`,
+    `Recent runs:\n${runs.join("\n")}`,
+    "Load is a rough estimate.",
+    "Write athlete-facing prose, not labels, placeholders, plans, or a data dump.",
+    "Summary: 1-2 sentences connecting at least two metrics.",
+    "Observations: 3 distinct trends or comparisons; do not merely list individual runs.",
+    "Do not invent numbers or diagnose health, injury, overtraining, or readiness."
+  ].join("\n");
+}
+
+function insightHeadline(input) {
+  const summary = input?.summary || {};
+  const ramp = Number(summary.rampRatePercent) || 0;
+  const consistency = Number(summary.consistencyPercent) || 0;
+  if (ramp > 15) return "Volume is rising faster than your recent baseline";
+  if (ramp < -15) return "Training volume has eased across this window";
+  if ((Number(summary.longestRestGapDays) || 0) >= 7) return "Long recovery gaps are shaping this training block";
+  if (consistency >= 80) return "Consistent training is anchoring this running block";
+  return "Steady training with room to build consistency";
+}
+
+function safeNextStep(input) {
+  const summary = input?.summary || {};
+  const weeklyMiles = Math.max(0, Number(summary.averageWeeklyMiles) || 0);
+  const runs = Math.max(1, Math.round(Number(summary.averageRunsPerWeek) || 1));
+  const observedLongRun = Math.max(0, Number(summary.longRunMiles) || 0);
+  const longRun = weeklyMiles ? Math.min(observedLongRun, weeklyMiles) : observedLongRun;
+  return `Repeat roughly your recent baseline next week: about ${weeklyMiles.toFixed(1)} miles across ${runs} ${runs === 1 ? "run" : "runs"}, keep the longest effort at or below ${longRun.toFixed(1)} miles, and take an easy or rest day afterward.`;
+}
+
+function normalizeInsight(value, input) {
+  const observations = Array.isArray(value?.observations)
+    ? value.observations.slice(0, 4).map((item) => ({
+      title: String(item?.title || "Training signal").slice(0, 100),
+      detail: String(item?.detail || "").slice(0, 500),
+      tone: ["positive", "neutral", "caution"].includes(item?.tone) ? item.tone : "neutral"
+    }))
+    : [];
+  if (!value?.summary || observations.length < 3) {
+    throw new Error("Ollama returned an incomplete analysis. Try again.");
+  }
+  return {
+    headline: insightHeadline(input),
+    summary: String(value.summary).slice(0, 700),
+    observations,
+    nextStep: safeNextStep(input),
+    caution: "Pattern-based guidance from your run data, not medical advice."
+  };
+}
+
+async function requestInsight(input) {
+  const baseUrl = String(process.env.OLLAMA_BASE_URL || DEFAULT_OLLAMA_URL).replace(/\/+$/, "");
+  const model = process.env.OLLAMA_MODEL || DEFAULT_OLLAMA_MODEL;
+  const response = await fetch(`${baseUrl}/api/chat`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      model,
+      stream: false,
+      think: false,
+      format: INSIGHT_SCHEMA,
+      messages: [
+        { role: "system", content: "Concise running analyst. Return only schema-valid JSON." },
+        { role: "user", content: buildInsightPrompt(input) }
+      ],
+      options: { temperature: 0.1, num_ctx: 8192, num_predict: 480 }
+    }),
+    signal: AbortSignal.timeout(120_000)
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || `Ollama returned HTTP ${response.status}.`);
+  let parsed;
+  try {
+    parsed = JSON.parse(data.message?.content || "");
+  } catch {
+    throw new Error("Ollama returned an unreadable analysis. Try again.");
+  }
+  return { insight: normalizeInsight(parsed, input), model };
 }
 
 async function exchangeToken(params) {
@@ -222,6 +361,17 @@ async function handleApi(req, res) {
       if (!Array.isArray(batch) || batch.length < perPage) break;
     }
     sendJson(res, 200, { activities });
+    return;
+  }
+
+  if (url.pathname === "/api/insights" && req.method === "POST") {
+    const input = await readRequestJson(req);
+    if (!input || !Array.isArray(input.recentRuns) || !input.recentRuns.length) {
+      sendJson(res, 400, { error: "No running data was supplied." });
+      return;
+    }
+    const result = await requestInsight(input);
+    sendJson(res, 200, result);
     return;
   }
 
