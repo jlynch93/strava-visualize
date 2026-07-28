@@ -4,12 +4,13 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#0b1112">
-    <title>Strava Run Trends</title>
+    <title>Stride — Running intelligence</title>
     <link rel="stylesheet" href="/styles.css?v=theme-2">
-    <link rel="stylesheet" href="/experience.css?v=run-read-1">
+    <link rel="stylesheet" href="/experience.css?v=workspace-1">
   </head>
   <body>
-    <main class="app">
+    <a class="skip-link" href="#overview">Skip to overview</a>
+    <main id="mainContent" class="app">
       <section class="topbar" aria-label="Dashboard header">
         <div class="brand-lockup">
           <span class="brand-mark" aria-hidden="true"></span>
@@ -87,9 +88,19 @@
         </div>
       </section>
 
+      <nav class="section-nav" aria-label="Dashboard sections">
+        <div class="section-nav-links">
+          <a href="#overview" data-section-link="overview" aria-current="true">Overview</a>
+          <a href="#coach" data-section-link="coach">Coach</a>
+          <a href="#patterns" data-section-link="patterns">Patterns</a>
+          <a href="#runs" data-section-link="runs">Runs</a>
+        </div>
+        <span id="navWindowLabel">No running data loaded</span>
+      </nav>
+
       <section id="status" class="status" role="status"></section>
 
-      <section class="kpis" aria-label="Runner trend summary">
+      <section id="overview" class="kpis" aria-label="Runner trend summary">
         <article>
           <span>Total distance</span>
           <strong id="totalDistance">-</strong>
@@ -117,6 +128,16 @@
         </article>
       </section>
 
+      <section class="training-brief" aria-labelledby="trainingBriefTitle">
+        <div class="training-brief-copy">
+          <p class="panel-kicker">At a glance</p>
+          <h2 id="trainingBriefTitle">What is shaping this block.</h2>
+          <p id="trainingBriefSummary">Load running data to build your training brief.</p>
+          <a class="brief-link" href="#coach">Take this to Ollama <span aria-hidden="true">↘</span></a>
+        </div>
+        <div id="trainingBriefSignals" class="training-brief-signals" aria-live="polite"></div>
+      </section>
+
       <section class="chart-panel feature-chart" aria-labelledby="mainChartTitle">
         <div class="panel-heading">
           <div>
@@ -125,10 +146,16 @@
           </div>
           <span id="mainChartSubtitle"></span>
         </div>
+        <div class="metric-switcher" aria-label="Quick chart metric">
+          <button type="button" data-metric="distance" aria-pressed="true">Volume</button>
+          <button type="button" data-metric="pace" aria-pressed="false">Pace</button>
+          <button type="button" data-metric="load" aria-pressed="false">Load</button>
+          <button type="button" data-metric="heartrate" aria-pressed="false">Heart rate</button>
+        </div>
         <div id="mainChart" class="chart"></div>
       </section>
 
-      <section class="ai-insights" aria-labelledby="aiInsightsTitle">
+      <section id="coach" class="ai-insights" aria-labelledby="aiInsightsTitle">
         <div class="ai-insights-intro">
           <div>
             <p class="ai-kicker"><span class="ai-status-dot" aria-hidden="true"></span> Ollama training read</p>
@@ -140,8 +167,8 @@
                 <strong>Metrics &amp; charts</strong>
               </div>
               <div>
-                <span>Written by Ollama</span>
-                <strong>This training read only</strong>
+                <span>Guided by Ollama</span>
+                <strong>Analysis priorities</strong>
               </div>
             </div>
           </div>
@@ -157,6 +184,11 @@
             </select>
             <label for="aiQuestion">Your question <span>(optional)</span></label>
             <textarea id="aiQuestion" rows="3" maxlength="280" placeholder="What changed most over the last eight weeks?"></textarea>
+            <div class="ai-prompt-chips" aria-label="Suggested questions">
+              <button type="button" data-focus="progression" data-question="What changed most across this training window?">What changed?</button>
+              <button type="button" data-focus="recovery" data-question="How has my training load shifted, and what should I watch?">Load check</button>
+              <button type="button" data-focus="durability" data-question="What stands out about my long-run pattern?">Long runs</button>
+            </div>
             <button id="aiAnalyzeButton" class="ai-action" type="button" disabled>Ask Ollama</button>
           </div>
           <p class="ai-model-note">Ollama · <span id="aiModelName">qwen3.5:0.8b</span> · compact context · runs only when you ask</p>
@@ -172,7 +204,7 @@
         </div>
       </section>
 
-      <section class="analysis-section" aria-labelledby="analysisTitle">
+      <section id="patterns" class="analysis-section" aria-labelledby="analysisTitle">
         <div class="section-intro">
           <div>
             <p>Pattern recognition</p>
@@ -237,13 +269,39 @@
         <div id="intelGrid" class="intel-grid"></div>
       </section>
 
-      <section class="table-section">
+      <section id="runs" class="table-section">
         <div class="panel-heading">
           <div>
             <p class="panel-kicker">The details</p>
             <h2>Recent runs</h2>
           </div>
           <span id="activityCount">No activities loaded</span>
+        </div>
+        <div class="run-browser" aria-label="Filter and sort runs">
+          <label class="run-search" for="activitySearch">
+            <span>Find a run</span>
+            <input id="activitySearch" type="search" placeholder="Search name or date" autocomplete="off">
+          </label>
+          <label for="activityType">
+            <span>Run type</span>
+            <select id="activityType">
+              <option value="all">All types</option>
+              <option value="Quality">Quality</option>
+              <option value="Long">Long</option>
+              <option value="Easy">Easy</option>
+              <option value="Steady">Steady</option>
+              <option value="Race">Race</option>
+            </select>
+          </label>
+          <label for="activitySort">
+            <span>Sort by</span>
+            <select id="activitySort">
+              <option value="newest">Newest first</option>
+              <option value="distance">Longest first</option>
+              <option value="pace">Fastest first</option>
+              <option value="load">Highest load</option>
+            </select>
+          </label>
         </div>
         <div class="table-wrap">
           <table>
@@ -262,6 +320,7 @@
             <tbody id="activityRows"></tbody>
           </table>
         </div>
+        <button id="loadMoreRuns" class="load-more-runs" type="button" hidden>Show more runs</button>
       </section>
       <footer class="site-footer">
         <p><span class="footer-mark" aria-hidden="true"></span> Stride intelligence</p>
@@ -275,6 +334,6 @@
         <div id="workoutModalContent"></div>
       </section>
     </div>
-    <script src="/script.js?v=run-read-1"></script>
+    <script src="/script.js?v=workspace-1"></script>
   </body>
 </html>

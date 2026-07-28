@@ -11,7 +11,10 @@ const state = {
   renderedInsightFingerprint: "",
   runInsightCache: new Map(),
   runInsightAbort: null,
-  activeRunInsightKey: ""
+  activeRunInsightKey: "",
+  activeRunId: "",
+  dataSource: "No data",
+  activityVisible: 15
 };
 
 const els = {
@@ -23,6 +26,7 @@ const els = {
   endDate: document.querySelector("#endDate"),
   bucketSelect: document.querySelector("#bucketSelect"),
   metricSelect: document.querySelector("#metricSelect"),
+  navWindowLabel: document.querySelector("#navWindowLabel"),
   status: document.querySelector("#status"),
   tooltip: document.querySelector("#chartTooltip"),
   totalDistance: document.querySelector("#totalDistance"),
@@ -35,6 +39,8 @@ const els = {
   consistencyDelta: document.querySelector("#consistencyDelta"),
   averageHr: document.querySelector("#averageHr"),
   averageHrDelta: document.querySelector("#averageHrDelta"),
+  trainingBriefSummary: document.querySelector("#trainingBriefSummary"),
+  trainingBriefSignals: document.querySelector("#trainingBriefSignals"),
   mainChartTitle: document.querySelector("#mainChartTitle"),
   mainChartSubtitle: document.querySelector("#mainChartSubtitle"),
   mainChart: document.querySelector("#mainChart"),
@@ -54,6 +60,10 @@ const els = {
   aiInsightContent: document.querySelector("#aiInsightContent"),
   activityRows: document.querySelector("#activityRows"),
   activityCount: document.querySelector("#activityCount"),
+  activitySearch: document.querySelector("#activitySearch"),
+  activityType: document.querySelector("#activityType"),
+  activitySort: document.querySelector("#activitySort"),
+  loadMoreRuns: document.querySelector("#loadMoreRuns"),
   workoutModal: document.querySelector("#workoutModal"),
   workoutModalClose: document.querySelector("#workoutModalClose"),
   workoutModalContent: document.querySelector("#workoutModalContent")
@@ -306,7 +316,12 @@ function summarize(runs, buckets) {
   const averageWeeklyMiles = spanDays ? totalMiles / Math.max(spanDays / 7, 1 / 7) : 0;
   const averageRunMiles = runs.length ? totalMiles / runs.length : 0;
   const averageRunsPerWeek = spanDays ? runs.length / Math.max(spanDays / 7, 1 / 7) : 0;
-  const longRunShare = totalMiles ? longRun / totalMiles : 0;
+  const longRunThreshold = Math.max(8, averageRunMiles * 1.35);
+  const longRunMiles = runs.reduce((sum, run) => {
+    const distance = miles(run.distance);
+    return sum + (distance >= longRunThreshold ? distance : 0);
+  }, 0);
+  const longRunShare = totalMiles ? longRunMiles / totalMiles : 0;
   const averageLoadPerMile = totalMiles ? totalLoad / totalMiles : 0;
   const elevationPerMile = totalMiles ? totalElevation / totalMiles : 0;
   const aerobicEfficiency = hrSeconds && totalMiles ? totalMiles / (weightedHr / hrSeconds) : 0;
@@ -380,7 +395,15 @@ function currentInsightFingerprint() {
     grouping: els.bucketSelect.value,
     focus: els.aiFocus.value,
     question: els.aiQuestion.value.trim(),
-    runs: state.filteredRuns.map((run) => [run.id, run.start_date_local || run.start_date])
+    runs: state.filteredRuns.map((run) => [
+      run.id,
+      run.start_date_local || run.start_date,
+      run.distance,
+      run.moving_time,
+      run.total_elevation_gain,
+      run.average_heartrate,
+      run.suffer_score
+    ])
   });
 }
 
@@ -411,6 +434,7 @@ function render() {
   renderDelta(els.consistencyDelta, summary.consistency * 100, previous.consistency * 100, "%", true);
   renderDelta(els.averageHrDelta, summary.averageHr, previous.averageHr, "bpm", false, true);
 
+  renderTrainingBrief(summary, previous, start, end);
   renderIntel(summary, previous, start, end);
   renderAiState();
   renderMainChart();
@@ -421,6 +445,66 @@ function render() {
   renderDistanceMix();
   renderPaceZones();
   renderTable();
+}
+
+function renderTrainingBrief(summary, previous, start, end) {
+  if (!summary.runCount) {
+    els.trainingBriefSummary.textContent = "Load running data to build a concise read of volume, pace, and training structure.";
+    els.trainingBriefSignals.replaceChildren(...[
+      ["Direction", "Waiting for a training window"],
+      ["Effort", "Pace and load will appear here"],
+      ["Structure", "Run spacing will appear here"]
+    ].map(([label, detail]) => {
+      const article = document.createElement("article");
+      const heading = document.createElement("span");
+      const copy = document.createElement("strong");
+      heading.textContent = label;
+      copy.textContent = detail;
+      article.append(heading, copy);
+      return article;
+    }));
+    els.navWindowLabel.textContent = "No running data loaded";
+    return;
+  }
+
+  const weeklyDelta = previous.averageWeeklyMiles
+    ? ((summary.averageWeeklyMiles - previous.averageWeeklyMiles) / previous.averageWeeklyMiles) * 100
+    : null;
+  const paceDelta = previous.averagePace ? summary.averagePace - previous.averagePace : null;
+  let headline = "A balanced training window is taking shape.";
+  if (summary.rampRate > 20) headline = "Volume is building quickly inside this window.";
+  else if (summary.rampRate < -15) headline = "The recent end of this window is lighter.";
+  else if (paceDelta !== null && paceDelta < -12) headline = "Average pace has moved faster than the prior window.";
+  else if (summary.consistency >= 0.8) headline = "Consistency is the anchor of this block.";
+
+  const rangeText = start && end
+    ? `${start.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}–${end.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}`
+    : "selected window";
+  els.trainingBriefSummary.textContent = `${headline} You averaged ${summary.averageWeeklyMiles.toFixed(1)} miles and ${summary.averageRunsPerWeek.toFixed(1)} runs per week across the ${rangeText} view.`;
+  els.navWindowLabel.textContent = `${state.dataSource} · ${summary.runCount} runs · ${rangeText}`;
+
+  const volumeDetail = weeklyDelta === null
+    ? `${summary.averageWeeklyMiles.toFixed(1)} mi/wk in view`
+    : `${weeklyDelta >= 0 ? "+" : ""}${Math.round(weeklyDelta)}% weekly volume vs prior`;
+  const paceDetail = paceDelta === null
+    ? `${formatPace(summary.averagePace)} average pace`
+    : `${paceDelta < 0 ? "Faster" : paceDelta > 0 ? "Slower" : "Level"} by ${formatPace(Math.abs(paceDelta)).replace("/mi", "")} vs prior`;
+  const structureDetail = `${Math.round(summary.longRunShare * 100)}% of mileage from long runs · ${summary.longestRestGap}d longest gap`;
+  const signals = [
+    { label: "Direction", detail: volumeDetail, tone: weeklyDelta !== null && Math.abs(weeklyDelta) > 20 ? "caution" : "positive" },
+    { label: "Effort", detail: paceDetail, tone: paceDelta !== null && paceDelta < 0 ? "positive" : "neutral" },
+    { label: "Structure", detail: structureDetail, tone: summary.longRunShare > 0.5 || summary.longestRestGap >= 7 ? "caution" : "neutral" }
+  ];
+  els.trainingBriefSignals.replaceChildren(...signals.map((signal) => {
+    const article = document.createElement("article");
+    article.className = signal.tone;
+    const label = document.createElement("span");
+    const detail = document.createElement("strong");
+    label.textContent = signal.label;
+    detail.textContent = signal.detail;
+    article.append(label, detail);
+    return article;
+  }));
 }
 
 function renderAiState() {
@@ -438,7 +522,7 @@ function renderAiState() {
   title.textContent = state.filteredRuns.length ? "Your selected window is ready" : "Load running data to begin";
   const detail = document.createElement("p");
   detail.textContent = state.filteredRuns.length
-    ? `${state.filteredRuns.length} runs are ready. Ask a question or choose a focus; Ollama will write only the training read in this panel.`
+    ? `${state.filteredRuns.length} runs are ready. Ask a question or choose a focus; Ollama will prioritize the most relevant app-calculated signals.`
     : "Connect Strava, import a file, or try the demo. The app will calculate your dashboard first, then you can ask Ollama for a separate training read.";
   copy.append(title, detail);
   wrapper.append(index, copy);
@@ -538,7 +622,7 @@ function renderAiLoading() {
   const title = document.createElement("strong");
   title.textContent = "Reading the shape of your training";
   const detail = document.createElement("p");
-  detail.textContent = "Ollama is comparing the compact metrics supplied for this request. Your dashboard and charts remain app-calculated. The model may take a moment to wake up.";
+  detail.textContent = "Ollama is selecting the most relevant angles from the compact metrics supplied for this request. The app keeps every statement tied to its calculations.";
   copy.append(title, detail);
   wrapper.append(index, copy);
   els.aiInsightContent.replaceChildren(wrapper);
@@ -566,7 +650,7 @@ function renderAiInsight(insight, model) {
   const header = document.createElement("div");
   header.className = "ai-result-header";
   const label = document.createElement("span");
-  label.textContent = `Ollama read · ${model || els.aiModelName.textContent}`;
+  label.textContent = `Ollama-guided read · ${model || els.aiModelName.textContent}`;
   const headline = document.createElement("h3");
   headline.textContent = insight.headline;
   const summary = document.createElement("p");
@@ -601,6 +685,10 @@ function renderAiInsight(insight, model) {
   caution.className = "ai-caution";
   caution.textContent = insight.caution || "Treat this as a training pattern review, not medical advice.";
   els.aiInsightContent.replaceChildren(header, observations, nextStep, caution);
+  requestAnimationFrame(() => {
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    els.aiInsightContent.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "start" });
+  });
 }
 
 async function analyzeWithOllama() {
@@ -757,6 +845,9 @@ function renderDelta(element, current, previous, unit, higherIsBetter, neutral =
 
 function renderMainChart() {
   const metric = METRICS[els.metricSelect.value];
+  document.querySelectorAll("[data-metric]").forEach((button) => {
+    button.setAttribute("aria-pressed", String(button.dataset.metric === els.metricSelect.value));
+  });
   els.mainChartTitle.textContent = `${metric.label} trend`;
   els.mainChartSubtitle.textContent = `${state.buckets.length} ${els.bucketSelect.value === "week" ? "weeks" : "months"}`;
   renderBarLineChart(els.mainChart, state.buckets, metric);
@@ -1258,8 +1349,11 @@ function percentileRank(values, value, higherIsBetter = true) {
 function classifyRun(run, distanceMiles, pace, distanceRank, paceRank) {
   const name = run.name.toLowerCase();
   if (name.includes("race")) return "Race";
-  if (name.includes("tempo") || name.includes("interval") || name.includes("workout") || paceRank >= 75) return "Quality";
+  if (name.includes("tempo") || name.includes("interval") || name.includes("workout")) return "Quality";
+  if (name.includes("easy") || name.includes("recovery")) return "Easy";
+  if (name.includes("long")) return "Long";
   if (distanceRank >= 85 || distanceMiles >= 10) return "Long";
+  if (paceRank >= 85) return "Quality";
   if (pace && pace >= 600) return "Easy";
   return "Steady";
 }
@@ -1561,6 +1655,11 @@ async function requestRunInsight(digest, { force = false } = {}) {
 function showWorkoutModal(runId, trigger = document.activeElement) {
   const run = state.filteredRuns.find((candidate) => String(candidate.id) === String(runId));
   if (!run) return;
+  const modalWasHidden = els.workoutModal.hidden;
+  if (modalWasHidden && trigger instanceof HTMLElement && !els.workoutModal.contains(trigger)) {
+    state.modalTrigger = trigger;
+  }
+  state.activeRunId = String(run.id);
   const digest = buildWorkoutDigest(run);
   const narrative = workoutNarrative(digest);
   const averageHr = Number(run.average_heartrate) || 0;
@@ -1583,6 +1682,18 @@ function showWorkoutModal(runId, trigger = document.activeElement) {
         <span id="workoutModalMeta">${escapeHtml(bucketLabelText)}</span>
         <span>${escapeHtml(socialText)}</span>
       </div>
+      <nav class="workout-run-nav" aria-label="Browse workouts">
+        <button type="button" data-action="navigate-run" data-run-id="${escapeHtml(digest.previousRun?.id || "")}" ${digest.previousRun ? "" : "disabled"}>
+          <span aria-hidden="true">←</span>
+          <small>Older</small>
+          <strong>${escapeHtml(digest.previousRun?.name || "Start of range")}</strong>
+        </button>
+        <button type="button" data-action="navigate-run" data-run-id="${escapeHtml(digest.nextRun?.id || "")}" ${digest.nextRun ? "" : "disabled"}>
+          <small>Newer</small>
+          <strong>${escapeHtml(digest.nextRun?.name || "End of range")}</strong>
+          <span aria-hidden="true">→</span>
+        </button>
+      </nav>
     </header>
     <div class="workout-body">
       <section class="workout-lead" aria-label="Workout summary">
@@ -1652,9 +1763,9 @@ function showWorkoutModal(runId, trigger = document.activeElement) {
       </div>
     </div>
   `;
-  state.modalTrigger = trigger instanceof HTMLElement ? trigger : null;
   els.workoutModal.hidden = false;
   document.body.classList.add("modal-open");
+  els.workoutModal.querySelector(".workout-modal").scrollTop = 0;
   els.workoutModalClose.focus();
   requestRunInsight(digest);
 }
@@ -1663,6 +1774,7 @@ function closeWorkoutModal() {
   state.runInsightAbort?.abort();
   state.runInsightAbort = null;
   state.activeRunInsightKey = "";
+  state.activeRunId = "";
   els.workoutModal.hidden = true;
   document.body.classList.remove("modal-open");
   els.workoutModalContent.replaceChildren();
@@ -1670,10 +1782,67 @@ function closeWorkoutModal() {
   state.modalTrigger = null;
 }
 
+function activityRunTypes(runs) {
+  const distances = runs.map((run) => miles(run.distance));
+  const paces = runs.map(paceSeconds);
+  return new Map(runs.map((run) => {
+    const distance = miles(run.distance);
+    const pace = paceSeconds(run);
+    return [
+      String(run.id),
+      classifyRun(
+        run,
+        distance,
+        pace,
+        percentileRank(distances, distance, true),
+        percentileRank(paces, pace, false)
+      )
+    ];
+  }));
+}
+
 function renderTable() {
-  const recent = [...state.filteredRuns].sort((a, b) => parseActivityDate(b) - parseActivityDate(a)).slice(0, 15);
-  els.activityCount.textContent = `${state.filteredRuns.length} runs in range`;
-  els.activityRows.replaceChildren(...recent.map((run) => {
+  const types = activityRunTypes(state.filteredRuns);
+  const query = els.activitySearch.value.trim().toLowerCase();
+  const selectedType = els.activityType.value;
+  const sort = els.activitySort.value;
+  const matching = state.filteredRuns.filter((run) => {
+    const type = types.get(String(run.id));
+    if (selectedType !== "all" && type !== selectedType) return false;
+    if (!query) return true;
+    const date = parseActivityDate(run);
+    const searchable = [
+      run.name,
+      type,
+      date.toLocaleDateString(),
+      date.toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" })
+    ].join(" ").toLowerCase();
+    return searchable.includes(query);
+  }).sort((left, right) => {
+    if (sort === "distance") return miles(right.distance) - miles(left.distance);
+    if (sort === "pace") return paceSeconds(left) - paceSeconds(right);
+    if (sort === "load") return activityLoad(right) - activityLoad(left);
+    return parseActivityDate(right) - parseActivityDate(left);
+  });
+  const visible = matching.slice(0, state.activityVisible);
+  els.activityCount.textContent = matching.length === state.filteredRuns.length
+    ? `${matching.length} runs in range`
+    : `${matching.length} of ${state.filteredRuns.length} runs`;
+  els.loadMoreRuns.hidden = visible.length >= matching.length;
+  els.loadMoreRuns.textContent = `Show ${Math.min(15, matching.length - visible.length)} more runs`;
+
+  if (!visible.length) {
+    const row = document.createElement("tr");
+    const cell = document.createElement("td");
+    cell.colSpan = 8;
+    cell.className = "run-browser-empty";
+    cell.textContent = state.filteredRuns.length ? "No runs match these filters." : "Load running data to browse workouts.";
+    row.append(cell);
+    els.activityRows.replaceChildren(row);
+    return;
+  }
+
+  els.activityRows.replaceChildren(...visible.map((run) => {
     const row = document.createElement("tr");
     row.className = "activity-row";
     row.dataset.activityId = run.id;
@@ -1687,16 +1856,25 @@ function renderTable() {
     action.textContent = "→";
     actionCell.appendChild(action);
     row.appendChild(actionCell);
-    const values = [
-      parseActivityDate(run).toLocaleDateString(),
-      run.name,
+
+    const dateCell = document.createElement("td");
+    dateCell.textContent = parseActivityDate(run).toLocaleDateString();
+    const nameCell = document.createElement("td");
+    nameCell.className = "run-name-cell";
+    const name = document.createElement("strong");
+    const type = document.createElement("small");
+    name.textContent = run.name;
+    type.textContent = `${types.get(String(run.id))} run`;
+    nameCell.append(name, type);
+    row.append(dateCell, nameCell);
+
+    [
       `${miles(run.distance).toFixed(2)} mi`,
       formatPace(paceSeconds(run)),
       `${Math.round(feet(run.total_elevation_gain)).toLocaleString()} ft`,
       run.average_heartrate ? `${Math.round(run.average_heartrate)} bpm` : "-",
       `${Math.round(run.suffer_score || runMinutes(run) * effortMultiplier(run))}`
-    ];
-    values.forEach((value) => {
+    ].forEach((value) => {
       const cell = document.createElement("td");
       cell.textContent = value;
       row.appendChild(cell);
@@ -1709,16 +1887,30 @@ function renderTable() {
   }));
 }
 
+function resetRunBrowser() {
+  els.activitySearch.value = "";
+  els.activityType.value = "all";
+  els.activitySort.value = "newest";
+  state.activityVisible = 15;
+}
+
 async function fetchActivities() {
   setStatus("Pulling activities from Strava...");
   const { start, end } = getRangeDates();
   const params = new URLSearchParams({ pages: "8", per_page: "100" });
-  if (start) params.set("after", Math.floor(start.getTime() / 1000));
+  if (start) {
+    const comparisonStart = end && end > start
+      ? new Date(start.valueOf() - (end.valueOf() - start.valueOf()))
+      : start;
+    params.set("after", Math.floor(comparisonStart.getTime() / 1000));
+  }
   if (end) params.set("before", Math.floor(end.getTime() / 1000));
   const response = await fetch(`/api/activities?${params}`);
   const data = await readApiJson(response);
   if (!response.ok) throw new Error(data.error || "Unable to fetch Strava activities.");
   state.rawActivities = data.activities;
+  state.dataSource = "Strava";
+  resetRunBrowser();
   syncRangeInputs();
   setStatus(`Loaded ${data.activities.length} activities from Strava.`);
   render();
@@ -1791,6 +1983,8 @@ async function importFile(file) {
   const text = await file.text();
   const data = file.name.toLowerCase().endsWith(".csv") ? parseCsv(text) : JSON.parse(text);
   state.rawActivities = Array.isArray(data) ? data : data.activities || [];
+  state.dataSource = "Import";
+  resetRunBrowser();
   syncRangeInputs();
   setStatus(`Imported ${state.rawActivities.length} activities.`);
   render();
@@ -1799,34 +1993,40 @@ async function importFile(file) {
 function makeDemoData() {
   const activities = [];
   const today = new Date();
-  for (let i = 0; i < 390; i += 1) {
+  const historyDays = 760;
+  let seed = 20260727;
+  const random = () => {
+    seed = (seed * 1664525 + 1013904223) >>> 0;
+    return seed / 4294967296;
+  };
+  for (let i = 0; i < historyDays; i += 1) {
     const date = new Date(today);
     date.setDate(today.getDate() - i);
-    if (![1, 3, 5, 6].includes(date.getDay()) || Math.random() < 0.16) continue;
+    if (![1, 3, 5, 6].includes(date.getDay()) || random() < 0.16) continue;
     const longRun = date.getDay() === 6;
-    const baseMiles = longRun ? 8 + Math.random() * 7 : 3 + Math.random() * 5;
-    const trend = 1 + (390 - i) / 900;
+    const baseMiles = longRun ? 8 + random() * 7 : 3 + random() * 5;
+    const trend = 1 + (historyDays - i) / 1800;
     const distanceMiles = baseMiles * trend;
-    const pace = 520 - (390 - i) * 0.16 + Math.random() * 45;
-    const hr = 136 + Math.random() * 24 + (longRun ? 4 : 0);
+    const pace = 530 - (historyDays - i) * 0.08 + random() * 45;
+    const hr = 136 + random() * 24 + (longRun ? 4 : 0);
     const movingTime = Math.round(distanceMiles * pace);
     activities.push({
       id: `demo-${i}`,
-      name: longRun ? "Long run" : ["Easy run", "Workout", "Steady run"][Math.floor(Math.random() * 3)],
+      name: longRun ? "Long run" : ["Easy run", "Workout", "Steady run"][Math.floor(random() * 3)],
       sport_type: "Run",
       start_date_local: date.toISOString(),
       distance: distanceMiles * 1609.344,
       moving_time: movingTime,
-      elapsed_time: movingTime + Math.round(Math.random() * 180),
-      total_elevation_gain: (40 + Math.random() * 95) * distanceMiles / 3.28084,
+      elapsed_time: movingTime + Math.round(random() * 180),
+      total_elevation_gain: (40 + random() * 95) * distanceMiles / 3.28084,
       average_heartrate: Math.round(hr),
-      max_heartrate: Math.round(hr + 18 + Math.random() * 18),
-      average_cadence: Math.round(160 + Math.random() * 18),
-      max_speed: 1609.344 / Math.max(300, pace - 75 - Math.random() * 30),
+      max_heartrate: Math.round(hr + 18 + random() * 18),
+      average_cadence: Math.round(160 + random() * 18),
+      max_speed: 1609.344 / Math.max(300, pace - 75 - random() * 30),
       suffer_score: Math.round(distanceMiles * (hr / 18)),
-      kudos_count: Math.floor(Math.random() * 18),
-      achievement_count: Math.random() > 0.78 ? Math.ceil(Math.random() * 4) : 0,
-      pr_count: Math.random() > 0.9 ? 1 : 0
+      kudos_count: Math.floor(random() * 18),
+      achievement_count: random() > 0.78 ? Math.ceil(random() * 4) : 0,
+      pr_count: random() > 0.9 ? 1 : 0
     });
   }
   return activities;
@@ -1845,12 +2045,30 @@ els.connectButton.addEventListener("click", () => {
 
 els.demoButton.addEventListener("click", () => {
   state.rawActivities = makeDemoData();
+  state.dataSource = "Demo";
+  resetRunBrowser();
   syncRangeInputs();
   setStatus("Loaded demo running history.");
   render();
 });
 
 els.aiAnalyzeButton.addEventListener("click", analyzeWithOllama);
+
+document.querySelector(".metric-switcher").addEventListener("click", (event) => {
+  const button = event.target.closest("[data-metric]");
+  if (!button) return;
+  els.metricSelect.value = button.dataset.metric;
+  renderMainChart();
+});
+
+document.querySelector(".ai-prompt-chips").addEventListener("click", (event) => {
+  const button = event.target.closest("[data-question]");
+  if (!button) return;
+  els.aiFocus.value = button.dataset.focus || "balanced";
+  els.aiQuestion.value = button.dataset.question;
+  invalidateAiInsight();
+  els.aiAnalyzeButton.focus();
+});
 
 function invalidateAiInsight() {
   state.insightFingerprint = currentInsightFingerprint();
@@ -1872,6 +2090,11 @@ els.activityRows.addEventListener("click", (event) => {
 });
 
 els.workoutModalContent.addEventListener("click", (event) => {
+  const navigate = event.target.closest("[data-action='navigate-run']");
+  if (navigate?.dataset.runId) {
+    showWorkoutModal(navigate.dataset.runId, state.modalTrigger);
+    return;
+  }
   const retry = event.target.closest("[data-action='retry-run-insight']");
   if (!retry) return;
   const run = state.filteredRuns.find((candidate) => String(candidate.id) === String(retry.dataset.runId));
@@ -1887,6 +2110,15 @@ els.workoutModal.addEventListener("click", (event) => {
 document.addEventListener("keydown", (event) => {
   if (els.workoutModal.hidden) return;
   if (event.key === "Escape") closeWorkoutModal();
+  if ((event.key === "ArrowLeft" || event.key === "ArrowRight") && !event.target.closest("input, textarea, select")) {
+    const runs = [...state.filteredRuns].sort((left, right) => parseActivityDate(left) - parseActivityDate(right));
+    const index = runs.findIndex((run) => String(run.id) === state.activeRunId);
+    const target = event.key === "ArrowLeft" ? runs[index - 1] : runs[index + 1];
+    if (target) {
+      event.preventDefault();
+      showWorkoutModal(target.id, state.modalTrigger);
+    }
+  }
   if (event.key === "Tab") {
     const focusable = [els.workoutModalClose, ...els.workoutModalContent.querySelectorAll("button, a, input, select, textarea")]
       .filter((element) => !element.disabled && element.offsetParent !== null);
@@ -1903,22 +2135,64 @@ document.addEventListener("keydown", (event) => {
 });
 
 els.rangeSelect.addEventListener("change", () => {
+  state.activityVisible = 15;
   syncRangeInputs();
   render();
 });
 
 [els.startDate, els.endDate].forEach((element) => {
   element.addEventListener("change", () => {
+    state.activityVisible = 15;
     els.rangeSelect.value = "custom";
+    if (els.startDate.value && els.endDate.value && els.startDate.value > els.endDate.value) {
+      if (element === els.startDate) els.endDate.value = els.startDate.value;
+      else els.startDate.value = els.endDate.value;
+    }
     render();
   });
 });
 
-[els.bucketSelect, els.metricSelect].forEach((element) => {
-  element.addEventListener("change", render);
+els.bucketSelect.addEventListener("change", render);
+els.metricSelect.addEventListener("change", renderMainChart);
+
+els.activitySearch.addEventListener("input", () => {
+  state.activityVisible = 15;
+  renderTable();
 });
+
+[els.activityType, els.activitySort].forEach((element) => {
+  element.addEventListener("change", () => {
+    state.activityVisible = 15;
+    renderTable();
+  });
+});
+
+els.loadMoreRuns.addEventListener("click", () => {
+  state.activityVisible += 15;
+  renderTable();
+});
+
+function setupSectionNavigation() {
+  const links = [...document.querySelectorAll("[data-section-link]")];
+  const sections = links
+    .map((link) => document.querySelector(`#${link.dataset.sectionLink}`))
+    .filter(Boolean);
+  if (!("IntersectionObserver" in window)) return;
+  const observer = new IntersectionObserver((entries) => {
+    const visible = entries
+      .filter((entry) => entry.isIntersecting)
+      .sort((left, right) => right.intersectionRatio - left.intersectionRatio)[0];
+    if (!visible) return;
+    links.forEach((link) => {
+      if (link.dataset.sectionLink === visible.target.id) link.setAttribute("aria-current", "true");
+      else link.removeAttribute("aria-current");
+    });
+  }, { rootMargin: "-18% 0px -66% 0px", threshold: [0, 0.15, 0.4] });
+  sections.forEach((section) => observer.observe(section));
+}
 
 checkStatus().catch((error) => setStatus(error.message, true));
 syncRangeInputs();
 bindTooltips();
+setupSectionNavigation();
 render();
