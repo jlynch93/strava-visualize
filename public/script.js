@@ -8,7 +8,10 @@ const state = {
   stravaError: "",
   modalTrigger: null,
   insightFingerprint: "",
-  renderedInsightFingerprint: ""
+  renderedInsightFingerprint: "",
+  runInsightCache: new Map(),
+  runInsightAbort: null,
+  activeRunInsightKey: ""
 };
 
 const els = {
@@ -1417,6 +1420,144 @@ function nearbyRunText(run, gap) {
   return `${prefix}${formatNumber(miles(run.distance), 1)} mi at ${formatPace(paceSeconds(run))}`;
 }
 
+function buildRunInsightPayload(digest) {
+  const run = digest.run;
+  const summary = summarize(state.filteredRuns, state.buckets);
+  const averageHr = Number(run.average_heartrate) || 0;
+  const rawCadence = Number(run.average_cadence) || 0;
+  const cadence = rawCadence && rawCadence < 120 ? rawCadence * 2 : rawCadence;
+  const paceDifference = digest.similarPace ? Math.round(digest.pace - digest.similarPace) : 0;
+  const loadDifferencePercent = digest.similarLoadPerMile
+    ? Math.round(((digest.loadPerMile - digest.similarLoadPerMile) / digest.similarLoadPerMile) * 100)
+    : 0;
+  return {
+    kind: "run",
+    run: {
+      name: String(run.name || "Run").slice(0, 100),
+      date: localDateValue(digest.date),
+      runType: digest.runType,
+      distanceMiles: Number(digest.distance.toFixed(2)),
+      paceSecondsPerMile: Math.round(digest.pace),
+      movingMinutes: Math.round(digest.moving / 60),
+      stoppedMinutes: Math.round(digest.stopped / 60),
+      elevationFeet: Math.round(digest.elevation),
+      elevationFeetPerMile: Math.round(digest.elevationDensity),
+      averageHr: averageHr ? Math.round(averageHr) : null,
+      maxHr: run.max_heartrate ? Math.round(run.max_heartrate) : null,
+      trainingLoad: Math.round(digest.load),
+      loadPerMile: Number(digest.loadPerMile.toFixed(1)),
+      cadenceSpm: cadence ? Math.round(cadence) : null
+    },
+    comparison: {
+      distancePercentile: digest.distanceRank,
+      pacePercentile: digest.paceRank,
+      loadPercentile: digest.loadRank,
+      similarRunCount: digest.similarCount,
+      similarPaceSecondsPerMile: digest.similarPace ? Math.round(digest.similarPace) : null,
+      paceDifferenceSeconds: digest.similarPace ? paceDifference : null,
+      similarAverageHr: digest.similarHr ? Math.round(digest.similarHr) : null,
+      heartRateDifference: averageHr && digest.similarHr ? Math.round(averageHr - digest.similarHr) : null,
+      similarLoadPerMile: digest.similarLoadPerMile ? Number(digest.similarLoadPerMile.toFixed(1)) : null,
+      loadPerMileDifferencePercent: digest.similarLoadPerMile ? loadDifferencePercent : null,
+      daysSincePreviousRun: digest.previousGap,
+      daysUntilNextRun: digest.nextGap
+    },
+    baseline: {
+      runCount: summary.runCount,
+      averageRunMiles: Number(summary.averageRunMiles.toFixed(1)),
+      averagePaceSecondsPerMile: Math.round(summary.averagePace),
+      averageHr: summary.averageHr ? Math.round(summary.averageHr) : null,
+      averageLoadPerMile: Number(summary.averageLoadPerMile.toFixed(1))
+    }
+  };
+}
+
+function runInsightLoadingMarkup() {
+  return `
+    <div class="workout-ai-loading" aria-busy="true">
+      <span class="workout-ai-pulse" aria-hidden="true"></span>
+      <div>
+        <strong>Reading this effort in context…</strong>
+        <p>Comparing it with similar-distance runs and your selected-window baseline.</p>
+      </div>
+    </div>
+  `;
+}
+
+function renderRunInsightResult(result) {
+  const content = document.querySelector("#workoutAiContent");
+  if (!content) return;
+  const insight = result.insight;
+  const model = document.querySelector("#workoutAiModel");
+  if (model) model.textContent = result.model || "qwen3.5:0.8b";
+  content.innerHTML = `
+    <div class="workout-ai-result">
+      <h4>${escapeHtml(insight.headline)}</h4>
+      <p class="workout-ai-read">${escapeHtml(insight.read)}</p>
+      <div class="workout-ai-signals">
+        ${insight.signals.map((signal) => `
+          <article class="workout-ai-signal ${escapeHtml(signal.tone)}">
+            <span>${escapeHtml(signal.title)}</span>
+            <p>${escapeHtml(signal.detail)}</p>
+          </article>
+        `).join("")}
+      </div>
+      <div class="workout-ai-next">
+        <span>Watch on the next similar run</span>
+        <p>${escapeHtml(insight.watchNext)}</p>
+      </div>
+      <small>${escapeHtml(insight.caution)}</small>
+    </div>
+  `;
+}
+
+function renderRunInsightError(message, runId) {
+  const content = document.querySelector("#workoutAiContent");
+  if (!content) return;
+  content.innerHTML = `
+    <div class="workout-ai-error">
+      <div>
+        <strong>The run read did not finish.</strong>
+        <p>${escapeHtml(message)}</p>
+      </div>
+      <button class="workout-ai-retry" type="button" data-action="retry-run-insight" data-run-id="${escapeHtml(runId)}">Try again</button>
+    </div>
+  `;
+}
+
+async function requestRunInsight(digest, { force = false } = {}) {
+  const key = `${digest.run.id}:${state.insightFingerprint}`;
+  state.activeRunInsightKey = key;
+  const cached = state.runInsightCache.get(key);
+  if (cached && !force) {
+    renderRunInsightResult(cached);
+    return;
+  }
+  state.runInsightAbort?.abort();
+  const controller = new AbortController();
+  state.runInsightAbort = controller;
+  const content = document.querySelector("#workoutAiContent");
+  if (content) content.innerHTML = runInsightLoadingMarkup();
+  try {
+    const response = await fetch("/api/insights", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(buildRunInsightPayload(digest)),
+      signal: controller.signal
+    });
+    const data = await readApiJson(response);
+    if (!response.ok) throw new Error(data.error || "Unable to generate this run read.");
+    if (state.activeRunInsightKey !== key || els.workoutModal.hidden) return;
+    state.runInsightCache.set(key, data);
+    renderRunInsightResult(data);
+  } catch (error) {
+    if (error.name === "AbortError" || state.activeRunInsightKey !== key || els.workoutModal.hidden) return;
+    renderRunInsightError(error.message, digest.run.id);
+  } finally {
+    if (state.runInsightAbort === controller) state.runInsightAbort = null;
+  }
+}
+
 function showWorkoutModal(runId, trigger = document.activeElement) {
   const run = state.filteredRuns.find((candidate) => String(candidate.id) === String(runId));
   if (!run) return;
@@ -1451,10 +1592,20 @@ function showWorkoutModal(runId, trigger = document.activeElement) {
           <article class="workout-lead-metric"><span>Moving time</span><strong>${escapeHtml(formatDuration(digest.moving))}</strong><small>${digest.stopped ? `${escapeHtml(formatDuration(digest.stopped))} stopped` : "Continuous effort"}</small></article>
         </div>
         <aside class="workout-read">
-          <span>The read</span>
+          <span>Quick read</span>
           <strong>${escapeHtml(narrative.headline)}</strong>
           <p>${escapeHtml(narrative.detail)}</p>
         </aside>
+      </section>
+      <section class="workout-ai" aria-labelledby="workoutAiTitle">
+        <div class="workout-ai-heading">
+          <div>
+            <p class="workout-ai-kicker"><span class="ai-status-dot" aria-hidden="true"></span> Ollama run read</p>
+            <h3 id="workoutAiTitle">A second look at this effort.</h3>
+          </div>
+          <span id="workoutAiModel">qwen3.5:0.8b</span>
+        </div>
+        <div id="workoutAiContent" class="workout-ai-content" aria-live="polite">${runInsightLoadingMarkup()}</div>
       </section>
       <div class="workout-grid">
         <div>
@@ -1505,9 +1656,13 @@ function showWorkoutModal(runId, trigger = document.activeElement) {
   els.workoutModal.hidden = false;
   document.body.classList.add("modal-open");
   els.workoutModalClose.focus();
+  requestRunInsight(digest);
 }
 
 function closeWorkoutModal() {
+  state.runInsightAbort?.abort();
+  state.runInsightAbort = null;
+  state.activeRunInsightKey = "";
   els.workoutModal.hidden = true;
   document.body.classList.remove("modal-open");
   els.workoutModalContent.replaceChildren();
@@ -1714,6 +1869,13 @@ els.fileInput.addEventListener("change", (event) => {
 els.activityRows.addEventListener("click", (event) => {
   const button = event.target.closest(".row-detail-button");
   if (button) showWorkoutModal(button.dataset.activityId, button);
+});
+
+els.workoutModalContent.addEventListener("click", (event) => {
+  const retry = event.target.closest("[data-action='retry-run-insight']");
+  if (!retry) return;
+  const run = state.filteredRuns.find((candidate) => String(candidate.id) === String(retry.dataset.runId));
+  if (run) requestRunInsight(buildWorkoutDigest(run), { force: true });
 });
 
 els.workoutModalClose.addEventListener("click", closeWorkoutModal);

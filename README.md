@@ -27,12 +27,15 @@ OLLAMA_MODEL=qwen3.5:0.8b
 ```
 
 The dashboard metrics and SVG charts are calculated in the app. Ollama writes
-only the on-demand training read: its headline, summary, observations, and next
-step. The `/api/insights` route turns the selected window into a compact,
-app-calculated fact sheet with an earlier-versus-recent comparison and the
-optional athlete question. It does not send route coordinates or the complete
-Strava activity payload. The URL and model above are the defaults, so set the
-Ollama variables only when you want to override them.
+the on-demand selected-window training read and guides a focused run read
+whenever an individual workout is opened. For that smaller model-guided read,
+Ollama selects the most useful analysis angles and the app turns them into copy
+from verified comparisons. The `/api/insights` route sends compact,
+app-calculated fact sheets: either the selected-window trends or the selected
+run with similar-distance comparisons and its window baseline. It does not send
+route coordinates or the complete Strava activity payload. The URL and model
+above are the defaults, so set the Ollama variables only when you want to
+override them.
 
 Then deploy:
 

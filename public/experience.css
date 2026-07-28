@@ -939,6 +939,213 @@ th {
   border-radius: 12px;
 }
 
+.workout-ai {
+  position: relative;
+  margin: 30px 0 4px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 88% -18%, rgba(252, 76, 2, 0.27), transparent 24rem),
+    radial-gradient(circle at 4% 115%, rgba(23, 160, 142, 0.25), transparent 26rem),
+    linear-gradient(145deg, #111c1e, #081011);
+  box-shadow: 0 24px 60px rgba(6, 12, 13, 0.16);
+  color: #ffffff;
+}
+
+.workout-ai::after {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(105deg, transparent 45%, rgba(255, 255, 255, 0.025) 45%, rgba(255, 255, 255, 0.025) 46%, transparent 46%);
+  content: "";
+}
+
+.workout-ai-heading,
+.workout-ai-content {
+  position: relative;
+  z-index: 1;
+}
+
+.workout-ai-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 24px 26px 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.workout-ai-kicker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 8px;
+  color: #f6a17e;
+  font-size: 0.62rem;
+  font-weight: 850;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.workout-ai-heading h3 {
+  margin: 0;
+  color: #ffffff;
+  font-size: clamp(1.5rem, 2.4vw, 2.25rem);
+  letter-spacing: -0.045em;
+}
+
+.workout-ai-heading > span {
+  flex: 0 0 auto;
+  padding: 7px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 99px;
+  background: rgba(4, 11, 12, 0.42);
+  color: #a9b6b6;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.67rem;
+}
+
+.workout-ai-content {
+  min-height: 142px;
+  padding: 24px 26px 26px;
+}
+
+.workout-ai-loading,
+.workout-ai-error {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-height: 92px;
+}
+
+.workout-ai-loading strong,
+.workout-ai-error strong {
+  display: block;
+  margin-bottom: 5px;
+  font-size: 1rem;
+}
+
+.workout-ai-loading p,
+.workout-ai-error p {
+  margin: 0;
+  color: #97a5a5;
+  font-size: 0.84rem;
+  line-height: 1.5;
+}
+
+.workout-ai-pulse {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  border: 3px solid rgba(252, 76, 2, 0.22);
+  border-top-color: var(--orange);
+  border-radius: 50%;
+  animation: workout-ai-spin 800ms linear infinite;
+}
+
+@keyframes workout-ai-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.workout-ai-result h4 {
+  max-width: 820px;
+  margin: 0;
+  color: #ffffff;
+  font-size: clamp(1.35rem, 2vw, 1.9rem);
+  line-height: 1.08;
+  letter-spacing: -0.04em;
+}
+
+.workout-ai-read {
+  max-width: 900px;
+  margin: 12px 0 22px;
+  color: #c6d0cf;
+  font-size: 0.94rem;
+  line-height: 1.62;
+}
+
+.workout-ai-signals {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.workout-ai-signal {
+  min-height: 116px;
+  padding: 15px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.workout-ai-signal.positive {
+  border-top-color: #35bba8;
+}
+
+.workout-ai-signal.caution {
+  border-top-color: #ff7540;
+}
+
+.workout-ai-signal span,
+.workout-ai-next span {
+  color: #8f9d9d;
+  font-size: 0.58rem;
+  font-weight: 850;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.workout-ai-signal p,
+.workout-ai-next p {
+  margin: 8px 0 0;
+  color: #edf2f1;
+  font-size: 0.82rem;
+  line-height: 1.48;
+}
+
+.workout-ai-next {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.28fr) minmax(0, 1fr);
+  align-items: baseline;
+  gap: 18px;
+  margin-top: 16px;
+  padding: 15px 0 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.workout-ai-next p {
+  margin: 0;
+}
+
+.workout-ai-result > small {
+  display: block;
+  margin-top: 18px;
+  color: #6f7e7e;
+  font-size: 0.68rem;
+  line-height: 1.4;
+}
+
+.workout-ai-error {
+  justify-content: space-between;
+}
+
+.workout-ai-retry {
+  flex: 0 0 auto;
+  min-height: 40px;
+  padding: 0 15px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--orange);
+  color: #ffffff;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
 @media (hover: hover) {
   .kpis article,
   .dashboard .chart-panel,
@@ -1311,6 +1518,43 @@ th {
 
   .workout-body {
     padding: 22px 18px max(30px, env(safe-area-inset-bottom));
+  }
+
+  .workout-ai {
+    margin-top: 22px;
+  }
+
+  .workout-ai-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 12px;
+    padding: 20px 18px 17px;
+  }
+
+  .workout-ai-heading h3 {
+    padding-right: 52px;
+  }
+
+  .workout-ai-content {
+    padding: 20px 18px 22px;
+  }
+
+  .workout-ai-signals {
+    grid-template-columns: 1fr;
+  }
+
+  .workout-ai-signal {
+    min-height: 0;
+  }
+
+  .workout-ai-next {
+    grid-template-columns: 1fr;
+    gap: 5px;
+  }
+
+  .workout-ai-error {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }
 

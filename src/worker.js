@@ -27,6 +27,23 @@ const INSIGHT_SCHEMA = {
   required: ["headline", "summary", "observations", "nextStep"]
 };
 
+const RUN_INSIGHT_SCHEMA = {
+  type: "object",
+  properties: {
+    headlineFocus: { type: "string", enum: ["distance", "pace", "load", "effort", "context"] },
+    summaryAngle: { type: "string", enum: ["comparison", "baseline", "terrain", "spacing", "limited"] },
+    signals: {
+      type: "array",
+      minItems: 2,
+      maxItems: 3,
+      uniqueItems: true,
+      items: { type: "string", enum: ["distance", "pace", "load", "heart_rate", "terrain", "spacing"] }
+    },
+    watchFocus: { type: "string", enum: ["pace_effort", "terrain", "spacing", "heart_rate", "load_per_mile"] }
+  },
+  required: ["headlineFocus", "summaryAngle", "signals", "watchFocus"]
+};
+
 function json(payload, status = 200, headers = {}) {
   const responseHeaders = headers instanceof Headers ? headers : new Headers(headers);
   responseHeaders.set("content-type", "application/json; charset=utf-8");
@@ -206,6 +223,40 @@ function buildInsightPrompt(input) {
   ].join("\n");
 }
 
+function buildRunInsightPrompt(input) {
+  const run = input.run || {};
+  const comparison = input.comparison || {};
+  const baseline = input.baseline || {};
+  const pace = (seconds) => {
+    const value = Math.max(0, Math.round(Number(seconds) || 0));
+    return value ? `${Math.floor(value / 60)}:${String(value % 60).padStart(2, "0")}/mi` : "n/a";
+  };
+  const paceDirection = comparison.paceDifferenceSeconds < 0
+    ? `${Math.abs(comparison.paceDifferenceSeconds)} sec/mi faster`
+    : comparison.paceDifferenceSeconds > 0
+      ? `${comparison.paceDifferenceSeconds} sec/mi slower`
+      : "about the same";
+  const loadDirection = comparison.loadPerMileDifferencePercent > 0
+    ? `${comparison.loadPerMileDifferencePercent}% higher`
+    : comparison.loadPerMileDifferencePercent < 0
+      ? `${Math.abs(comparison.loadPerMileDifferencePercent)}% lower`
+      : "about the same";
+  return [
+    `Selected run: ${run.name || "Run"} on ${run.date || "unknown date"}; app classification ${run.runType || "run"}.`,
+    `Run facts: ${run.distanceMiles} mi at ${pace(run.paceSecondsPerMile)}, moving ${run.movingMinutes} min, stopped ${run.stoppedMinutes} min, elevation ${run.elevationFeet} ft (${run.elevationFeetPerMile} ft/mi), average HR ${run.averageHr ?? "n/a"} bpm, max HR ${run.maxHr ?? "n/a"} bpm, load ${run.trainingLoad} (${run.loadPerMile} per mile), cadence ${run.cadenceSpm ?? "n/a"} spm.`,
+    `Selected-window ranks: distance ${comparison.distancePercentile} percentile, pace ${comparison.pacePercentile} percentile, load ${comparison.loadPercentile} percentile.`,
+    comparison.similarRunCount
+      ? `Similar-distance comparison (${comparison.similarRunCount} other runs): average pace ${pace(comparison.similarPaceSecondsPerMile)}, selected run was ${paceDirection}; average HR ${comparison.similarAverageHr ?? "n/a"} bpm; average load per mile ${comparison.similarLoadPerMile}, selected run was ${loadDirection}.`
+      : "There are not enough similar-distance runs for a direct benchmark.",
+    `Spacing: ${comparison.daysSincePreviousRun ?? "n/a"} days since the prior run and ${comparison.daysUntilNextRun ?? "n/a"} days until the next run in this selected window.`,
+    `Window baseline: ${baseline.runCount} runs, ${baseline.averageRunMiles} mi per run, average pace ${pace(baseline.averagePaceSecondsPerMile)}, average HR ${baseline.averageHr ?? "n/a"} bpm, and average load per mile ${baseline.averageLoadPerMile}.`,
+    "The app calculated every value above. Select the most relevant analysis angles for this run.",
+    "Do not claim that Ollama generated, measured, verified, or detected any metric. Do not infer workout intent, fitness, recovery, readiness, injury, or causation.",
+    "Return only the allowed enum keys in the schema. Do not write prose, numbers, dates, or units.",
+    "Choose two or three distinct signals and one conservative comparison focus for a future similar run."
+  ].join("\n");
+}
+
 function insightHeadline(input) {
   const summary = input?.summary || {};
   const ramp = Number(summary.rampRatePercent) || 0;
@@ -246,15 +297,82 @@ function normalizeInsight(value, input) {
   };
 }
 
+function normalizeRunInsight(value, input) {
+  const run = input.run || {};
+  const comparison = input.comparison || {};
+  const rankPhrase = (rank, high, middle, low) => rank >= 75 ? high : rank <= 25 ? low : middle;
+  const paceVsSimilar = comparison.similarRunCount
+    ? Math.abs(comparison.paceDifferenceSeconds || 0) <= 5 ? "Pace closely matched your similar-distance benchmark." : comparison.paceDifferenceSeconds < 0 ? "Pace was faster than your similar-distance benchmark." : "Pace was slower than your similar-distance benchmark."
+    : "Pace needs more similar-distance runs before it has a useful benchmark.";
+  const loadVsSimilar = comparison.similarRunCount && comparison.similarLoadPerMile
+    ? Math.abs(comparison.loadPerMileDifferencePercent || 0) <= 8 ? "Load per mile was close to your comparable-run pattern." : comparison.loadPerMileDifferencePercent < 0 ? "Load per mile was lower than on comparable runs." : "Load per mile was higher than on comparable runs."
+    : "Load is shown against the selected window because a direct benchmark is limited.";
+  const distancePhrase = rankPhrase(comparison.distancePercentile, "This was one of the longer efforts in the selected window.", "Distance sat near your usual range.", "This was one of the shorter efforts in the selected window.");
+  const pacePhrase = rankPhrase(comparison.pacePercentile, "Its pace also sat toward the faster end of the window.", "Its pace sat near the middle of the window.", "Its pace sat toward the slower end of the window.");
+  const terrainPhrase = run.elevationFeetPerMile >= 100 ? "The route was hillier than a flat-effort comparison would assume." : run.elevationFeetPerMile >= 60 ? "Rolling terrain adds useful context to the pace comparison." : "The flatter terrain makes pace easier to compare with similar efforts.";
+  const spacingPhrase = comparison.daysSincePreviousRun === null ? "There is no earlier run inside this window for spacing context." : comparison.daysSincePreviousRun <= 1 ? "This effort followed closely after the previous run in the window." : comparison.daysSincePreviousRun >= 5 ? "This effort had a wider gap after the previous run in the window." : "This effort had moderate spacing after the previous run in the window.";
+  const hrDifference = comparison.heartRateDifference;
+  const heartRatePhrase = hrDifference === null || !comparison.similarAverageHr ? "Heart-rate comparison is limited by the available activity data." : Math.abs(hrDifference) <= 3 ? "Average heart rate closely matched similar-distance efforts." : hrDifference < 0 ? "Average heart rate was lower than on similar-distance efforts." : "Average heart rate was higher than on similar-distance efforts.";
+  const signalCopy = {
+    distance: { title: "Distance profile", detail: distancePhrase, tone: comparison.distancePercentile >= 75 ? "positive" : "neutral" },
+    pace: { title: "Pace comparison", detail: paceVsSimilar, tone: comparison.paceDifferenceSeconds < -5 ? "positive" : "neutral" },
+    load: { title: "Relative load", detail: loadVsSimilar, tone: comparison.loadPerMileDifferencePercent > 15 ? "caution" : "neutral" },
+    heart_rate: { title: "Heart-rate context", detail: heartRatePhrase, tone: "neutral" },
+    terrain: { title: "Terrain context", detail: terrainPhrase, tone: run.elevationFeetPerMile >= 100 ? "caution" : "neutral" },
+    spacing: { title: "Run spacing", detail: spacingPhrase, tone: comparison.daysSincePreviousRun !== null && comparison.daysSincePreviousRun <= 1 ? "caution" : "neutral" }
+  };
+  const requestedSignals = Array.isArray(value?.signals) ? value.signals : [];
+  const signalKeys = [...new Set(requestedSignals.filter((key) => signalCopy[key]))].slice(0, 3);
+  ["pace", "load", "distance"].forEach((key) => {
+    if (signalKeys.length < 2 && !signalKeys.includes(key)) signalKeys.push(key);
+  });
+  const signals = signalKeys.map((key) => signalCopy[key]);
+  if (signals.length < 2) {
+    throw new Error("Ollama returned an incomplete run analysis. Try again.");
+  }
+  const headlineCopy = {
+    distance: distancePhrase, pace: paceVsSimilar, load: loadVsSimilar,
+    effort: `${distancePhrase} ${pacePhrase}`,
+    context: comparison.similarRunCount ? "This run has a useful like-for-like benchmark." : "This run is best read against the broader selected window."
+  };
+  const comparisonSummary = value?.headlineFocus === "pace"
+    ? `${loadVsSimilar} Together with the pace comparison, that makes this a clean reference point for another similar effort.`
+    : value?.headlineFocus === "load"
+      ? `${paceVsSimilar} Together with the load comparison, that makes this a clean reference point for another similar effort.`
+      : `${paceVsSimilar} ${loadVsSimilar}`;
+  const summaryCopy = {
+    comparison: comparisonSummary, baseline: `${distancePhrase} ${pacePhrase}`,
+    terrain: `${terrainPhrase} ${paceVsSimilar}`, spacing: `${spacingPhrase} ${loadVsSimilar}`,
+    limited: `${distancePhrase} More similar-distance efforts would make the comparison stronger.`
+  };
+  const watchCopy = {
+    pace_effort: "Compare pace and load per mile on another run of similar distance.",
+    terrain: "Compare this with another run over similarly rolling terrain.",
+    spacing: "Compare a similar effort after a different gap between runs.",
+    heart_rate: "Compare average heart rate on another similar-distance effort.",
+    load_per_mile: "Watch whether load per mile stays near this pattern on a comparable run."
+  };
+  return {
+    headline: headlineCopy[value?.headlineFocus] || headlineCopy.effort,
+    read: summaryCopy[value?.summaryAngle] || summaryCopy.comparison,
+    signals,
+    watchNext: watchCopy[value?.watchFocus] || watchCopy.pace_effort,
+    caution: "Ollama-guided read from app-calculated workout context. Pattern guidance only—not medical advice."
+  };
+}
+
 async function handleInsights(env, request) {
   const contentLength = Number(request.headers.get("content-length") || 0);
   if (contentLength > 64_000) return json({ error: "The training summary is too large." }, 413);
   const input = await request.json();
-  if (!input || !Array.isArray(input.recentRuns) || !input.recentRuns.length) {
+  const hasRunInput = input?.kind === "run" && input.run;
+  const hasWindowInput = input?.kind !== "run" && Array.isArray(input?.recentRuns) && input.recentRuns.length;
+  if (!hasRunInput && !hasWindowInput) {
     return json({ error: "No running data was supplied." }, 400);
   }
   const baseUrl = String(env.OLLAMA_BASE_URL || DEFAULT_OLLAMA_URL).replace(/\/+$/, "");
   const model = env.OLLAMA_MODEL || DEFAULT_OLLAMA_MODEL;
+  const isRunInsight = input.kind === "run";
   const response = await fetch(`${baseUrl}/api/chat`, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -262,12 +380,12 @@ async function handleInsights(env, request) {
       model,
       stream: false,
       think: false,
-      format: INSIGHT_SCHEMA,
+      format: isRunInsight ? RUN_INSIGHT_SCHEMA : INSIGHT_SCHEMA,
       messages: [
         { role: "system", content: "Interpret only the supplied app-calculated running data. Preserve units, avoid causal or intent claims, and return only schema-valid JSON." },
-        { role: "user", content: buildInsightPrompt(input) }
+        { role: "user", content: isRunInsight ? buildRunInsightPrompt(input) : buildInsightPrompt(input) }
       ],
-      options: { temperature: 0, num_ctx: 8192, num_predict: 640 }
+      options: { temperature: 0, num_ctx: isRunInsight ? 4096 : 8192, num_predict: isRunInsight ? 120 : 640 }
     }),
     signal: AbortSignal.timeout(120_000)
   });
@@ -279,7 +397,7 @@ async function handleInsights(env, request) {
   } catch {
     return json({ error: "Ollama returned an unreadable analysis. Try again." }, 502);
   }
-  return json({ insight: normalizeInsight(parsed, input), model });
+  return json({ insight: isRunInsight ? normalizeRunInsight(parsed, input) : normalizeInsight(parsed, input), model });
 }
 
 async function handleRequest(request, env) {
