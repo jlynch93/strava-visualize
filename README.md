@@ -23,15 +23,16 @@ STRAVA_CLIENT_ID
 STRAVA_CLIENT_SECRET
 STRAVA_REDIRECT_URI=https://your-domain.example/auth/callback
 OLLAMA_BASE_URL=https://ollama.jeer.rest
-OLLAMA_MODEL=qwen3:0.6b
+OLLAMA_MODEL=qwen3.5:0.8b
 ```
 
-The Ollama integration sends a compact summary of the selected training window
-through the app's `/api/insights` route. It does not send route coordinates or
-the complete Strava activity payload. The URL and model above are the defaults,
-so the Ollama variables only need to be set when you want to override them. The
-prompt is capped at the 12 most recent runs and 8 latest grouped periods to keep
-the context small and fast for the 0.6B model.
+The dashboard metrics and SVG charts are calculated in the app. Ollama writes
+only the on-demand training read: its headline, summary, observations, and next
+step. The `/api/insights` route turns the selected window into a compact,
+app-calculated fact sheet with an earlier-versus-recent comparison and the
+optional athlete question. It does not send route coordinates or the complete
+Strava activity payload. The URL and model above are the defaults, so set the
+Ollama variables only when you want to override them.
 
 Then deploy:
 

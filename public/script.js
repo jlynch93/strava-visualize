@@ -45,7 +45,9 @@ const els = {
   intelSubtitle: document.querySelector("#intelSubtitle"),
   intelGrid: document.querySelector("#intelGrid"),
   aiFocus: document.querySelector("#aiFocus"),
+  aiQuestion: document.querySelector("#aiQuestion"),
   aiAnalyzeButton: document.querySelector("#aiAnalyzeButton"),
+  aiModelName: document.querySelector("#aiModelName"),
   aiInsightContent: document.querySelector("#aiInsightContent"),
   activityRows: document.querySelector("#activityRows"),
   activityCount: document.querySelector("#activityCount"),
@@ -369,6 +371,16 @@ function getRampRate(buckets) {
   return earlyAvg ? ((lateAvg - earlyAvg) / earlyAvg) * 100 : 0;
 }
 
+function currentInsightFingerprint() {
+  return JSON.stringify({
+    range: [els.startDate.value, els.endDate.value],
+    grouping: els.bucketSelect.value,
+    focus: els.aiFocus.value,
+    question: els.aiQuestion.value.trim(),
+    runs: state.filteredRuns.map((run) => [run.id, run.start_date_local || run.start_date])
+  });
+}
+
 function render() {
   applyRangeInputs();
   const normalized = state.rawActivities.map(normalizeActivity);
@@ -381,11 +393,7 @@ function render() {
     })
     .sort((a, b) => parseActivityDate(a) - parseActivityDate(b));
   state.buckets = buildBuckets(state.filteredRuns);
-  state.insightFingerprint = JSON.stringify({
-    range: [els.startDate.value, els.endDate.value],
-    grouping: els.bucketSelect.value,
-    runs: state.filteredRuns.map((run) => [run.id, run.start_date_local || run.start_date])
-  });
+  state.insightFingerprint = currentInsightFingerprint();
 
   const summary = summarize(state.filteredRuns, state.buckets);
   const previous = summarizePreviousPeriod(normalized, start, end);
@@ -427,8 +435,8 @@ function renderAiState() {
   title.textContent = state.filteredRuns.length ? "Your selected window is ready" : "Load running data to begin";
   const detail = document.createElement("p");
   detail.textContent = state.filteredRuns.length
-    ? `${state.filteredRuns.length} runs will be summarized for Ollama. No route coordinates or raw activity payloads are included.`
-    : "Connect Strava, import a file, or try the demo. Then choose a window and ask for an analysis.";
+    ? `${state.filteredRuns.length} runs are ready. Ask a question or choose a focus; Ollama will write only the training read in this panel.`
+    : "Connect Strava, import a file, or try the demo. The app will calculate your dashboard first, then you can ask Ollama for a separate training read.";
   copy.append(title, detail);
   wrapper.append(index, copy);
   els.aiInsightContent.replaceChildren(wrapper);
@@ -454,8 +462,38 @@ function buildInsightPayload() {
     averageHr: bucket.averageHr ? Math.round(bucket.averageHr) : null,
     trainingLoad: Math.round(bucket.trainingLoad)
   }));
+  const trendHalf = Math.floor(buckets.length / 2);
+  const earlierBuckets = buckets.slice(0, trendHalf);
+  const recentBuckets = buckets.slice(trendHalf);
+  const mean = (items, key, predicate = (value) => Number.isFinite(value)) => {
+    const values = items.map((item) => Number(item[key])).filter(predicate);
+    return values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null;
+  };
+  const earlierMiles = mean(earlierBuckets, "miles");
+  const recentMiles = mean(recentBuckets, "miles");
+  const earlierPace = mean(earlierBuckets, "averagePaceSeconds", (value) => value > 0);
+  const recentPace = mean(recentBuckets, "averagePaceSeconds", (value) => value > 0);
+  const earlierHr = mean(earlierBuckets, "averageHr", (value) => value > 0);
+  const recentHr = mean(recentBuckets, "averageHr", (value) => value > 0);
+  const earlierLoad = mean(earlierBuckets, "trainingLoad");
+  const recentLoad = mean(recentBuckets, "trainingLoad");
+  const trend = buckets.length >= 4 ? {
+    earlierPeriodCount: earlierBuckets.length,
+    recentPeriodCount: recentBuckets.length,
+    earlierAverageMiles: Number(earlierMiles.toFixed(1)),
+    recentAverageMiles: Number(recentMiles.toFixed(1)),
+    volumeChangePercent: earlierMiles ? Math.round(((recentMiles - earlierMiles) / earlierMiles) * 100) : 0,
+    earlierAveragePaceSeconds: earlierPace ? Math.round(earlierPace) : null,
+    recentAveragePaceSeconds: recentPace ? Math.round(recentPace) : null,
+    paceChangeSeconds: earlierPace && recentPace ? Math.round(recentPace - earlierPace) : null,
+    earlierAverageHr: earlierHr ? Math.round(earlierHr) : null,
+    recentAverageHr: recentHr ? Math.round(recentHr) : null,
+    earlierAverageLoad: earlierLoad ? Math.round(earlierLoad) : null,
+    recentAverageLoad: recentLoad ? Math.round(recentLoad) : null
+  } : null;
   return {
     focus: els.aiFocus.value,
+    question: els.aiQuestion.value.trim().slice(0, 280),
     range: {
       start: els.startDate.value || null,
       end: els.endDate.value || null,
@@ -480,6 +518,7 @@ function buildInsightPayload() {
       loadPerMile: Number(summary.averageLoadPerMile.toFixed(1)),
       longestRestGapDays: summary.longestRestGap
     },
+    trend,
     buckets,
     recentRuns
   };
@@ -496,7 +535,7 @@ function renderAiLoading() {
   const title = document.createElement("strong");
   title.textContent = "Reading the shape of your training";
   const detail = document.createElement("p");
-  detail.textContent = "The local model is comparing volume, pace, load, recovery gaps, and recent run patterns. This can take a minute if the model is waking up.";
+  detail.textContent = "Ollama is comparing the compact metrics supplied for this request. Your dashboard and charts remain app-calculated. The model may take a moment to wake up.";
   copy.append(title, detail);
   wrapper.append(index, copy);
   els.aiInsightContent.replaceChildren(wrapper);
@@ -519,12 +558,12 @@ function renderAiError(message) {
   els.aiInsightContent.replaceChildren(wrapper);
 }
 
-function renderAiInsight(insight) {
+function renderAiInsight(insight, model) {
   els.aiInsightContent.removeAttribute("aria-busy");
   const header = document.createElement("div");
   header.className = "ai-result-header";
   const label = document.createElement("span");
-  label.textContent = "Selected-window read";
+  label.textContent = `Ollama read · ${model || els.aiModelName.textContent}`;
   const headline = document.createElement("h3");
   headline.textContent = insight.headline;
   const summary = document.createElement("p");
@@ -563,9 +602,10 @@ function renderAiInsight(insight) {
 
 async function analyzeWithOllama() {
   if (!state.filteredRuns.length) return;
+  state.insightFingerprint = currentInsightFingerprint();
   const requestedFingerprint = state.insightFingerprint;
   els.aiAnalyzeButton.disabled = true;
-  els.aiAnalyzeButton.textContent = "Analyzing…";
+  els.aiAnalyzeButton.textContent = "Asking Ollama…";
   renderAiLoading();
   try {
     const response = await fetch("/api/insights", {
@@ -580,13 +620,14 @@ async function analyzeWithOllama() {
       return;
     }
     state.renderedInsightFingerprint = requestedFingerprint;
-    renderAiInsight(data.insight);
+    if (data.model) els.aiModelName.textContent = data.model;
+    renderAiInsight(data.insight, data.model);
   } catch (error) {
     state.renderedInsightFingerprint = "";
     renderAiError(error.message || "Check that the Ollama URL is reachable and try again.");
   } finally {
     els.aiAnalyzeButton.disabled = !state.filteredRuns.length;
-    els.aiAnalyzeButton.textContent = "Analyze selected window";
+    els.aiAnalyzeButton.textContent = "Ask Ollama";
   }
 }
 
@@ -1656,10 +1697,14 @@ els.demoButton.addEventListener("click", () => {
 
 els.aiAnalyzeButton.addEventListener("click", analyzeWithOllama);
 
-els.aiFocus.addEventListener("change", () => {
+function invalidateAiInsight() {
+  state.insightFingerprint = currentInsightFingerprint();
   state.renderedInsightFingerprint = "";
   renderAiState();
-});
+}
+
+els.aiFocus.addEventListener("change", invalidateAiInsight);
+els.aiQuestion.addEventListener("input", invalidateAiInsight);
 
 els.fileInput.addEventListener("change", (event) => {
   const [file] = event.target.files;

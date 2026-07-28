@@ -10,11 +10,11 @@ const TOKEN_FILE = path.join(__dirname, ".strava-token.json");
 const STRAVA_API = "https://www.strava.com/api/v3";
 const STRAVA_OAUTH_TOKEN = "https://www.strava.com/oauth/token";
 const DEFAULT_OLLAMA_URL = "https://ollama.jeer.rest";
-const DEFAULT_OLLAMA_MODEL = "qwen3:0.6b";
-
+const DEFAULT_OLLAMA_MODEL = "qwen3.5:0.8b";
 const INSIGHT_SCHEMA = {
   type: "object",
   properties: {
+    headline: { type: "string" },
     summary: { type: "string" },
     observations: {
       type: "array",
@@ -29,9 +29,10 @@ const INSIGHT_SCHEMA = {
         },
         required: ["title", "detail", "tone"]
       }
-    }
+    },
+    nextStep: { type: "string" }
   },
-  required: ["summary", "observations"]
+  required: ["headline", "summary", "observations", "nextStep"]
 };
 
 loadLocalEnv();
@@ -141,6 +142,7 @@ function readRequestJson(req, limit = 64_000) {
 
 function buildInsightPrompt(input) {
   const summary = input.summary || {};
+  const question = String(input.question || "").trim().slice(0, 280);
   const pace = (seconds) => {
     const value = Math.max(0, Math.round(Number(seconds) || 0));
     return value ? `${Math.floor(value / 60)}:${String(value % 60).padStart(2, "0")}/mi` : "n/a";
@@ -151,16 +153,28 @@ function buildInsightPrompt(input) {
   const runs = (input.recentRuns || []).map((run) =>
     `${run.date}: ${run.distanceMiles} mi, ${pace(run.paceSecondsPerMile)}, ${run.elevationFeet} ft, HR ${run.averageHr ?? "n/a"}, load ${run.trainingLoad}`
   );
+  const trend = input.trend || null;
+  const trendComparison = trend
+    ? `App-calculated comparison (${trend.earlierPeriodCount} earlier periods vs ${trend.recentPeriodCount} recent periods): volume ${trend.earlierAverageMiles} to ${trend.recentAverageMiles} mi/period (${trend.volumeChangePercent >= 0 ? "+" : ""}${trend.volumeChangePercent}%); pace ${pace(trend.earlierAveragePaceSeconds)} to ${pace(trend.recentAveragePaceSeconds)} (${trend.paceChangeSeconds < 0 ? `${Math.abs(trend.paceChangeSeconds)} sec/mi faster` : trend.paceChangeSeconds > 0 ? `${trend.paceChangeSeconds} sec/mi slower` : "unchanged"}); HR ${trend.earlierAverageHr ?? "n/a"} to ${trend.recentAverageHr ?? "n/a"} bpm; load ${trend.earlierAverageLoad ?? "n/a"} to ${trend.recentAverageLoad ?? "n/a"}.`
+    : "App-calculated earlier-vs-recent comparison is unavailable for this window.";
   return [
     `Focus: ${input.focus || "balanced"}. Window: ${input.range?.start || "unknown"} to ${input.range?.end || "unknown"}.`,
+    `Athlete question: ${question || "No custom question; provide a focused review of the selected window."}`,
     `Totals: ${summary.runCount} runs, ${summary.totalMiles} mi, average pace ${pace(summary.averagePaceSeconds)}, average ${summary.averageWeeklyMiles} mi/week and ${summary.averageRunsPerWeek} runs/week.`,
     `Signals: long run ${summary.longRunMiles} mi (${summary.longRunSharePercent}% of mileage), peak week ${summary.peakWeekMiles} mi, consistency ${summary.consistencyPercent}%, ramp ${summary.rampRatePercent}%, average HR ${summary.averageHr ?? "n/a"}, load ${summary.trainingLoad}, longest rest gap ${summary.longestRestGapDays} days.`,
-    `Recent periods:\n${periods.join("\n")}`,
-    `Recent runs:\n${runs.join("\n")}`,
+    trendComparison,
     "Load is a rough estimate.",
-    "Write athlete-facing prose, not labels, placeholders, plans, or a data dump.",
+    "Consistency is the percentage of grouped periods containing at least one run; it does not measure discipline, plan adherence, recovery quality, or effort.",
+    "Pace values are minutes per mile. Heart rate values are bpm. Never combine or relabel those units.",
+    "Write only the athlete-facing training read. The app already calculated every metric and chart; never imply that you generated, measured, or verified them.",
+    "Address the athlete question directly when one is provided. Do not use labels, placeholders, or a data dump.",
+    "Use the app-calculated comparison for trend claims. Do not infer motivation, training phase, tapering, recovery status, readiness, or causation.",
+    "Do not include digits, numeric quantities, or units in any response field. Describe the supplied changes qualitatively without recomputing or restating values.",
+    "Treat the approved totals, signals, and app-calculated comparison above as exhaustive. If they cannot answer the question, say the supplied snapshot is insufficient.",
+    "Headline: one concise sentence naming the most important pattern.",
     "Summary: 1-2 sentences connecting at least two metrics.",
     "Observations: 3 distinct trends or comparisons; do not merely list individual runs.",
+    "Next step: one conservative, specific action grounded in the supplied baseline.",
     "Do not invent numbers or diagnose health, injury, overtraining, or readiness."
   ].join("\n");
 }
@@ -197,11 +211,11 @@ function normalizeInsight(value, input) {
     throw new Error("Ollama returned an incomplete analysis. Try again.");
   }
   return {
-    headline: insightHeadline(input),
+    headline: String(value.headline || insightHeadline(input)).slice(0, 160),
     summary: String(value.summary).slice(0, 700),
     observations,
-    nextStep: safeNextStep(input),
-    caution: "Pattern-based guidance from your run data, not medical advice."
+    nextStep: String(value.nextStep || safeNextStep(input)).slice(0, 500),
+    caution: "Written by Ollama from app-calculated training metrics. Pattern guidance only—not medical advice."
   };
 }
 
@@ -217,10 +231,10 @@ async function requestInsight(input) {
       think: false,
       format: INSIGHT_SCHEMA,
       messages: [
-        { role: "system", content: "Concise running analyst. Return only schema-valid JSON." },
+        { role: "system", content: "Interpret only the supplied app-calculated running data. Preserve units, avoid causal or intent claims, and return only schema-valid JSON." },
         { role: "user", content: buildInsightPrompt(input) }
       ],
-      options: { temperature: 0.1, num_ctx: 8192, num_predict: 480 }
+      options: { temperature: 0, num_ctx: 8192, num_predict: 640 }
     }),
     signal: AbortSignal.timeout(120_000)
   });
