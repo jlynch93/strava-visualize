@@ -14,6 +14,8 @@ const DEFAULT_OLLAMA_MODEL = "qwen3.5:0.8b";
 const INSIGHT_SCHEMA = {
   type: "object",
   properties: {
+    answerability: { type: "string", enum: ["strong", "partial", "insufficient"] },
+    confidence: { type: "string", enum: ["high", "medium", "low"] },
     headlineFocus: { type: "string", enum: ["volume", "pace", "consistency", "load", "long_run", "spacing"] },
     summaryAngle: { type: "string", enum: ["trend", "baseline", "structure", "efficiency", "limits"] },
     observations: {
@@ -23,14 +25,17 @@ const INSIGHT_SCHEMA = {
       uniqueItems: true,
       items: { type: "string", enum: ["volume", "pace", "consistency", "load", "long_run", "heart_rate", "spacing", "terrain"] }
     },
-    nextFocus: { type: "string", enum: ["hold_baseline", "watch_load", "compare_pace", "protect_spacing", "long_run_balance"] }
+    nextFocus: { type: "string", enum: ["hold_baseline", "watch_load", "compare_pace", "protect_spacing", "long_run_balance"] },
+    limitation: { type: "string", enum: ["none", "heart_rate_coverage", "load_estimate", "short_window", "no_comparison", "sparse_data"] }
   },
-  required: ["headlineFocus", "summaryAngle", "observations", "nextFocus"]
+  required: ["answerability", "confidence", "headlineFocus", "summaryAngle", "observations", "nextFocus", "limitation"]
 };
 
 const RUN_INSIGHT_SCHEMA = {
   type: "object",
   properties: {
+    answerability: { type: "string", enum: ["strong", "partial", "insufficient"] },
+    confidence: { type: "string", enum: ["high", "medium", "low"] },
     headlineFocus: { type: "string", enum: ["distance", "pace", "load", "effort", "context"] },
     summaryAngle: { type: "string", enum: ["comparison", "baseline", "terrain", "spacing", "limited"] },
     signals: {
@@ -40,9 +45,10 @@ const RUN_INSIGHT_SCHEMA = {
       uniqueItems: true,
       items: { type: "string", enum: ["distance", "pace", "load", "heart_rate", "terrain", "spacing"] }
     },
-    watchFocus: { type: "string", enum: ["pace_effort", "terrain", "spacing", "heart_rate", "load_per_mile"] }
+    watchFocus: { type: "string", enum: ["pace_effort", "terrain", "spacing", "heart_rate", "load_per_mile"] },
+    limitation: { type: "string", enum: ["none", "similar_runs", "heart_rate", "load_estimate", "window_edge"] }
   },
-  required: ["headlineFocus", "summaryAngle", "signals", "watchFocus"]
+  required: ["answerability", "confidence", "headlineFocus", "summaryAngle", "signals", "watchFocus", "limitation"]
 };
 
 loadLocalEnv();
@@ -151,69 +157,56 @@ function readRequestJson(req, limit = 64_000) {
 }
 
 function buildInsightPrompt(input) {
-  const summary = input.summary || {};
   const question = String(input.question || "").trim().slice(0, 280);
-  const pace = (seconds) => {
-    const value = Math.max(0, Math.round(Number(seconds) || 0));
-    return value ? `${Math.floor(value / 60)}:${String(value % 60).padStart(2, "0")}/mi` : "n/a";
+  const packet = {
+    task: "rank_app_calculated_training_signals",
+    focus: input.focus || "balanced",
+    question: question || "Identify the strongest supported pattern in this selected window.",
+    range: input.range || {},
+    coverage: input.coverage || {},
+    candidates: Array.isArray(input.candidates) ? input.candidates : [],
+    summary: input.summary || {},
+    comparison: input.comparison || null
   };
-  const trend = input.trend || null;
-  const trendComparison = trend
-    ? `App-calculated comparison (${trend.earlierPeriodCount} earlier periods vs ${trend.recentPeriodCount} recent periods): volume ${trend.earlierAverageMiles} to ${trend.recentAverageMiles} mi/period (${trend.volumeChangePercent >= 0 ? "+" : ""}${trend.volumeChangePercent}%); pace ${pace(trend.earlierAveragePaceSeconds)} to ${pace(trend.recentAveragePaceSeconds)} (${trend.paceChangeSeconds < 0 ? `${Math.abs(trend.paceChangeSeconds)} sec/mi faster` : trend.paceChangeSeconds > 0 ? `${trend.paceChangeSeconds} sec/mi slower` : "unchanged"}); HR ${trend.earlierAverageHr ?? "n/a"} to ${trend.recentAverageHr ?? "n/a"} bpm; load ${trend.earlierAverageLoad ?? "n/a"} to ${trend.recentAverageLoad ?? "n/a"}.`
-    : "App-calculated earlier-vs-recent comparison is unavailable for this window.";
   return [
-    `Focus: ${input.focus || "balanced"}. Window: ${input.range?.start || "unknown"} to ${input.range?.end || "unknown"}.`,
-    `Athlete question: ${question || "No custom question; provide a focused review of the selected window."}`,
-    `Totals: ${summary.runCount} runs, ${summary.totalMiles} mi, average pace ${pace(summary.averagePaceSeconds)}, average ${summary.averageWeeklyMiles} mi/week and ${summary.averageRunsPerWeek} runs/week.`,
-    `Signals: long run ${summary.longRunMiles} mi (${summary.longRunSharePercent}% of mileage), peak week ${summary.peakWeekMiles} mi, consistency ${summary.consistencyPercent}%, ramp ${summary.rampRatePercent}%, average HR ${summary.averageHr ?? "n/a"}, load ${summary.trainingLoad}, longest rest gap ${summary.longestRestGapDays} days.`,
-    trendComparison,
-    "Load is a rough estimate.",
-    "Consistency is the percentage of grouped periods containing at least one run; it does not measure discipline, plan adherence, recovery quality, or effort.",
-    "Pace values are minutes per mile. Heart rate values are bpm. Never combine or relabel those units.",
-    "The app calculated every value above. Select only the most relevant analysis angles for this training window.",
-    "Use the athlete question to prioritize categories, not to make unsupported claims. Choose the limits angle when the snapshot cannot answer it.",
-    "Return only allowed enum keys from the schema. Do not write prose, numbers, dates, or units.",
+    JSON.stringify(packet),
+    "Choose the primary signal, 3-4 distinct observations, next comparison, answerability, confidence, and one limitation.",
+    "Rank supplied candidates; do not recalculate, invent, or reinterpret their values.",
+    "Do not select heart_rate when heartRatePercent is below 50. Treat load as estimated when directLoadPercent is below 80.",
+    "Use no_comparison when comparison is null. Use sparse_data or short_window when the evidence cannot answer the question.",
+    "Consistency means grouped periods with a run, not discipline or plan adherence.",
+    "Return only allowed enum keys from the schema. Never write prose, numbers, dates, or units.",
     "Do not infer motivation, training phase, recovery, readiness, injury, causation, discipline, or plan adherence."
   ].join("\n");
 }
 
 function buildRunInsightPrompt(input) {
-  const run = input.run || {};
-  const comparison = input.comparison || {};
-  const baseline = input.baseline || {};
-  const pace = (seconds) => {
-    const value = Math.max(0, Math.round(Number(seconds) || 0));
-    return value ? `${Math.floor(value / 60)}:${String(value % 60).padStart(2, "0")}/mi` : "n/a";
+  const packet = {
+    task: "rank_app_calculated_workout_signals",
+    focus: input.focus || "balanced",
+    run: input.run || {},
+    comparison: input.comparison || {},
+    baseline: input.baseline || {},
+    context: input.context || {},
+    coverage: input.coverage || {}
   };
-  const paceDirection = comparison.paceDifferenceSeconds < 0
-    ? `${Math.abs(comparison.paceDifferenceSeconds)} sec/mi faster`
-    : comparison.paceDifferenceSeconds > 0
-      ? `${comparison.paceDifferenceSeconds} sec/mi slower`
-      : "about the same";
-  const loadDirection = comparison.loadPerMileDifferencePercent > 0
-    ? `${comparison.loadPerMileDifferencePercent}% higher`
-    : comparison.loadPerMileDifferencePercent < 0
-      ? `${Math.abs(comparison.loadPerMileDifferencePercent)}% lower`
-      : "about the same";
   return [
-    `Selected run: ${run.name || "Run"} on ${run.date || "unknown date"}; app classification ${run.runType || "run"}.`,
-    `Run facts: ${run.distanceMiles} mi at ${pace(run.paceSecondsPerMile)}, moving ${run.movingMinutes} min, stopped ${run.stoppedMinutes} min, elevation ${run.elevationFeet} ft (${run.elevationFeetPerMile} ft/mi), average HR ${run.averageHr ?? "n/a"} bpm, max HR ${run.maxHr ?? "n/a"} bpm, load ${run.trainingLoad} (${run.loadPerMile} per mile), cadence ${run.cadenceSpm ?? "n/a"} spm.`,
-    `Selected-window ranks: distance ${comparison.distancePercentile} percentile, pace ${comparison.pacePercentile} percentile, load ${comparison.loadPercentile} percentile.`,
-    comparison.similarRunCount
-      ? `Similar-distance comparison (${comparison.similarRunCount} other runs): average pace ${pace(comparison.similarPaceSecondsPerMile)}, selected run was ${paceDirection}; average HR ${comparison.similarAverageHr ?? "n/a"} bpm; average load per mile ${comparison.similarLoadPerMile}, selected run was ${loadDirection}.`
-      : "There are not enough similar-distance runs for a direct benchmark.",
-    `Spacing: ${comparison.daysSincePreviousRun ?? "n/a"} days since the prior run and ${comparison.daysUntilNextRun ?? "n/a"} days until the next run in this selected window.`,
-    `Window baseline: ${baseline.runCount} runs, ${baseline.averageRunMiles} mi per run, average pace ${pace(baseline.averagePaceSecondsPerMile)}, average HR ${baseline.averageHr ?? "n/a"} bpm, and average load per mile ${baseline.averageLoadPerMile}.`,
-    "The app calculated every value above. Select the most relevant analysis angles for this run.",
-    "Do not claim that Ollama generated, measured, verified, or detected any metric. Do not infer workout intent, fitness, recovery, readiness, injury, or causation.",
-    "Return only the allowed enum keys in the schema. Do not write prose, numbers, dates, or units.",
-    "Choose two or three distinct signals and one conservative comparison focus for a future similar run."
+    JSON.stringify(packet),
+    "Choose the primary angle, 2-3 distinct signals, next comparison, answerability, confidence, and one limitation.",
+    "Prioritize the requested focus: standout emphasizes percentile extremes; load emphasizes load per mile; spacing emphasizes surrounding-run context.",
+    "Do not select heart_rate when similarHeartRatePercent is below 50. Use similar_runs when fewer than 5 similar runs exist.",
+    "Use load_estimate when directLoad is false. Use window_edge when previous or next run context is missing.",
+    "The app calculated every supplied value. Rank them; do not recalculate, invent, or write prose.",
+    "Return only the allowed enum keys in the schema. Do not write numbers, dates, or units.",
+    "Do not infer workout intent, fitness, recovery, readiness, injury, or causation."
   ].join("\n");
 }
 
 function normalizeInsight(value, input) {
   const summary = input.summary || {};
   const trend = input.trend || null;
+  const coverage = input.coverage || {};
+  const comparisonName = trend?.comparisonLabel || input.range?.comparisonLabel || "comparison period";
   const pace = (seconds) => {
     const rounded = Math.max(0, Math.round(Number(seconds) || 0));
     return rounded ? `${Math.floor(rounded / 60)}:${String(rounded % 60).padStart(2, "0")}/mi` : "n/a";
@@ -224,14 +217,14 @@ function normalizeInsight(value, input) {
     ? ((Number(trend.recentAverageLoad) - Number(trend.earlierAverageLoad)) / Number(trend.earlierAverageLoad)) * 100
     : null;
   const volumePhrase = volumeChange === null
-    ? "The selected window does not contain enough grouped periods for a recent trend comparison."
-    : Math.abs(volumeChange) <= 5 ? "Recent volume stayed close to the earlier-period baseline." : volumeChange > 0 ? "Recent volume was higher than the earlier-period baseline." : "Recent volume was lower than the earlier-period baseline.";
+    ? "The selected window does not contain a usable comparison for volume."
+    : Math.abs(volumeChange) <= 5 ? `Weekly volume stayed close to the ${comparisonName}.` : volumeChange > 0 ? `Weekly volume was higher than the ${comparisonName}.` : `Weekly volume was lower than the ${comparisonName}.`;
   const pacePhrase = paceChange === null
-    ? "Pace does not have enough comparable grouped data for a recent trend."
-    : Math.abs(paceChange) <= 3 ? "Average pace stayed close to the earlier-period baseline." : paceChange < 0 ? "Average pace was faster in the recent comparison." : "Average pace was slower in the recent comparison.";
+    ? "Pace does not have a usable comparison in this view."
+    : Math.abs(paceChange) <= 3 ? `Average pace stayed close to the ${comparisonName}.` : paceChange < 0 ? `Average pace was faster than the ${comparisonName}.` : `Average pace was slower than the ${comparisonName}.`;
   const loadPhrase = loadChange === null
-    ? "Training load can be read against the full-window baseline, but not a recent comparison."
-    : Math.abs(loadChange) <= 8 ? "Recent training load stayed close to the earlier-period baseline." : loadChange > 0 ? "Recent training load was higher than the earlier-period baseline." : "Recent training load was lower than the earlier-period baseline.";
+    ? "Training load can be read as a selected-window estimate, but not against a comparison."
+    : Math.abs(loadChange) <= 8 ? `Estimated training load stayed close to the ${comparisonName}.` : loadChange > 0 ? `Estimated training load was higher than the ${comparisonName}.` : `Estimated training load was lower than the ${comparisonName}.`;
   const consistency = Number(summary.consistencyPercent) || 0;
   const consistencyPhrase = consistency >= 80 ? "Running appeared in most grouped periods across the selected window." : consistency >= 55 ? "Running was present in more than half of the grouped periods." : "The selected window contains wider gaps between active grouped periods.";
   const longShare = Number(summary.longRunSharePercent) || 0;
@@ -241,7 +234,7 @@ function normalizeInsight(value, input) {
   const earlierHr = Number(trend?.earlierAverageHr) || 0;
   const recentHr = Number(trend?.recentAverageHr) || 0;
   const hrPhrase = earlierHr && recentHr
-    ? Math.abs(recentHr - earlierHr) <= 3 ? "Average heart rate stayed close across the recent comparison." : recentHr > earlierHr ? "Average heart rate was higher in the recent comparison." : "Average heart rate was lower in the recent comparison."
+    ? Math.abs(recentHr - earlierHr) <= 3 ? `Average heart rate stayed close to the ${comparisonName}.` : recentHr > earlierHr ? `Average heart rate was higher than the ${comparisonName}.` : `Average heart rate was lower than the ${comparisonName}.`
     : "Heart-rate comparison is limited by the available activity data.";
   const terrainPhrase = Number(summary.elevationFeetPerMile) >= 100 ? "The selected mileage has a notably hilly profile." : Number(summary.elevationFeetPerMile) >= 55 ? "Rolling terrain is part of the selected-window context." : "The selected mileage has a relatively flatter profile.";
   const signalCopy = {
@@ -255,7 +248,7 @@ function normalizeInsight(value, input) {
     terrain: { title: "Terrain context", detail: terrainPhrase, tone: Number(summary.elevationFeetPerMile) >= 100 ? "caution" : "neutral" }
   };
   const requested = Array.isArray(value?.observations) ? value.observations : [];
-  const signalKeys = [...new Set(requested.filter((key) => signalCopy[key]))].slice(0, 4);
+  const signalKeys = [...new Set(requested.filter((key) => signalCopy[key] && (key !== "heart_rate" || Number(coverage.heartRatePercent) >= 50)))].slice(0, 4);
   ["volume", "pace", "consistency"].forEach((key) => {
     if (signalKeys.length < 3 && !signalKeys.includes(key)) signalKeys.push(key);
   });
@@ -288,11 +281,59 @@ function normalizeInsight(value, input) {
     : headlineCopy[value?.headlineFocus] ? value.headlineFocus : "volume";
   const summaryAngle = preferredSummary[input.focus] || value?.summaryAngle;
   const nextFocus = preferredNext[input.focus] || value?.nextFocus;
+  const allowedAnswerability = ["strong", "partial", "insufficient"];
+  const allowedConfidence = ["high", "medium", "low"];
+  let answerability = allowedAnswerability.includes(value?.answerability) ? value.answerability : "partial";
+  let confidence = allowedConfidence.includes(value?.confidence) ? value.confidence : "medium";
+  let limitation = ["none", "heart_rate_coverage", "load_estimate", "short_window", "no_comparison", "sparse_data"].includes(value?.limitation)
+    ? value.limitation
+    : "none";
+  if (
+    (limitation === "no_comparison" && trend)
+    || (limitation === "short_window" && Number(coverage.completePeriods) >= 2)
+    || (limitation === "sparse_data" && Number(summary.runCount) >= 8)
+    || (limitation === "heart_rate_coverage" && Number(coverage.heartRatePercent) >= 50)
+    || (limitation === "load_estimate" && Number(coverage.directLoadPercent) >= 80)
+  ) limitation = "none";
+  if (Number(summary.runCount) < 4) {
+    answerability = "insufficient";
+    confidence = "low";
+    limitation = "sparse_data";
+  } else if (!trend) {
+    if (answerability === "strong") answerability = "partial";
+    if (confidence === "high") confidence = "medium";
+    limitation = "no_comparison";
+  } else if (Number(coverage.completePeriods) < 2) {
+    if (confidence === "high") confidence = "medium";
+    limitation = "short_window";
+  } else if (input.focus === "efficiency" && Number(coverage.heartRatePercent) < 50) {
+    answerability = "partial";
+    confidence = "low";
+    limitation = "heart_rate_coverage";
+  } else if (input.focus === "recovery" && Number(coverage.directLoadPercent) < 80) {
+    if (confidence === "high") confidence = "medium";
+    limitation = "load_estimate";
+  } else if (trend && Number(summary.runCount) >= 8 && Number(coverage.comparisonRuns) >= 8 && Number(coverage.completePeriods) >= 3) {
+    if (confidence === "low") confidence = "medium";
+  }
+  const limitationCopy = {
+    none: "The selected data supports this comparison without a major coverage flag.",
+    heart_rate_coverage: `Heart-rate context is limited because ${Math.round(Number(coverage.heartRatePercent) || 0)}% of runs include it.`,
+    load_estimate: "Some training-load values are estimates rather than source activity scores.",
+    short_window: "Only a small number of complete grouped periods are available.",
+    no_comparison: "No comparison window is active, so this read describes the selected baseline only.",
+    sparse_data: "There are too few runs in this view for a strong pattern conclusion."
+  };
+  const answerabilityCopy = { strong: "Strong", partial: "Partial", insufficient: "Limited" };
+  const confidenceCopy = { high: "High", medium: "Medium", low: "Low" };
   return {
     headline: headlineCopy[headlineFocus],
     summary: summaryCopy[summaryAngle] || summaryCopy.trend,
     observations,
     nextStep: nextCopy[nextFocus] || nextCopy.hold_baseline,
+    answerability: answerabilityCopy[answerability],
+    confidence: confidenceCopy[confidence],
+    limitation: limitation === "none" ? "" : limitationCopy[limitation],
     caution: "Ollama-guided read from app-calculated training metrics. Pattern guidance only—not medical advice."
   };
 }
@@ -300,6 +341,7 @@ function normalizeInsight(value, input) {
 function normalizeRunInsight(value, input) {
   const run = input.run || {};
   const comparison = input.comparison || {};
+  const coverage = input.coverage || {};
   const rankPhrase = (rank, high, middle, low) => rank >= 75 ? high : rank <= 25 ? low : middle;
   const paceVsSimilar = comparison.similarRunCount
     ? Math.abs(comparison.paceDifferenceSeconds || 0) <= 5
@@ -342,10 +384,15 @@ function normalizeRunInsight(value, input) {
     spacing: { title: "Run spacing", detail: spacingPhrase, tone: comparison.daysSincePreviousRun !== null && comparison.daysSincePreviousRun <= 1 ? "caution" : "neutral" }
   };
   const requestedSignals = Array.isArray(value?.signals) ? value.signals : [];
-  const signalKeys = [...new Set(requestedSignals.filter((key) => signalCopy[key]))].slice(0, 3);
+  const signalKeys = [...new Set(requestedSignals.filter((key) => signalCopy[key] && (key !== "heart_rate" || Number(coverage.similarHeartRatePercent) >= 50)))].slice(0, 3);
   ["pace", "load", "distance"].forEach((key) => {
     if (signalKeys.length < 2 && !signalKeys.includes(key)) signalKeys.push(key);
   });
+  const prioritizedSignal = { load: "load", spacing: "spacing", standout: comparison.pacePercentile >= comparison.distancePercentile ? "pace" : "distance" }[input.focus];
+  if (prioritizedSignal && !signalKeys.includes(prioritizedSignal)) {
+    if (signalKeys.length >= 3) signalKeys.pop();
+    signalKeys.unshift(prioritizedSignal);
+  }
   const signals = signalKeys.map((key) => signalCopy[key]);
   if (signals.length < 2) {
     throw new Error("Ollama returned an incomplete run analysis. Try again.");
@@ -355,7 +402,8 @@ function normalizeRunInsight(value, input) {
     pace: paceVsSimilar,
     load: loadVsSimilar,
     effort: `${distancePhrase} ${pacePhrase}`,
-    context: comparison.similarRunCount ? "This run has a useful like-for-like benchmark." : "This run is best read against the broader selected window."
+    context: comparison.similarRunCount ? "This run has a useful like-for-like benchmark." : "This run is best read against the broader selected window.",
+    spacing: spacingPhrase
   };
   const comparisonSummary = value?.headlineFocus === "pace"
     ? `${loadVsSimilar} Together with the pace comparison, that makes this a clean reference point for another similar effort.`
@@ -376,11 +424,49 @@ function normalizeRunInsight(value, input) {
     heart_rate: "Compare average heart rate on another similar-distance effort.",
     load_per_mile: "Watch whether load per mile stays near this pattern on a comparable run."
   };
+  const focusHeadline = { load: "load", spacing: "spacing" }[input.focus];
+  const focusSummary = { load: "comparison", spacing: "spacing", standout: "baseline" }[input.focus];
+  const focusWatch = { load: "load_per_mile", spacing: "spacing", standout: "pace_effort" }[input.focus];
+  const allowedAnswerability = ["strong", "partial", "insufficient"];
+  const allowedConfidence = ["high", "medium", "low"];
+  let answerability = allowedAnswerability.includes(value?.answerability) ? value.answerability : "partial";
+  let confidence = allowedConfidence.includes(value?.confidence) ? value.confidence : "medium";
+  let limitation = ["none", "similar_runs", "heart_rate", "load_estimate", "window_edge"].includes(value?.limitation)
+    ? value.limitation
+    : "none";
+  if (Number(coverage.similarRunCount) < 5) {
+    answerability = Number(coverage.similarRunCount) < 2 ? "insufficient" : "partial";
+    confidence = "low";
+    limitation = "similar_runs";
+  } else if (input.focus === "load" && !coverage.directLoad) {
+    if (confidence === "high") confidence = "medium";
+    limitation = "load_estimate";
+  } else if (input.focus === "spacing" && (!coverage.hasPreviousRun || !coverage.hasNextRun)) {
+    if (answerability === "strong") answerability = "partial";
+    if (confidence === "high") confidence = "medium";
+    limitation = "window_edge";
+  } else if (value?.signals?.includes("heart_rate") && Number(coverage.similarHeartRatePercent) < 50) {
+    answerability = "partial";
+    confidence = "low";
+    limitation = "heart_rate";
+  }
+  const limitationCopy = {
+    none: "The selected window provides a useful like-for-like workout comparison.",
+    similar_runs: `Only ${Number(coverage.similarRunCount) || 0} similar-distance runs are available for this benchmark.`,
+    heart_rate: `Heart-rate comparison is limited to ${Math.round(Number(coverage.similarHeartRatePercent) || 0)}% of similar runs.`,
+    load_estimate: "This workout’s load is estimated because no source activity score was supplied.",
+    window_edge: "This run sits near an edge of the selected window, so surrounding-run context is incomplete."
+  };
+  const answerabilityCopy = { strong: "Strong", partial: "Partial", insufficient: "Limited" };
+  const confidenceCopy = { high: "High", medium: "Medium", low: "Low" };
   return {
-    headline: headlineCopy[value?.headlineFocus] || headlineCopy.effort,
-    read: summaryCopy[value?.summaryAngle] || summaryCopy.comparison,
+    headline: headlineCopy[focusHeadline || value?.headlineFocus] || headlineCopy.effort,
+    read: summaryCopy[focusSummary || value?.summaryAngle] || summaryCopy.comparison,
     signals,
-    watchNext: watchCopy[value?.watchFocus] || watchCopy.pace_effort,
+    watchNext: watchCopy[focusWatch || value?.watchFocus] || watchCopy.pace_effort,
+    answerability: answerabilityCopy[answerability],
+    confidence: confidenceCopy[confidence],
+    limitation: limitation === "none" ? "" : limitationCopy[limitation],
     caution: "Ollama-guided read from app-calculated workout context. Pattern guidance only—not medical advice."
   };
 }
@@ -548,7 +634,7 @@ async function handleApi(req, res) {
   if (url.pathname === "/api/insights" && req.method === "POST") {
     const input = await readRequestJson(req);
     const hasRunInput = input?.kind === "run" && input.run;
-    const hasWindowInput = input?.kind !== "run" && Array.isArray(input?.recentRuns) && input.recentRuns.length;
+    const hasWindowInput = input?.kind !== "run" && Number(input?.summary?.runCount) > 0 && Array.isArray(input?.candidates);
     if (!hasRunInput && !hasWindowInput) {
       sendJson(res, 400, { error: "No running data was supplied." });
       return;

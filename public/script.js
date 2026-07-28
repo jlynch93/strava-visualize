@@ -2,6 +2,11 @@ const state = {
   rawActivities: [],
   filteredRuns: [],
   buckets: [],
+  comparisonRuns: [],
+  comparisonBuckets: [],
+  comparisonSummary: null,
+  comparisonLabel: "previous period",
+  bucketMode: "week",
   status: null,
   stravaReady: false,
   stravaConnected: false,
@@ -13,6 +18,7 @@ const state = {
   runInsightAbort: null,
   activeRunInsightKey: "",
   activeRunId: "",
+  activeRunFocus: "balanced",
   dataSource: "No data",
   activityVisible: 15
 };
@@ -22,10 +28,16 @@ const els = {
   demoButton: document.querySelector("#demoButton"),
   fileInput: document.querySelector("#fileInput"),
   rangeSelect: document.querySelector("#rangeSelect"),
+  rangeSummary: document.querySelector("#rangeSummary"),
+  rangePresetButtons: [...document.querySelectorAll("[data-range]")],
+  customRangeToggle: document.querySelector("#customRangeToggle"),
+  customRangePanel: document.querySelector("#customRangePanel"),
   startDate: document.querySelector("#startDate"),
   endDate: document.querySelector("#endDate"),
+  comparisonSelect: document.querySelector("#comparisonSelect"),
   bucketSelect: document.querySelector("#bucketSelect"),
   metricSelect: document.querySelector("#metricSelect"),
+  copyViewButton: document.querySelector("#copyViewButton"),
   navWindowLabel: document.querySelector("#navWindowLabel"),
   status: document.querySelector("#status"),
   tooltip: document.querySelector("#chartTooltip"),
@@ -58,6 +70,7 @@ const els = {
   aiAnalyzeButton: document.querySelector("#aiAnalyzeButton"),
   aiModelName: document.querySelector("#aiModelName"),
   aiInsightContent: document.querySelector("#aiInsightContent"),
+  aiPromptChips: document.querySelector("#aiPromptChips"),
   activityRows: document.querySelector("#activityRows"),
   activityCount: document.querySelector("#activityCount"),
   activitySearch: document.querySelector("#activitySearch"),
@@ -198,6 +211,99 @@ function getRangeDates() {
   return { start, end };
 }
 
+function resolvedBucketMode(start, end) {
+  if (els.bucketSelect.value !== "auto") return els.bucketSelect.value;
+  const spanDays = start && end ? Math.max(1, (end - start) / 86400000) : 0;
+  return spanDays > 370 ? "month" : "week";
+}
+
+function rangeLabel(start, end) {
+  if (!start || !end) return "Selected window";
+  const sameYear = start.getFullYear() === end.getFullYear();
+  const startText = start.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: sameYear ? undefined : "numeric"
+  });
+  const endText = end.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+  return `${startText}–${endText}`;
+}
+
+function comparisonWindow(start, end, mode = els.comparisonSelect.value) {
+  if (!start || !end || end <= start || mode === "off") {
+    return { start: null, end: null, label: "no comparison", shortLabel: "comparison off" };
+  }
+  if (mode === "year") {
+    const comparisonStart = new Date(start);
+    const comparisonEnd = new Date(end);
+    comparisonStart.setFullYear(comparisonStart.getFullYear() - 1);
+    comparisonEnd.setFullYear(comparisonEnd.getFullYear() - 1);
+    return { start: comparisonStart, end: comparisonEnd, label: "same period last year", shortLabel: "same period last year" };
+  }
+  const periodMs = end.valueOf() - start.valueOf();
+  const comparisonEnd = new Date(start.valueOf() - 1);
+  const comparisonStart = new Date(comparisonEnd.valueOf() - periodMs);
+  return { start: comparisonStart, end: comparisonEnd, label: "previous period", shortLabel: "previous period" };
+}
+
+function runsInWindow(activities, start, end) {
+  if (!start || !end) return [];
+  return activities
+    .filter(isRun)
+    .filter((activity) => {
+      const date = parseActivityDate(activity);
+      return !Number.isNaN(date.valueOf()) && date >= start && date <= end;
+    })
+    .sort((left, right) => parseActivityDate(left) - parseActivityDate(right));
+}
+
+function syncRangeControlState(start, end) {
+  const mode = els.rangeSelect.value;
+  els.rangePresetButtons.forEach((button) => {
+    button.setAttribute("aria-pressed", String(button.dataset.range === mode));
+  });
+  const custom = mode === "custom";
+  els.customRangeToggle.setAttribute("aria-expanded", String(custom && !els.customRangePanel.hidden));
+  els.customRangeToggle.setAttribute("aria-pressed", String(custom));
+  const comparisonText = els.comparisonSelect.value === "off"
+    ? "comparison off"
+    : `compared with ${comparisonWindow(start, end).label}`;
+  els.rangeSummary.textContent = `${rangeLabel(start, end)} · ${comparisonText}`;
+}
+
+function restoreViewFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  const range = params.get("range");
+  const comparison = params.get("compare");
+  const grouping = params.get("group");
+  const metric = params.get("metric");
+  if (["28", "56", "84", "180", "365", "all", "custom"].includes(range)) els.rangeSelect.value = range;
+  if (["previous", "year", "off"].includes(comparison)) els.comparisonSelect.value = comparison;
+  if (["auto", "week", "month"].includes(grouping)) els.bucketSelect.value = grouping;
+  if (METRICS[metric]) els.metricSelect.value = metric;
+  if (range === "custom") {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(params.get("start") || "")) els.startDate.value = params.get("start");
+    if (/^\d{4}-\d{2}-\d{2}$/.test(params.get("end") || "")) els.endDate.value = params.get("end");
+    els.customRangePanel.hidden = false;
+  }
+}
+
+function syncViewUrl() {
+  const url = new URL(window.location.href);
+  url.searchParams.set("range", els.rangeSelect.value);
+  url.searchParams.set("compare", els.comparisonSelect.value);
+  url.searchParams.set("group", els.bucketSelect.value);
+  url.searchParams.set("metric", els.metricSelect.value);
+  if (els.rangeSelect.value === "custom") {
+    url.searchParams.set("start", els.startDate.value);
+    url.searchParams.set("end", els.endDate.value);
+  } else {
+    url.searchParams.delete("start");
+    url.searchParams.delete("end");
+  }
+  window.history.replaceState(null, "", url);
+}
+
 function getActivityBounds() {
   const dates = state.rawActivities
     .map(normalizeActivity)
@@ -242,11 +348,12 @@ function syncRangeInputs() {
 function applyRangeInputs() {
   const bounds = getActivityBounds();
   els.startDate.min = localDateValue(bounds.start);
+  els.startDate.max = localDateValue(bounds.end);
+  els.endDate.min = localDateValue(bounds.start);
   els.endDate.max = localDateValue(bounds.end);
 }
 
-function buildBuckets(runs) {
-  const mode = els.bucketSelect.value;
+function buildBuckets(runs, mode = state.bucketMode) {
   const buckets = new Map();
   runs.forEach((run) => {
     const date = parseActivityDate(run);
@@ -393,6 +500,7 @@ function currentInsightFingerprint() {
   return JSON.stringify({
     range: [els.startDate.value, els.endDate.value],
     grouping: els.bucketSelect.value,
+    comparison: els.comparisonSelect.value,
     focus: els.aiFocus.value,
     question: els.aiQuestion.value.trim(),
     runs: state.filteredRuns.map((run) => [
@@ -411,18 +519,20 @@ function render() {
   applyRangeInputs();
   const normalized = state.rawActivities.map(normalizeActivity);
   const { start, end } = getRangeDates();
-  state.filteredRuns = normalized
-    .filter(isRun)
-    .filter((activity) => {
-      const date = parseActivityDate(activity);
-      return !Number.isNaN(date.valueOf()) && (!start || date >= start) && (!end || date <= end);
-    })
-    .sort((a, b) => parseActivityDate(a) - parseActivityDate(b));
-  state.buckets = buildBuckets(state.filteredRuns);
+  state.bucketMode = resolvedBucketMode(start, end);
+  state.filteredRuns = runsInWindow(normalized, start, end);
+  state.buckets = buildBuckets(state.filteredRuns, state.bucketMode);
+  const comparison = comparisonWindow(start, end);
+  state.comparisonRuns = runsInWindow(normalized, comparison.start, comparison.end);
+  state.comparisonBuckets = buildBuckets(state.comparisonRuns, state.bucketMode);
+  state.comparisonSummary = summarize(state.comparisonRuns, state.comparisonBuckets);
+  state.comparisonLabel = comparison.shortLabel;
+  syncRangeControlState(start, end);
+  syncViewUrl();
   state.insightFingerprint = currentInsightFingerprint();
 
   const summary = summarize(state.filteredRuns, state.buckets);
-  const previous = summarizePreviousPeriod(normalized, start, end);
+  const previous = state.comparisonSummary;
   els.totalDistance.textContent = `${summary.totalMiles.toFixed(1)} mi`;
   els.averagePace.textContent = formatPace(summary.averagePace);
   els.longRun.textContent = `${summary.longRun.toFixed(1)} mi`;
@@ -435,6 +545,7 @@ function render() {
   renderDelta(els.averageHrDelta, summary.averageHr, previous.averageHr, "bpm", false, true);
 
   renderTrainingBrief(summary, previous, start, end);
+  renderSuggestedQuestions(summary, previous);
   renderIntel(summary, previous, start, end);
   renderAiState();
   renderMainChart();
@@ -485,10 +596,10 @@ function renderTrainingBrief(summary, previous, start, end) {
 
   const volumeDetail = weeklyDelta === null
     ? `${summary.averageWeeklyMiles.toFixed(1)} mi/wk in view`
-    : `${weeklyDelta >= 0 ? "+" : ""}${Math.round(weeklyDelta)}% weekly volume vs prior`;
+    : `${weeklyDelta >= 0 ? "+" : ""}${Math.round(weeklyDelta)}% weekly volume vs ${state.comparisonLabel}`;
   const paceDetail = paceDelta === null
     ? `${formatPace(summary.averagePace)} average pace`
-    : `${paceDelta < 0 ? "Faster" : paceDelta > 0 ? "Slower" : "Level"} by ${formatPace(Math.abs(paceDelta)).replace("/mi", "")} vs prior`;
+    : `${paceDelta < 0 ? "Faster" : paceDelta > 0 ? "Slower" : "Level"} by ${formatPace(Math.abs(paceDelta)).replace("/mi", "")} vs ${state.comparisonLabel}`;
   const structureDetail = `${Math.round(summary.longRunShare * 100)}% of mileage from long runs · ${summary.longestRestGap}d longest gap`;
   const signals = [
     { label: "Direction", detail: volumeDetail, tone: weeklyDelta !== null && Math.abs(weeklyDelta) > 20 ? "caution" : "positive" },
@@ -504,6 +615,76 @@ function renderTrainingBrief(summary, previous, start, end) {
     detail.textContent = signal.detail;
     article.append(label, detail);
     return article;
+  }));
+}
+
+function renderSuggestedQuestions(summary, comparison) {
+  if (!summary.runCount) {
+    els.aiPromptChips.replaceChildren();
+    return;
+  }
+  const questions = [];
+  const hasComparison = comparison?.runCount > 0;
+  const volumeChange = hasComparison && comparison.averageWeeklyMiles
+    ? Math.round(((summary.averageWeeklyMiles - comparison.averageWeeklyMiles) / comparison.averageWeeklyMiles) * 100)
+    : null;
+  const loadChange = hasComparison && comparison.totalLoad
+    ? Math.round(((summary.totalLoad - comparison.totalLoad) / comparison.totalLoad) * 100)
+    : null;
+  const paceChange = hasComparison && comparison.averagePace
+    ? Math.round(summary.averagePace - comparison.averagePace)
+    : null;
+
+  if (volumeChange !== null && Math.abs(volumeChange) >= 8) {
+    questions.push({
+      focus: "progression",
+      label: `${volumeChange >= 0 ? "Volume +" : "Volume "}${volumeChange}%`,
+      question: `What best explains the ${Math.abs(volumeChange)}% ${volumeChange >= 0 ? "increase" : "decrease"} in weekly volume versus the ${state.comparisonLabel}?`
+    });
+  }
+  if (loadChange !== null && Math.abs(loadChange) >= 8) {
+    questions.push({
+      focus: "recovery",
+      label: `Load ${loadChange >= 0 ? "+" : ""}${loadChange}%`,
+      question: `How did training load shift versus the ${state.comparisonLabel}, and which supporting signal matters most?`
+    });
+  }
+  if (paceChange !== null && Math.abs(paceChange) >= 6) {
+    questions.push({
+      focus: "efficiency",
+      label: paceChange < 0 ? "Pace moved faster" : "Pace moved slower",
+      question: `How did pace change versus the ${state.comparisonLabel}, and does the load or heart-rate context support that change?`
+    });
+  }
+  if (summary.longRunShare >= 0.32) {
+    questions.push({
+      focus: "durability",
+      label: `${Math.round(summary.longRunShare * 100)}% long-run share`,
+      question: "How balanced is the long-run contribution within this selected window?"
+    });
+  }
+  if (summary.longestRestGap >= 5) {
+    questions.push({
+      focus: "consistency",
+      label: `${summary.longestRestGap}d longest gap`,
+      question: "What does the run-spacing pattern show, and where is the evidence limited?"
+    });
+  }
+  [
+    { focus: "balanced", label: "Strongest signal", question: "Which app-calculated signal is strongest in this window, and how confident is that read?" },
+    { focus: "recovery", label: "Load check", question: "How has training load shifted, and what should I compare next?" },
+    { focus: "durability", label: "Long runs", question: "What stands out about my long-run pattern?" }
+  ].forEach((fallback) => {
+    if (questions.length < 3 && !questions.some((item) => item.focus === fallback.focus)) questions.push(fallback);
+  });
+
+  els.aiPromptChips.replaceChildren(...questions.slice(0, 4).map((item) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.dataset.focus = item.focus;
+    button.dataset.question = item.question;
+    button.textContent = item.label;
+    return button;
   }));
 }
 
@@ -531,52 +712,51 @@ function renderAiState() {
 
 function buildInsightPayload() {
   const summary = summarize(state.filteredRuns, state.buckets);
-  const recentRuns = state.filteredRuns.slice(-12).reverse().map((run) => ({
-    date: localDateValue(parseActivityDate(run)),
-    name: String(run.name || "Run").slice(0, 80),
-    distanceMiles: Number(miles(run.distance).toFixed(2)),
-    paceSecondsPerMile: Math.round(paceSeconds(run)),
-    elevationFeet: Math.round(feet(run.total_elevation_gain)),
-    averageHr: run.average_heartrate ? Math.round(run.average_heartrate) : null,
-    trainingLoad: Math.round(activityLoad(run))
-  }));
-  const buckets = state.buckets.slice(-8).map((bucket) => ({
-    period: bucket.label,
-    runs: bucket.runs,
-    miles: Number(bucket.distanceMiles.toFixed(1)),
-    averagePaceSeconds: Math.round(bucket.averagePace || 0),
-    longRunMiles: Number(bucket.longRunMiles.toFixed(1)),
-    averageHr: bucket.averageHr ? Math.round(bucket.averageHr) : null,
-    trainingLoad: Math.round(bucket.trainingLoad)
-  }));
-  const trendHalf = Math.floor(buckets.length / 2);
-  const earlierBuckets = buckets.slice(0, trendHalf);
-  const recentBuckets = buckets.slice(trendHalf);
-  const mean = (items, key, predicate = (value) => Number.isFinite(value)) => {
-    const values = items.map((item) => Number(item[key])).filter(predicate);
-    return values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null;
+  const comparison = state.comparisonSummary || summarize([], []);
+  const hasComparison = comparison.runCount > 0 && els.comparisonSelect.value !== "off";
+  const percentChange = (current, earlier) => earlier ? Math.round(((current - earlier) / earlier) * 100) : null;
+  const direction = (change, inverse = false) => {
+    if (change === null || Math.abs(change) < 1) return "stable";
+    const higher = change > 0;
+    return inverse ? (higher ? "slower" : "faster") : (higher ? "higher" : "lower");
   };
-  const earlierMiles = mean(earlierBuckets, "miles");
-  const recentMiles = mean(recentBuckets, "miles");
-  const earlierPace = mean(earlierBuckets, "averagePaceSeconds", (value) => value > 0);
-  const recentPace = mean(recentBuckets, "averagePaceSeconds", (value) => value > 0);
-  const earlierHr = mean(earlierBuckets, "averageHr", (value) => value > 0);
-  const recentHr = mean(recentBuckets, "averageHr", (value) => value > 0);
-  const earlierLoad = mean(earlierBuckets, "trainingLoad");
-  const recentLoad = mean(recentBuckets, "trainingLoad");
-  const trend = buckets.length >= 4 ? {
-    earlierPeriodCount: earlierBuckets.length,
-    recentPeriodCount: recentBuckets.length,
-    earlierAverageMiles: Number(earlierMiles.toFixed(1)),
-    recentAverageMiles: Number(recentMiles.toFixed(1)),
-    volumeChangePercent: earlierMiles ? Math.round(((recentMiles - earlierMiles) / earlierMiles) * 100) : 0,
-    earlierAveragePaceSeconds: earlierPace ? Math.round(earlierPace) : null,
-    recentAveragePaceSeconds: recentPace ? Math.round(recentPace) : null,
-    paceChangeSeconds: earlierPace && recentPace ? Math.round(recentPace - earlierPace) : null,
-    earlierAverageHr: earlierHr ? Math.round(earlierHr) : null,
-    recentAverageHr: recentHr ? Math.round(recentHr) : null,
-    earlierAverageLoad: earlierLoad ? Math.round(earlierLoad) : null,
-    recentAverageLoad: recentLoad ? Math.round(recentLoad) : null
+  const volumeChange = hasComparison ? percentChange(summary.averageWeeklyMiles, comparison.averageWeeklyMiles) : null;
+  const loadChange = hasComparison ? percentChange(summary.totalLoad, comparison.totalLoad) : null;
+  const paceChange = hasComparison && comparison.averagePace ? Math.round(summary.averagePace - comparison.averagePace) : null;
+  const consistencyChange = hasComparison ? Math.round((summary.consistency - comparison.consistency) * 100) : null;
+  const longRunShareChange = hasComparison ? Math.round((summary.longRunShare - comparison.longRunShare) * 100) : null;
+  const heartRateChange = hasComparison && summary.averageHr && comparison.averageHr ? Math.round(summary.averageHr - comparison.averageHr) : null;
+  const spacingChange = hasComparison ? summary.longestRestGap - comparison.longestRestGap : null;
+  const hrCoverage = summary.runCount
+    ? Math.round((state.filteredRuns.filter((run) => Number(run.average_heartrate) > 0).length / summary.runCount) * 100)
+    : 0;
+  const directLoadCoverage = summary.runCount
+    ? Math.round((state.filteredRuns.filter((run) => Number(run.suffer_score) > 0).length / summary.runCount) * 100)
+    : 0;
+  const candidates = [
+    { id: "volume", direction: direction(volumeChange), change: volumeChange, coverage: 100 },
+    { id: "pace", direction: direction(paceChange, true), change: paceChange, coverage: 100 },
+    { id: "load", direction: direction(loadChange), change: loadChange, coverage: directLoadCoverage },
+    { id: "consistency", direction: direction(consistencyChange), change: consistencyChange, coverage: 100 },
+    { id: "long_run", direction: direction(longRunShareChange), change: longRunShareChange, coverage: 100 },
+    { id: "heart_rate", direction: direction(heartRateChange), change: heartRateChange, coverage: hrCoverage },
+    { id: "spacing", direction: direction(spacingChange), change: spacingChange, coverage: 100 }
+  ];
+  const trend = hasComparison ? {
+    comparisonMode: els.comparisonSelect.value,
+    comparisonLabel: state.comparisonLabel,
+    earlierPeriodCount: state.comparisonBuckets.length,
+    recentPeriodCount: state.buckets.length,
+    earlierAverageMiles: Number(comparison.averageWeeklyMiles.toFixed(1)),
+    recentAverageMiles: Number(summary.averageWeeklyMiles.toFixed(1)),
+    volumeChangePercent: volumeChange,
+    earlierAveragePaceSeconds: comparison.averagePace ? Math.round(comparison.averagePace) : null,
+    recentAveragePaceSeconds: summary.averagePace ? Math.round(summary.averagePace) : null,
+    paceChangeSeconds: paceChange,
+    earlierAverageHr: comparison.averageHr ? Math.round(comparison.averageHr) : null,
+    recentAverageHr: summary.averageHr ? Math.round(summary.averageHr) : null,
+    earlierAverageLoad: Math.round(comparison.totalLoad),
+    recentAverageLoad: Math.round(summary.totalLoad)
   } : null;
   return {
     focus: els.aiFocus.value,
@@ -584,7 +764,9 @@ function buildInsightPayload() {
     range: {
       start: els.startDate.value || null,
       end: els.endDate.value || null,
-      grouping: els.bucketSelect.value
+      grouping: state.bucketMode,
+      comparisonMode: els.comparisonSelect.value,
+      comparisonLabel: state.comparisonLabel
     },
     summary: {
       runCount: summary.runCount,
@@ -605,9 +787,25 @@ function buildInsightPayload() {
       loadPerMile: Number(summary.averageLoadPerMile.toFixed(1)),
       longestRestGapDays: summary.longestRestGap
     },
+    comparison: hasComparison ? {
+      runCount: comparison.runCount,
+      averageWeeklyMiles: Number(comparison.averageWeeklyMiles.toFixed(1)),
+      averagePaceSeconds: Math.round(comparison.averagePace || 0),
+      consistencyPercent: Math.round(comparison.consistency * 100),
+      longRunSharePercent: Math.round(comparison.longRunShare * 100),
+      averageHr: comparison.averageHr ? Math.round(comparison.averageHr) : null,
+      trainingLoad: Math.round(comparison.totalLoad),
+      longestRestGapDays: comparison.longestRestGap
+    } : null,
+    coverage: {
+      heartRatePercent: hrCoverage,
+      directLoadPercent: directLoadCoverage,
+      currentRuns: summary.runCount,
+      comparisonRuns: comparison.runCount,
+      completePeriods: Math.max(0, state.buckets.length - 2)
+    },
+    candidates,
     trend,
-    buckets,
-    recentRuns
   };
 }
 
@@ -657,6 +855,18 @@ function renderAiInsight(insight, model) {
   summary.textContent = insight.summary;
   header.append(label, headline, summary);
 
+  const evidence = document.createElement("div");
+  evidence.className = "ai-evidence";
+  [
+    insight.answerability ? `Evidence: ${insight.answerability}` : "",
+    insight.confidence ? `Confidence: ${insight.confidence}` : "",
+    insight.limitation ? insight.limitation : ""
+  ].filter(Boolean).forEach((text) => {
+    const badge = document.createElement("span");
+    badge.textContent = text;
+    evidence.append(badge);
+  });
+
   const observations = document.createElement("div");
   observations.className = "ai-observations";
   (insight.observations || []).slice(0, 4).forEach((observation, index) => {
@@ -684,7 +894,7 @@ function renderAiInsight(insight, model) {
   const caution = document.createElement("p");
   caution.className = "ai-caution";
   caution.textContent = insight.caution || "Treat this as a training pattern review, not medical advice.";
-  els.aiInsightContent.replaceChildren(header, observations, nextStep, caution);
+  els.aiInsightContent.replaceChildren(header, evidence, observations, nextStep, caution);
   requestAnimationFrame(() => {
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     els.aiInsightContent.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "start" });
@@ -802,31 +1012,17 @@ function renderIntelCard(card) {
 }
 
 function deltaText(current, previous, unit, higherIsBetter) {
-  if (!previous || !Number.isFinite(previous) || !Number.isFinite(current)) return "No prior period";
+  if (!previous || !Number.isFinite(previous) || !Number.isFinite(current)) return "No comparison";
   const diff = current - previous;
   const improved = higherIsBetter ? diff >= 0 : diff <= 0;
   const direction = improved ? "Up" : "Down";
-  return `${direction} ${Math.abs(diff).toFixed(1)} ${unit} vs prior`;
-}
-
-function summarizePreviousPeriod(normalized, start, end) {
-  if (!start || !end || end <= start) return summarize([], []);
-  const periodMs = end.valueOf() - start.valueOf();
-  const previousEnd = new Date(start.valueOf() - 1);
-  const previousStart = new Date(previousEnd.valueOf() - periodMs);
-  const previousRuns = normalized
-    .filter(isRun)
-    .filter((activity) => {
-      const date = parseActivityDate(activity);
-      return !Number.isNaN(date.valueOf()) && date >= previousStart && date <= previousEnd;
-    });
-  return summarize(previousRuns, buildBuckets(previousRuns));
+  return `${direction} ${Math.abs(diff).toFixed(1)} ${unit} vs ${state.comparisonLabel}`;
 }
 
 function renderDelta(element, current, previous, unit, higherIsBetter, neutral = false) {
   element.className = "";
   if (!previous || !Number.isFinite(previous) || !Number.isFinite(current)) {
-    element.textContent = "No prior period";
+    element.textContent = "No comparison";
     return;
   }
   const diff = current - previous;
@@ -840,7 +1036,7 @@ function renderDelta(element, current, previous, unit, higherIsBetter, neutral =
   const sign = diff >= 0 ? "+" : "-";
   const value = Math.abs(diff);
   const formatted = unit === "%" ? `${Math.round(value)}%` : unit === "bpm" ? `${Math.round(value)} bpm` : `${value.toFixed(1)} ${unit}`;
-  element.textContent = `${sign}${formatted} vs prior`;
+  element.textContent = `${sign}${formatted} vs ${state.comparisonLabel}`;
 }
 
 function renderMainChart() {
@@ -849,8 +1045,9 @@ function renderMainChart() {
     button.setAttribute("aria-pressed", String(button.dataset.metric === els.metricSelect.value));
   });
   els.mainChartTitle.textContent = `${metric.label} trend`;
-  els.mainChartSubtitle.textContent = `${state.buckets.length} ${els.bucketSelect.value === "week" ? "weeks" : "months"}`;
-  renderBarLineChart(els.mainChart, state.buckets, metric);
+  const comparisonText = state.comparisonRuns.length ? ` · ${state.comparisonLabel} overlay` : "";
+  els.mainChartSubtitle.textContent = `${state.buckets.length} ${state.bucketMode === "week" ? "weeks" : "months"}${comparisonText}`;
+  renderBarLineChart(els.mainChart, state.buckets, metric, state.comparisonBuckets);
 }
 
 function svg(tag, attrs = {}, children = []) {
@@ -944,7 +1141,7 @@ function bindTooltips() {
   });
 }
 
-function renderBarLineChart(container, buckets, metric) {
+function renderBarLineChart(container, buckets, metric, comparisonBuckets = []) {
   if (!buckets.length) {
     renderEmpty(container);
     return;
@@ -953,10 +1150,12 @@ function renderBarLineChart(container, buckets, metric) {
   const height = 520;
   const pad = { top: 22, right: 28, bottom: 48, left: 58 };
   const values = buckets.map(metric.value);
+  const comparisonValues = comparisonBuckets.map(metric.value);
   const metricKey = els.metricSelect.value;
-  const paceValues = values.filter((value) => Number.isFinite(value) && value > 0);
+  const allValues = [...values, ...comparisonValues];
+  const paceValues = allValues.filter((value) => Number.isFinite(value) && value > 0);
   const min = metricKey === "pace" && paceValues.length ? Math.min(...paceValues) : 0;
-  const max = Math.max(...values, 1);
+  const max = Math.max(...allValues, 1);
   const span = Math.max(max - min, 1);
   const chartWidth = width - pad.left - pad.right;
   const chartHeight = height - pad.top - pad.bottom;
@@ -967,6 +1166,14 @@ function renderBarLineChart(container, buckets, metric) {
     root.appendChild(svg("line", { class: "axis", x1: pad.left, y1: y, x2: width - pad.right, y2: y }));
     const tick = max - (span / 4) * i;
     root.appendChild(svg("text", { class: "label", x: 8, y: y + 4 }, [document.createTextNode(metric.format(tick).replace("/mi", ""))]));
+  }
+  if (comparisonValues.length) {
+    const comparisonPoints = comparisonValues.map((value, index) => {
+      const x = pad.left + index * (chartWidth / comparisonValues.length) + (chartWidth / comparisonValues.length) / 2;
+      const y = pad.top + chartHeight - ((value - min) / span) * chartHeight;
+      return `${x},${y}`;
+    });
+    root.appendChild(svg("polyline", { class: "line comparison", points: comparisonPoints.join(" ") }));
   }
   const points = buckets.map((bucket, index) => {
     const value = metric.value(bucket);
@@ -1004,7 +1211,10 @@ function renderBarLineChart(container, buckets, metric) {
     return `${x},${y}`;
   });
   root.appendChild(svg("polyline", { class: "line secondary", points: smoothPoints.join(" ") }));
-  root.appendChild(svg("text", { class: "label", x: width - 180, y: 16 }, [document.createTextNode("orange: actual  blue: moving avg")]));
+  const legend = comparisonValues.length
+    ? `orange: current  teal: moving avg  dashed: ${state.comparisonLabel}`
+    : "orange: current  teal: moving avg";
+  root.appendChild(svg("text", { class: "label chart-legend", x: width - 310, y: 16 }, [document.createTextNode(legend)]));
   container.replaceChildren(root);
 }
 
@@ -1361,6 +1571,7 @@ function classifyRun(run, distanceMiles, pace, distanceRank, paceRank) {
 function buildWorkoutDigest(run) {
   const runs = [...state.filteredRuns].sort((a, b) => parseActivityDate(a) - parseActivityDate(b));
   const index = runs.findIndex((candidate) => String(candidate.id) === String(run.id));
+  const runDate = parseActivityDate(run);
   const previousRun = index > 0 ? runs[index - 1] : null;
   const nextRun = index >= 0 && index < runs.length - 1 ? runs[index + 1] : null;
   const distance = miles(run.distance);
@@ -1385,12 +1596,37 @@ function buildWorkoutDigest(run) {
   const distanceRank = percentileRank(runs.map((candidate) => miles(candidate.distance)), distance, true);
   const paceRank = percentileRank(runs.map(paceSeconds), pace, false);
   const loadRank = percentileRank(runs.map(activityLoad), load, true);
-  const bucket = state.buckets.find((candidate) => candidate.key === bucketKey(parseActivityDate(run), els.bucketSelect.value));
+  const bucket = state.buckets.find((candidate) => candidate.key === bucketKey(runDate, state.bucketMode));
   const previousGap = daysBetween(previousRun, run);
   const nextGap = daysBetween(run, nextRun);
   const contextStart = Math.max(0, Math.min(index - 3, runs.length - 7));
   const neighboringRuns = runs.slice(contextStart, contextStart + 7);
   const runType = classifyRun(run, distance, pace, distanceRank, paceRank);
+  const sevenDays = 7 * 86400000;
+  const priorSevenRuns = runs.filter((candidate) => {
+    const date = parseActivityDate(candidate);
+    return date < runDate && runDate - date <= sevenDays;
+  });
+  const nextSevenRuns = runs.filter((candidate) => {
+    const date = parseActivityDate(candidate);
+    return date > runDate && date - runDate <= sevenDays;
+  });
+  const sumMiles = (items) => items.reduce((sum, candidate) => sum + miles(candidate.distance), 0);
+  const sumLoad = (items) => items.reduce((sum, candidate) => sum + activityLoad(candidate), 0);
+  const priorSevenMiles = sumMiles(priorSevenRuns);
+  const nextSevenMiles = sumMiles(nextSevenRuns);
+  const priorSevenLoad = sumLoad(priorSevenRuns);
+  const nextSevenLoad = sumLoad(nextSevenRuns);
+  const periodDistanceShare = bucket?.distanceMiles ? distance / bucket.distanceMiles : 0;
+  const periodLoadShare = bucket?.trainingLoad ? load / bucket.trainingLoad : 0;
+  const similarElevationDensity = average(similar.map((candidate) => {
+    const candidateMiles = miles(candidate.distance);
+    return candidateMiles ? feet(candidate.total_elevation_gain) / candidateMiles : 0;
+  }));
+  const standoutScore = Math.round((Math.abs(distanceRank - 50) + Math.abs(paceRank - 50) + Math.abs(loadRank - 50)) / 3);
+  const hrCoverage = similar.length
+    ? Math.round((similar.filter((candidate) => Number(candidate.average_heartrate) > 0).length / similar.length) * 100)
+    : 0;
   const signals = [
     {
       label: runType,
@@ -1416,7 +1652,7 @@ function buildWorkoutDigest(run) {
 
   return {
     run,
-    date: parseActivityDate(run),
+    date: runDate,
     distance,
     pace,
     elevation,
@@ -1440,6 +1676,17 @@ function buildWorkoutDigest(run) {
     nextGap,
     runType,
     neighboringRuns,
+    priorSevenRuns,
+    nextSevenRuns,
+    priorSevenMiles,
+    nextSevenMiles,
+    priorSevenLoad,
+    nextSevenLoad,
+    periodDistanceShare,
+    periodLoadShare,
+    similarElevationDensity,
+    standoutScore,
+    hrCoverage,
     signals
   };
 }
@@ -1514,6 +1761,63 @@ function nearbyRunText(run, gap) {
   return `${prefix}${formatNumber(miles(run.distance), 1)} mi at ${formatPace(paceSeconds(run))}`;
 }
 
+function comparisonCellMarkup(label, current, benchmark, difference, available = true) {
+  return `
+    <div class="workout-compare-row" role="row">
+      <strong role="rowheader">${escapeHtml(label)}</strong>
+      <span role="cell">${escapeHtml(current)}</span>
+      <span role="cell">${escapeHtml(available ? benchmark : "—")}</span>
+      <span role="cell" class="${available ? "" : "muted"}">${escapeHtml(available ? difference : "Needs more data")}</span>
+    </div>
+  `;
+}
+
+function workoutComparisonMarkup(digest, averageHr) {
+  const paceAvailable = Boolean(digest.similarPace);
+  const hrAvailable = Boolean(averageHr && digest.similarHr);
+  const loadAvailable = Boolean(digest.similarLoadPerMile);
+  const elevationAvailable = Boolean(digest.similarElevationDensity);
+  const paceDifference = paceAvailable ? Math.round(digest.pace - digest.similarPace) : 0;
+  const hrDifference = hrAvailable ? Math.round(averageHr - digest.similarHr) : 0;
+  const loadDifference = loadAvailable ? digest.loadPerMile - digest.similarLoadPerMile : 0;
+  const elevationDifference = elevationAvailable ? digest.elevationDensity - digest.similarElevationDensity : 0;
+  return `
+    <div class="workout-compare" role="table" aria-label="Run compared with similar-distance efforts">
+      <div class="workout-compare-head" role="row">
+        <span role="columnheader">Metric</span><span role="columnheader">This run</span><span role="columnheader">Similar</span><span role="columnheader">Difference</span>
+      </div>
+      ${comparisonCellMarkup(
+        "Pace",
+        formatPace(digest.pace),
+        formatPace(digest.similarPace),
+        `${Math.abs(paceDifference)} sec ${paceDifference <= 0 ? "faster" : "slower"}`,
+        paceAvailable
+      )}
+      ${comparisonCellMarkup(
+        "Heart rate",
+        averageHr ? `${Math.round(averageHr)} bpm` : "—",
+        `${Math.round(digest.similarHr)} bpm`,
+        `${hrDifference >= 0 ? "+" : ""}${hrDifference} bpm`,
+        hrAvailable
+      )}
+      ${comparisonCellMarkup(
+        "Load / mile",
+        formatNumber(digest.loadPerMile, 1),
+        formatNumber(digest.similarLoadPerMile, 1),
+        `${loadDifference >= 0 ? "+" : ""}${formatNumber(loadDifference, 1)}`,
+        loadAvailable
+      )}
+      ${comparisonCellMarkup(
+        "Elevation / mile",
+        `${Math.round(digest.elevationDensity)} ft`,
+        `${Math.round(digest.similarElevationDensity)} ft`,
+        `${elevationDifference >= 0 ? "+" : ""}${Math.round(elevationDifference)} ft`,
+        elevationAvailable
+      )}
+    </div>
+  `;
+}
+
 function buildRunInsightPayload(digest) {
   const run = digest.run;
   const summary = summarize(state.filteredRuns, state.buckets);
@@ -1526,6 +1830,7 @@ function buildRunInsightPayload(digest) {
     : 0;
   return {
     kind: "run",
+    focus: state.activeRunFocus,
     run: {
       name: String(run.name || "Run").slice(0, 100),
       date: localDateValue(digest.date),
@@ -1554,7 +1859,8 @@ function buildRunInsightPayload(digest) {
       similarLoadPerMile: digest.similarLoadPerMile ? Number(digest.similarLoadPerMile.toFixed(1)) : null,
       loadPerMileDifferencePercent: digest.similarLoadPerMile ? loadDifferencePercent : null,
       daysSincePreviousRun: digest.previousGap,
-      daysUntilNextRun: digest.nextGap
+      daysUntilNextRun: digest.nextGap,
+      similarElevationFeetPerMile: digest.similarElevationDensity ? Math.round(digest.similarElevationDensity) : null
     },
     baseline: {
       runCount: summary.runCount,
@@ -1562,6 +1868,24 @@ function buildRunInsightPayload(digest) {
       averagePaceSecondsPerMile: Math.round(summary.averagePace),
       averageHr: summary.averageHr ? Math.round(summary.averageHr) : null,
       averageLoadPerMile: Number(summary.averageLoadPerMile.toFixed(1))
+    },
+    context: {
+      priorSevenRunCount: digest.priorSevenRuns.length,
+      priorSevenMiles: Number(digest.priorSevenMiles.toFixed(1)),
+      priorSevenLoad: Math.round(digest.priorSevenLoad),
+      nextSevenRunCount: digest.nextSevenRuns.length,
+      nextSevenMiles: Number(digest.nextSevenMiles.toFixed(1)),
+      nextSevenLoad: Math.round(digest.nextSevenLoad),
+      periodDistanceSharePercent: Math.round(digest.periodDistanceShare * 100),
+      periodLoadSharePercent: Math.round(digest.periodLoadShare * 100),
+      standoutScore: digest.standoutScore
+    },
+    coverage: {
+      similarRunCount: digest.similarCount,
+      similarHeartRatePercent: digest.hrCoverage,
+      directLoad: Number(run.suffer_score) > 0,
+      hasPreviousRun: Boolean(digest.previousRun),
+      hasNextRun: Boolean(digest.nextRun)
     }
   };
 }
@@ -1588,6 +1912,11 @@ function renderRunInsightResult(result) {
     <div class="workout-ai-result">
       <h4>${escapeHtml(insight.headline)}</h4>
       <p class="workout-ai-read">${escapeHtml(insight.read)}</p>
+      <div class="workout-ai-evidence">
+        <span>Evidence: ${escapeHtml(insight.answerability || "Partial")}</span>
+        <span>Confidence: ${escapeHtml(insight.confidence || "Medium")}</span>
+        ${insight.limitation ? `<span>${escapeHtml(insight.limitation)}</span>` : ""}
+      </div>
       <div class="workout-ai-signals">
         ${insight.signals.map((signal) => `
           <article class="workout-ai-signal ${escapeHtml(signal.tone)}">
@@ -1620,7 +1949,7 @@ function renderRunInsightError(message, runId) {
 }
 
 async function requestRunInsight(digest, { force = false } = {}) {
-  const key = `${digest.run.id}:${state.insightFingerprint}`;
+  const key = `${digest.run.id}:${state.insightFingerprint}:${state.activeRunFocus}`;
   state.activeRunInsightKey = key;
   const cached = state.runInsightCache.get(key);
   if (cached && !force) {
@@ -1656,9 +1985,11 @@ function showWorkoutModal(runId, trigger = document.activeElement) {
   const run = state.filteredRuns.find((candidate) => String(candidate.id) === String(runId));
   if (!run) return;
   const modalWasHidden = els.workoutModal.hidden;
+  const runChanged = state.activeRunId !== String(run.id);
   if (modalWasHidden && trigger instanceof HTMLElement && !els.workoutModal.contains(trigger)) {
     state.modalTrigger = trigger;
   }
+  if (modalWasHidden || runChanged) state.activeRunFocus = "balanced";
   state.activeRunId = String(run.id);
   const digest = buildWorkoutDigest(run);
   const narrative = workoutNarrative(digest);
@@ -1706,7 +2037,30 @@ function showWorkoutModal(runId, trigger = document.activeElement) {
           <span>Quick read</span>
           <strong>${escapeHtml(narrative.headline)}</strong>
           <p>${escapeHtml(narrative.detail)}</p>
+          <div class="workout-standout" style="--score: ${digest.standoutScore}%"><span>${digest.standoutScore}% standout from the middle of this window</span></div>
         </aside>
+      </section>
+      <section class="workout-context-strip" aria-label="Training context around this run">
+        <article>
+          <span>7 days before</span>
+          <strong>${digest.priorSevenMiles.toFixed(1)} mi</strong>
+          <small>${digest.priorSevenRuns.length} runs · ${Math.round(digest.priorSevenLoad)} load</small>
+        </article>
+        <article>
+          <span>Period contribution</span>
+          <strong>${Math.round(digest.periodDistanceShare * 100)}% mileage</strong>
+          <small>${Math.round(digest.periodLoadShare * 100)}% of grouped load</small>
+        </article>
+        <article>
+          <span>7 days after</span>
+          <strong>${digest.nextSevenMiles.toFixed(1)} mi</strong>
+          <small>${digest.nextSevenRuns.length} runs · ${Math.round(digest.nextSevenLoad)} load</small>
+        </article>
+        <article>
+          <span>Benchmark depth</span>
+          <strong>${digest.similarCount} similar</strong>
+          <small>${digest.hrCoverage}% include heart rate</small>
+        </article>
       </section>
       <section class="workout-ai" aria-labelledby="workoutAiTitle">
         <div class="workout-ai-heading">
@@ -1715,6 +2069,12 @@ function showWorkoutModal(runId, trigger = document.activeElement) {
             <h3 id="workoutAiTitle">A second look at this effort.</h3>
           </div>
           <span id="workoutAiModel">qwen3.5:0.8b</span>
+        </div>
+        <div class="workout-ai-focus" role="group" aria-label="Run analysis focus">
+          <button type="button" data-action="run-focus" data-focus="balanced" aria-pressed="true">Overall</button>
+          <button type="button" data-action="run-focus" data-focus="standout" aria-pressed="false">Why it stands out</button>
+          <button type="button" data-action="run-focus" data-focus="load" aria-pressed="false">Load</button>
+          <button type="button" data-action="run-focus" data-focus="spacing" aria-pressed="false">Spacing</button>
         </div>
         <div id="workoutAiContent" class="workout-ai-content" aria-live="polite">${runInsightLoadingMarkup()}</div>
       </section>
@@ -1727,6 +2087,10 @@ function showWorkoutModal(runId, trigger = document.activeElement) {
               ${profileMarkup("Pace", digest.paceRank)}
               ${profileMarkup("Load", digest.loadRank)}
             </div>
+          </section>
+          <section class="workout-section">
+            <div class="workout-section-heading"><h3>Like-for-like comparison</h3><span>${digest.similarCount} runs within ±20% distance</span></div>
+            ${workoutComparisonMarkup(digest, averageHr)}
           </section>
           <section class="workout-section">
             <div class="workout-section-heading"><h3>Neighboring runs</h3><span>Miles · selected run in orange</span></div>
@@ -1756,6 +2120,8 @@ function showWorkoutModal(runId, trigger = document.activeElement) {
               <dt>Heart rate</dt><dd>${escapeHtml(hrCompare)}</dd>
               <dt>Previous</dt><dd>${escapeHtml(nearbyRunText(digest.previousRun, digest.previousGap))}</dd>
               <dt>Next</dt><dd>${escapeHtml(nearbyRunText(digest.nextRun, digest.nextGap))}</dd>
+              <dt>Period share</dt><dd>${Math.round(digest.periodDistanceShare * 100)}% mileage · ${Math.round(digest.periodLoadShare * 100)}% load</dd>
+              <dt>Evidence depth</dt><dd>${digest.similarCount} similar runs · ${digest.hrCoverage}% HR coverage</dd>
               <dt>Device</dt><dd>${escapeHtml(run.device_name || "Not included in activity data")}</dd>
             </dl>
           </section>
@@ -1775,6 +2141,7 @@ function closeWorkoutModal() {
   state.runInsightAbort = null;
   state.activeRunInsightKey = "";
   state.activeRunId = "";
+  state.activeRunFocus = "balanced";
   els.workoutModal.hidden = true;
   document.body.classList.remove("modal-open");
   els.workoutModalContent.replaceChildren();
@@ -1899,10 +2266,9 @@ async function fetchActivities() {
   const { start, end } = getRangeDates();
   const params = new URLSearchParams({ pages: "8", per_page: "100" });
   if (start) {
-    const comparisonStart = end && end > start
-      ? new Date(start.valueOf() - (end.valueOf() - start.valueOf()))
-      : start;
-    params.set("after", Math.floor(comparisonStart.getTime() / 1000));
+    const comparison = comparisonWindow(start, end);
+    const fetchStart = comparison.start && comparison.start < start ? comparison.start : start;
+    params.set("after", Math.floor(fetchStart.getTime() / 1000));
   }
   if (end) params.set("before", Math.floor(end.getTime() / 1000));
   const response = await fetch(`/api/activities?${params}`);
@@ -2059,6 +2425,7 @@ document.querySelector(".metric-switcher").addEventListener("click", (event) => 
   if (!button) return;
   els.metricSelect.value = button.dataset.metric;
   renderMainChart();
+  syncViewUrl();
 });
 
 document.querySelector(".ai-prompt-chips").addEventListener("click", (event) => {
@@ -2076,6 +2443,14 @@ function invalidateAiInsight() {
   renderAiState();
 }
 
+function refreshRangeView() {
+  if (state.dataSource === "Strava") {
+    fetchActivities().catch((error) => setStatus(error.message, true));
+    return;
+  }
+  render();
+}
+
 els.aiFocus.addEventListener("change", invalidateAiInsight);
 els.aiQuestion.addEventListener("input", invalidateAiInsight);
 
@@ -2090,6 +2465,16 @@ els.activityRows.addEventListener("click", (event) => {
 });
 
 els.workoutModalContent.addEventListener("click", (event) => {
+  const focusButton = event.target.closest("[data-action='run-focus']");
+  if (focusButton?.dataset.focus) {
+    state.activeRunFocus = focusButton.dataset.focus;
+    els.workoutModalContent.querySelectorAll("[data-action='run-focus']").forEach((button) => {
+      button.setAttribute("aria-pressed", String(button === focusButton));
+    });
+    const run = state.filteredRuns.find((candidate) => String(candidate.id) === state.activeRunId);
+    if (run) requestRunInsight(buildWorkoutDigest(run));
+    return;
+  }
   const navigate = event.target.closest("[data-action='navigate-run']");
   if (navigate?.dataset.runId) {
     showWorkoutModal(navigate.dataset.runId, state.modalTrigger);
@@ -2137,7 +2522,31 @@ document.addEventListener("keydown", (event) => {
 els.rangeSelect.addEventListener("change", () => {
   state.activityVisible = 15;
   syncRangeInputs();
-  render();
+  refreshRangeView();
+});
+
+els.rangePresetButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    state.activityVisible = 15;
+    els.rangeSelect.value = button.dataset.range;
+    els.customRangePanel.hidden = true;
+    els.customRangeToggle.setAttribute("aria-expanded", "false");
+    syncRangeInputs();
+    refreshRangeView();
+  });
+});
+
+els.customRangeToggle.addEventListener("click", () => {
+  const opening = els.customRangePanel.hidden;
+  els.customRangePanel.hidden = !opening;
+  els.customRangeToggle.setAttribute("aria-expanded", String(opening));
+  if (opening) {
+    els.rangeSelect.value = "custom";
+    syncRangeInputs();
+    const { start, end } = getRangeDates();
+    syncRangeControlState(start, end);
+    els.startDate.focus();
+  }
 });
 
 [els.startDate, els.endDate].forEach((element) => {
@@ -2148,12 +2557,35 @@ els.rangeSelect.addEventListener("change", () => {
       if (element === els.startDate) els.endDate.value = els.startDate.value;
       else els.startDate.value = els.endDate.value;
     }
-    render();
+    refreshRangeView();
   });
 });
 
+els.comparisonSelect.addEventListener("change", () => {
+  state.activityVisible = 15;
+  refreshRangeView();
+});
+
 els.bucketSelect.addEventListener("change", render);
-els.metricSelect.addEventListener("change", renderMainChart);
+els.metricSelect.addEventListener("change", () => {
+  renderMainChart();
+  syncViewUrl();
+});
+
+els.copyViewButton.addEventListener("click", async () => {
+  syncViewUrl();
+  try {
+    await navigator.clipboard.writeText(window.location.href);
+    const original = els.copyViewButton.textContent;
+    els.copyViewButton.textContent = "Copied";
+    setStatus("Copied a link to this training view.");
+    window.setTimeout(() => {
+      els.copyViewButton.textContent = original;
+    }, 1800);
+  } catch {
+    setStatus(`Copy this view: ${window.location.href}`);
+  }
+});
 
 els.activitySearch.addEventListener("input", () => {
   state.activityVisible = 15;
@@ -2192,6 +2624,7 @@ function setupSectionNavigation() {
 }
 
 checkStatus().catch((error) => setStatus(error.message, true));
+restoreViewFromUrl();
 syncRangeInputs();
 bindTooltips();
 setupSectionNavigation();

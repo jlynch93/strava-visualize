@@ -304,6 +304,16 @@ h1 span {
   padding: 4px 22px 4px 2px;
 }
 
+.visually-hidden {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  clip-path: inset(50%) !important;
+  white-space: nowrap !important;
+}
+
 .toolbar-title span,
 .control label {
   color: #7b8384;
@@ -315,6 +325,87 @@ h1 span {
 .toolbar-title strong {
   font-size: 1.05rem;
   letter-spacing: -0.03em;
+}
+
+.toolbar-title small {
+  max-width: 170px;
+  color: #737d7e;
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+
+.toolbar-workspace {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  align-items: end;
+  min-width: 0;
+}
+
+.range-presets,
+.toolbar-secondary,
+.custom-range-panel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.range-presets {
+  flex-wrap: wrap;
+}
+
+.range-presets button {
+  min-width: 48px;
+  height: 38px;
+  padding: 0 13px;
+  border: 1px solid #d4d7d2;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #4e595b;
+  font: inherit;
+  font-size: 0.76rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.range-presets button:hover {
+  border-color: #aeb7b3;
+  color: var(--ink);
+}
+
+.range-presets button[aria-pressed="true"] {
+  border-color: var(--orange);
+  background: var(--orange);
+  color: #ffffff;
+}
+
+.range-presets .range-custom-toggle {
+  min-width: 76px;
+  margin-left: 2px;
+  border-style: dashed;
+}
+
+.custom-range-panel {
+  grid-column: 1 / -1;
+  width: fit-content;
+  padding: 12px;
+  border: 1px solid #dfe3df;
+  border-radius: 12px;
+  background: #eef1ed;
+}
+
+.custom-range-panel[hidden] {
+  display: none;
+}
+
+.custom-range-panel > span {
+  margin-top: 19px;
+  color: #8b9492;
+}
+
+.toolbar-secondary {
+  justify-content: flex-start;
+  flex-wrap: wrap;
 }
 
 .toolbar-controls {
@@ -338,6 +429,28 @@ h1 span {
 
 .metric-control select {
   width: 205px;
+}
+
+.comparison-control select {
+  width: 190px;
+}
+
+.copy-view-button {
+  align-self: end;
+  height: 46px;
+  padding: 0 15px;
+  border: 1px solid #cfd5d0;
+  border-radius: 9px;
+  background: #182426;
+  color: #ffffff;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.copy-view-button:hover {
+  background: #253234;
 }
 
 .status {
@@ -705,6 +818,17 @@ h1 span {
   stroke-width: 3.5;
 }
 
+.feature-chart .line.secondary {
+  stroke: #1aa38f;
+  stroke-width: 2;
+}
+
+.feature-chart .line.comparison {
+  stroke: rgba(218, 226, 225, 0.82);
+  stroke-width: 2.5;
+  stroke-dasharray: 8 7;
+}
+
 .feature-chart .empty-state {
   color: #8e999a;
 }
@@ -855,6 +979,25 @@ h1 span {
   padding: clamp(28px, 3.2vw, 48px);
   background: #f9f8f3;
   scroll-margin-top: 88px;
+}
+
+.ai-evidence {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin: 22px 0 18px;
+}
+
+.ai-evidence span {
+  padding: 7px 10px;
+  border: 1px solid #d9dfdb;
+  border-radius: 999px;
+  background: #f2f4f0;
+  color: #566163;
+  font-size: 0.64rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .ai-empty,
@@ -1291,6 +1434,12 @@ th {
   padding: 34px 42px 46px;
 }
 
+.workout-grid > *,
+.workout-grid > div,
+.workout-section {
+  min-width: 0;
+}
+
 .workout-lead-metric,
 .workout-stat {
   border-radius: 12px;
@@ -1298,6 +1447,70 @@ th {
 
 .workout-read {
   border-radius: 12px;
+}
+
+.workout-standout {
+  display: grid;
+  gap: 7px;
+  margin-top: 18px;
+}
+
+.workout-standout::before {
+  width: 100%;
+  height: 5px;
+  border-radius: 99px;
+  background:
+    linear-gradient(90deg, var(--orange) 0 var(--score, 0%), #dfe4df var(--score, 0%) 100%);
+  content: "";
+}
+
+.workout-standout span {
+  color: #728082;
+  font-size: 0.68rem;
+  line-height: 1.35;
+}
+
+.workout-context-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1px;
+  margin: 28px 0 4px;
+  overflow: hidden;
+  border: 1px solid #dce1dc;
+  border-radius: 14px;
+  background: #dce1dc;
+}
+
+.workout-context-strip article {
+  min-height: 118px;
+  padding: 17px;
+  background: #ffffff;
+}
+
+.workout-context-strip span,
+.workout-context-strip strong,
+.workout-context-strip small {
+  display: block;
+}
+
+.workout-context-strip span {
+  color: #778183;
+  font-size: 0.62rem;
+  font-weight: 850;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.workout-context-strip strong {
+  margin-top: 16px;
+  font-size: 1.35rem;
+  letter-spacing: -0.04em;
+}
+
+.workout-context-strip small {
+  margin-top: 7px;
+  color: #788284;
+  font-size: 0.7rem;
 }
 
 .workout-ai {
@@ -1372,6 +1585,34 @@ th {
   padding: 24px 26px 26px;
 }
 
+.workout-ai-focus {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 14px 26px 0;
+}
+
+.workout-ai-focus button {
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.045);
+  color: #a5b2b2;
+  font: inherit;
+  font-size: 0.67rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.workout-ai-focus button[aria-pressed="true"] {
+  border-color: var(--orange);
+  background: var(--orange);
+  color: #ffffff;
+}
+
 .workout-ai-loading,
 .workout-ai-error {
   display: flex;
@@ -1426,6 +1667,80 @@ th {
   color: #c6d0cf;
   font-size: 0.94rem;
   line-height: 1.62;
+}
+
+.workout-ai-evidence {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: -8px 0 20px;
+}
+
+.workout-ai-evidence span {
+  padding: 6px 9px;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #9ba8a8;
+  font-size: 0.59rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.workout-compare {
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+  border: 1px solid #dce1dc;
+  border-radius: 12px;
+  background: #ffffff;
+}
+
+.workout-compare-head,
+.workout-compare-row {
+  display: grid;
+  grid-template-columns: 1.05fr repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  align-items: center;
+  padding: 12px 14px;
+}
+
+.workout-compare-head {
+  background: #111b1d;
+  color: #95a2a2;
+  font-size: 0.58rem;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.workout-compare-row + .workout-compare-row {
+  border-top: 1px solid #e3e7e3;
+}
+
+.workout-compare-row strong,
+.workout-compare-row span {
+  min-width: 0;
+  font-size: 0.76rem;
+}
+
+.workout-compare-row strong {
+  color: #313d3f;
+}
+
+.workout-compare-row span {
+  color: #657173;
+}
+
+.workout-compare-row span:last-child {
+  color: var(--teal);
+  font-weight: 800;
+}
+
+.workout-compare-row .muted {
+  color: #919a99;
+  font-weight: 600;
 }
 
 .workout-ai-signals {
@@ -1549,6 +1864,24 @@ th {
 
   .toolbar-controls {
     justify-content: flex-start;
+  }
+
+  .toolbar-workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .toolbar-secondary {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .copy-view-button {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+
+  .workout-context-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .kpis {
@@ -1687,7 +2020,52 @@ th {
   }
 
   .toolbar-title {
+    display: grid;
+    gap: 4px;
+    align-items: start;
     padding-bottom: 12px;
+  }
+
+  .toolbar-title small {
+    max-width: none;
+  }
+
+  .range-presets {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding: 1px 1px 5px;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: none;
+  }
+
+  .range-presets::-webkit-scrollbar {
+    display: none;
+  }
+
+  .range-presets button {
+    flex: 0 0 auto;
+    min-width: 52px;
+    height: 42px;
+  }
+
+  .toolbar-secondary {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .custom-range-panel {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .custom-range-panel .control:first-child {
+    grid-column: auto;
+  }
+
+  .custom-range-panel > span {
+    display: none;
   }
 
   .toolbar-controls {
@@ -1768,6 +2146,12 @@ th {
     padding-bottom: 5px;
     overscroll-behavior-inline: contain;
     scroll-snap-type: x proximity;
+    scrollbar-width: none;
+  }
+
+  .workout-context-strip::-webkit-scrollbar,
+  .workout-ai-focus::-webkit-scrollbar {
+    display: none;
   }
 
   .training-brief-signals article {
@@ -1824,6 +2208,41 @@ th {
 
   .ai-observations {
     grid-template-columns: 1fr;
+  }
+
+  .workout-context-strip {
+    grid-auto-columns: minmax(220px, 78%);
+    grid-auto-flow: column;
+    grid-template-columns: none;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    scroll-snap-type: x proximity;
+  }
+
+  .workout-context-strip article {
+    scroll-snap-align: start;
+  }
+
+  .workout-ai-focus {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-right: 18px;
+    padding-left: 18px;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: none;
+  }
+
+  .workout-ai-focus button {
+    flex: 0 0 auto;
+  }
+
+  .workout-compare {
+    overflow-x: auto;
+  }
+
+  .workout-compare-head,
+  .workout-compare-row {
+    min-width: 590px;
   }
 
   .ai-empty > span,

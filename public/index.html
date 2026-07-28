@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#0b1112">
     <title>Stride — Running intelligence</title>
     <link rel="stylesheet" href="/styles.css?v=theme-2">
-    <link rel="stylesheet" href="/experience.css?v=workspace-1">
+    <link rel="stylesheet" href="/experience.css?v=workspace-2">
   </head>
   <body>
     <a class="skip-link" href="#overview">Skip to overview</a>
@@ -41,49 +41,64 @@
         <div class="toolbar-title">
           <span>Analysis window</span>
           <strong>Shape the view</strong>
+          <small id="rangeSummary">Latest 8 weeks · compared with previous period</small>
         </div>
-        <div class="toolbar-controls">
-          <div class="control">
-            <label for="rangeSelect">Range</label>
-            <select id="rangeSelect">
-              <option value="90">Last 90 days</option>
-              <option value="180">Last 6 months</option>
-              <option value="365" selected>Last year</option>
-              <option value="730">Last 2 years</option>
-              <option value="all">All time</option>
-              <option value="custom">Custom</option>
-            </select>
+        <div class="toolbar-workspace">
+          <div class="range-presets" role="group" aria-label="Quick analysis range">
+            <button type="button" data-range="28">4W</button>
+            <button type="button" data-range="56" aria-pressed="true">8W</button>
+            <button type="button" data-range="84">12W</button>
+            <button type="button" data-range="180">6M</button>
+            <button type="button" data-range="365">1Y</button>
+            <button type="button" data-range="all">All</button>
+            <button id="customRangeToggle" class="range-custom-toggle" type="button" aria-expanded="false" aria-controls="customRangePanel">Custom</button>
           </div>
-          <div class="control">
-            <label for="startDate">Start</label>
-            <input id="startDate" type="date">
+          <input id="rangeSelect" type="hidden" value="56">
+          <div id="customRangePanel" class="custom-range-panel" hidden>
+            <div class="control">
+              <label for="startDate">Start</label>
+              <input id="startDate" type="date">
+            </div>
+            <span aria-hidden="true">→</span>
+            <div class="control">
+              <label for="endDate">End</label>
+              <input id="endDate" type="date">
+            </div>
           </div>
-          <div class="control">
-            <label for="endDate">End</label>
-            <input id="endDate" type="date">
-          </div>
-          <div class="control">
-            <label for="bucketSelect">Group by</label>
-            <select id="bucketSelect">
-              <option value="week" selected>Week</option>
-              <option value="month">Month</option>
-            </select>
-          </div>
-          <div class="control metric-control">
-            <label for="metricSelect">Main chart</label>
-            <select id="metricSelect">
-              <option value="distance" selected>Mileage</option>
-              <option value="runs">Run count</option>
-              <option value="avgRun">Average run</option>
-              <option value="longRun">Long run</option>
-              <option value="pace">Pace</option>
-              <option value="elevation">Elevation</option>
-              <option value="elevationDensity">Elevation density</option>
-              <option value="heartrate">Heart rate</option>
-              <option value="load">Training load</option>
-              <option value="loadPerMile">Load per mile</option>
-              <option value="efficiency">Aerobic efficiency</option>
-            </select>
+          <div class="toolbar-secondary">
+            <div class="control comparison-control">
+              <label for="comparisonSelect">Compare with</label>
+              <select id="comparisonSelect">
+                <option value="previous" selected>Previous period</option>
+                <option value="year">Same period last year</option>
+                <option value="off">No comparison</option>
+              </select>
+            </div>
+            <div class="control">
+              <label for="bucketSelect">Group by</label>
+              <select id="bucketSelect">
+                <option value="auto" selected>Auto</option>
+                <option value="week">Week</option>
+                <option value="month">Month</option>
+              </select>
+            </div>
+            <div class="control metric-control">
+              <label for="metricSelect">Main chart</label>
+              <select id="metricSelect">
+                <option value="distance" selected>Mileage</option>
+                <option value="runs">Run count</option>
+                <option value="avgRun">Average run</option>
+                <option value="longRun">Long run</option>
+                <option value="pace">Pace</option>
+                <option value="elevation">Elevation</option>
+                <option value="elevationDensity">Elevation density</option>
+                <option value="heartrate">Heart rate</option>
+                <option value="load">Training load</option>
+                <option value="loadPerMile">Load per mile</option>
+                <option value="efficiency">Aerobic efficiency</option>
+              </select>
+            </div>
+            <button id="copyViewButton" class="copy-view-button" type="button" title="Copy a link to this view">Copy view</button>
           </div>
         </div>
       </section>
@@ -184,11 +199,7 @@
             </select>
             <label for="aiQuestion">Your question <span>(optional)</span></label>
             <textarea id="aiQuestion" rows="3" maxlength="280" placeholder="What changed most over the last eight weeks?"></textarea>
-            <div class="ai-prompt-chips" aria-label="Suggested questions">
-              <button type="button" data-focus="progression" data-question="What changed most across this training window?">What changed?</button>
-              <button type="button" data-focus="recovery" data-question="How has my training load shifted, and what should I watch?">Load check</button>
-              <button type="button" data-focus="durability" data-question="What stands out about my long-run pattern?">Long runs</button>
-            </div>
+            <div id="aiPromptChips" class="ai-prompt-chips" aria-label="Suggested questions"></div>
             <button id="aiAnalyzeButton" class="ai-action" type="button" disabled>Ask Ollama</button>
           </div>
           <p class="ai-model-note">Ollama · <span id="aiModelName">qwen3.5:0.8b</span> · compact context · runs only when you ask</p>
@@ -334,6 +345,6 @@
         <div id="workoutModalContent"></div>
       </section>
     </div>
-    <script src="/script.js?v=workspace-1"></script>
+    <script src="/script.js?v=workspace-2"></script>
   </body>
 </html>
