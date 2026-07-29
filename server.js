@@ -18,6 +18,9 @@ const INSIGHT_SCHEMA = {
     confidence: { type: "string", enum: ["high", "medium", "low"] },
     headlineFocus: { type: "string", enum: ["volume", "pace", "consistency", "load", "long_run", "spacing"] },
     summaryAngle: { type: "string", enum: ["trend", "baseline", "structure", "efficiency", "limits"] },
+    relationshipFocus: { type: "string", enum: ["volume_pace", "volume_load", "pace_heart_rate", "load_spacing", "consistency_load", "long_run_balance", "terrain_pace", "none"] },
+    analysisMode: { type: "string", enum: ["alignment", "divergence", "tradeoff", "stability", "insufficient"] },
+    priority: { type: "string", enum: ["maintain", "monitor", "investigate", "compare_again"] },
     observations: {
       type: "array",
       minItems: 3,
@@ -28,7 +31,7 @@ const INSIGHT_SCHEMA = {
     nextFocus: { type: "string", enum: ["hold_baseline", "watch_load", "compare_pace", "protect_spacing", "long_run_balance"] },
     limitation: { type: "string", enum: ["none", "heart_rate_coverage", "load_estimate", "short_window", "no_comparison", "sparse_data"] }
   },
-  required: ["answerability", "confidence", "headlineFocus", "summaryAngle", "observations", "nextFocus", "limitation"]
+  required: ["answerability", "confidence", "headlineFocus", "summaryAngle", "relationshipFocus", "analysisMode", "priority", "observations", "nextFocus", "limitation"]
 };
 
 const RUN_INSIGHT_SCHEMA = {
@@ -36,8 +39,11 @@ const RUN_INSIGHT_SCHEMA = {
   properties: {
     answerability: { type: "string", enum: ["strong", "partial", "insufficient"] },
     confidence: { type: "string", enum: ["high", "medium", "low"] },
-    headlineFocus: { type: "string", enum: ["distance", "pace", "load", "effort", "context"] },
+    headlineFocus: { type: "string", enum: ["distance", "pace", "load", "effort", "context", "spacing"] },
     summaryAngle: { type: "string", enum: ["comparison", "baseline", "terrain", "spacing", "limited"] },
+    relationshipFocus: { type: "string", enum: ["pace_load", "pace_heart_rate", "terrain_pace", "spacing_load", "distance_load", "none"] },
+    analysisMode: { type: "string", enum: ["alignment", "divergence", "tradeoff", "stability", "insufficient"] },
+    priority: { type: "string", enum: ["use_as_reference", "monitor_cost", "compare_context", "collect_more"] },
     signals: {
       type: "array",
       minItems: 2,
@@ -48,7 +54,7 @@ const RUN_INSIGHT_SCHEMA = {
     watchFocus: { type: "string", enum: ["pace_effort", "terrain", "spacing", "heart_rate", "load_per_mile"] },
     limitation: { type: "string", enum: ["none", "similar_runs", "heart_rate", "load_estimate", "window_edge"] }
   },
-  required: ["answerability", "confidence", "headlineFocus", "summaryAngle", "signals", "watchFocus", "limitation"]
+  required: ["answerability", "confidence", "headlineFocus", "summaryAngle", "relationshipFocus", "analysisMode", "priority", "signals", "watchFocus", "limitation"]
 };
 
 loadLocalEnv();
@@ -165,13 +171,18 @@ function buildInsightPrompt(input) {
     range: input.range || {},
     coverage: input.coverage || {},
     candidates: Array.isArray(input.candidates) ? input.candidates : [],
+    relationships: Array.isArray(input.relationships) ? input.relationships : [],
     summary: input.summary || {},
-    comparison: input.comparison || null
+    comparison: input.comparison || null,
+    trend: input.trend || null
   };
   return [
     JSON.stringify(packet),
-    "Choose the primary signal, 3-4 distinct observations, next comparison, answerability, confidence, and one limitation.",
-    "Rank supplied candidates; do not recalculate, invent, or reinterpret their values.",
+    "Choose the primary signal, strongest supported relationship, analytical mode, action priority, 3-4 distinct observations, next comparison, answerability, confidence, and one limitation.",
+    "Rank supplied signal and relationship candidates by relevance, strength, and coverage. Prefer relationships with higher strength when coverage is adequate.",
+    "Keep the relationship on the requested focus: progression uses volume_pace or volume_load; recovery uses load_spacing or volume_load; consistency uses consistency_load or load_spacing; durability uses long_run_balance; efficiency uses pace_heart_rate, volume_pace, or terrain_pace.",
+    "Use alignment when both measures meaningfully reinforce the same read, divergence when one is stable or they separate, tradeoff when one favorable movement accompanies a counter-movement, stability when both are near baseline, and insufficient only when no relationship is supported.",
+    "Choose relationshipFocus only from supplied relationships. Match analysisMode to that relationship's supplied pattern; do not recalculate or reinterpret it.",
     "Do not select heart_rate when heartRatePercent is below 50. Treat load as estimated when directLoadPercent is below 80.",
     "Use no_comparison when comparison is null. Use sparse_data or short_window when the evidence cannot answer the question.",
     "Consistency means grouped periods with a run, not discipline or plan adherence.",
@@ -188,12 +199,16 @@ function buildRunInsightPrompt(input) {
     comparison: input.comparison || {},
     baseline: input.baseline || {},
     context: input.context || {},
+    relationships: Array.isArray(input.relationships) ? input.relationships : [],
     coverage: input.coverage || {}
   };
   return [
     JSON.stringify(packet),
-    "Choose the primary angle, 2-3 distinct signals, next comparison, answerability, confidence, and one limitation.",
+    "Choose the primary angle, strongest supported relationship, analytical mode, action priority, 2-3 distinct signals, next comparison, answerability, confidence, and one limitation.",
     "Prioritize the requested focus: standout emphasizes percentile extremes; load emphasizes load per mile; spacing emphasizes surrounding-run context.",
+    "Keep the relationship on the requested focus: standout uses distance_load or pace_load; load uses pace_load or distance_load; spacing uses spacing_load.",
+    "Rank supplied relationship candidates by relevance, strength, and coverage. Choose relationshipFocus only from supplied relationships and match analysisMode to its supplied pattern.",
+    "Use alignment when two measures reinforce the same read, divergence when they separate, tradeoff when an improved result accompanies higher cost or denser context, stability when both sit near benchmark, and insufficient only when no relationship is supported.",
     "Do not select heart_rate when similarHeartRatePercent is below 50. Use similar_runs when fewer than 5 similar runs exist.",
     "Use load_estimate when directLoad is false. Use window_edge when previous or next run context is missing.",
     "The app calculated every supplied value. Rank them; do not recalculate, invent, or write prose.",
@@ -206,6 +221,19 @@ function normalizeInsight(value, input) {
   const summary = input.summary || {};
   const trend = input.trend || null;
   const coverage = input.coverage || {};
+  const relationshipCandidates = Array.isArray(input.relationships) ? input.relationships : [];
+  const focusRelationshipIds = {
+    progression: ["volume_pace", "volume_load"],
+    recovery: ["load_spacing", "volume_load"],
+    consistency: ["consistency_load", "load_spacing"],
+    durability: ["long_run_balance"],
+    efficiency: ["pace_heart_rate", "volume_pace", "terrain_pace"]
+  }[input.focus] || [];
+  const focusedRelationships = relationshipCandidates.filter((candidate) => focusRelationshipIds.includes(candidate.id));
+  const requestedRelationship = relationshipCandidates.find((candidate) => candidate.id === value?.relationshipFocus);
+  const relationship = (requestedRelationship && (!focusRelationshipIds.length || focusRelationshipIds.includes(requestedRelationship.id)))
+    ? requestedRelationship
+    : [...(focusedRelationships.length ? focusedRelationships : relationshipCandidates)].sort((a, b) => Number(b.strength) - Number(a.strength))[0] || null;
   const comparisonName = trend?.comparisonLabel || input.range?.comparisonLabel || "comparison period";
   const pace = (seconds) => {
     const rounded = Math.max(0, Math.round(Number(seconds) || 0));
@@ -237,6 +265,51 @@ function normalizeInsight(value, input) {
     ? Math.abs(recentHr - earlierHr) <= 3 ? `Average heart rate stayed close to the ${comparisonName}.` : recentHr > earlierHr ? `Average heart rate was higher than the ${comparisonName}.` : `Average heart rate was lower than the ${comparisonName}.`
     : "Heart-rate comparison is limited by the available activity data.";
   const terrainPhrase = Number(summary.elevationFeetPerMile) >= 100 ? "The selected mileage has a notably hilly profile." : Number(summary.elevationFeetPerMile) >= 55 ? "Rolling terrain is part of the selected-window context." : "The selected mileage has a relatively flatter profile.";
+  const relationshipNames = {
+    volume_pace: "Volume × pace",
+    volume_load: "Volume × load",
+    pace_heart_rate: "Pace × heart rate",
+    load_spacing: "Load × spacing",
+    consistency_load: "Consistency × load",
+    long_run_balance: "Long-run balance",
+    terrain_pace: "Terrain × pace"
+  };
+  const patternNames = {
+    alignment: "Alignment",
+    divergence: "Divergence",
+    tradeoff: "Tradeoff",
+    stability: "Stable relationship",
+    insufficient: "Limited evidence"
+  };
+  const changeClause = (label, change, stableThreshold, higher, lower, unit) => {
+    if (change === null || !Number.isFinite(Number(change))) return `${label} had no usable comparison`;
+    if (Math.abs(change) <= stableThreshold) return `${label} stayed near the ${comparisonName}`;
+    return `${label} was ${change > 0 ? higher : lower} by ${Math.abs(Math.round(change))}${unit}`;
+  };
+  const volumeClause = changeClause("Weekly volume", volumeChange, 5, "higher", "lower", "%");
+  const paceClause = changeClause("average pace", paceChange, 3, "slower", "faster", " sec/mi");
+  const loadClause = changeClause("estimated load", trend ? Number(trend.loadChangePercent) : null, 8, "higher", "lower", "%");
+  const heartRateClause = changeClause("average heart rate", trend ? Number(trend.heartRateChangeBpm) : null, 3, "higher", "lower", " bpm");
+  const consistencyClause = changeClause("grouped-period consistency", trend ? Number(trend.consistencyChangePoints) : null, 5, "higher", "lower", " points");
+  const spacingClause = changeClause("the longest gap", trend ? Number(trend.longestGapChangeDays) : null, 1, "longer", "shorter", " days");
+  const terrainClause = changeClause("elevation per mile", trend ? Number(trend.terrainChangeFeetPerMile) : null, 15, "higher", "lower", " ft/mi");
+  const longRunChange = trend && Number.isFinite(Number(trend.longRunShareChangePoints)) ? Number(trend.longRunShareChangePoints) : null;
+  const relationshipCopy = {
+    volume_pace: `${volumeClause}, while ${paceClause}. Read those together before treating either headline metric as a complete progression signal.`,
+    volume_load: `${volumeClause}, while ${loadClause}. The gap between those movements shows whether the selected workload changed roughly in proportion to mileage.`,
+    pace_heart_rate: `${paceClause}, while ${heartRateClause}. This is an association within the selected data, not evidence that one change caused the other.`,
+    load_spacing: `${loadClause}, while ${spacingClause}. Together they describe whether workload was spread differently across the window.`,
+    consistency_load: `${consistencyClause}, while ${loadClause}. This separates a change in training presence from a change in overall workload.`,
+    long_run_balance: `Long efforts supplied ${longShare}% of selected mileage${longRunChange !== null ? `, a ${Math.abs(longRunChange)}-point ${longRunChange >= 0 ? "increase" : "decrease"} versus the ${comparisonName}` : ""}. That concentration is best judged alongside total volume, not in isolation.`,
+    terrain_pace: `${terrainClause}, while ${paceClause}. The terrain shift is useful context for the pace comparison, without assigning causation.`
+  };
+  const relationshipPattern = relationship?.pattern && patternNames[relationship.pattern] ? relationship.pattern : "insufficient";
+  const analysisLabel = relationship
+    ? `${relationshipNames[relationship.id] || "Relationship"} · ${patternNames[relationshipPattern]}`
+    : "Relationship · Limited evidence";
+  const analysis = relationship
+    ? relationshipCopy[relationship.id] || "The selected relationship is supported by the supplied app-calculated metrics."
+    : "No supported metric relationship is available in this view. Activate a comparison or expand the selected window.";
   const signalCopy = {
     volume: { title: "Volume direction", detail: volumePhrase, tone: volumeChange !== null && Math.abs(volumeChange) > 25 ? "caution" : "neutral" },
     pace: { title: "Pace direction", detail: pacePhrase, tone: paceChange !== null && paceChange < -3 ? "positive" : "neutral" },
@@ -276,11 +349,20 @@ function normalizeInsight(value, input) {
   };
   const preferredSummary = { progression: "trend", recovery: "trend", consistency: "structure", durability: "structure", efficiency: "efficiency" };
   const preferredNext = { progression: "hold_baseline", recovery: "watch_load", consistency: "protect_spacing", durability: "long_run_balance", efficiency: "compare_pace" };
+  const relationshipNext = {
+    volume_pace: "compare_pace",
+    volume_load: "watch_load",
+    pace_heart_rate: "compare_pace",
+    load_spacing: "protect_spacing",
+    consistency_load: "protect_spacing",
+    long_run_balance: "long_run_balance",
+    terrain_pace: "compare_pace"
+  };
   const headlineFocus = input.focus !== "balanced"
     ? focusFallback[input.focus] || "volume"
     : headlineCopy[value?.headlineFocus] ? value.headlineFocus : "volume";
   const summaryAngle = preferredSummary[input.focus] || value?.summaryAngle;
-  const nextFocus = preferredNext[input.focus] || value?.nextFocus;
+  const nextFocus = preferredNext[input.focus] || relationshipNext[relationship?.id] || value?.nextFocus;
   const allowedAnswerability = ["strong", "partial", "insufficient"];
   const allowedConfidence = ["high", "medium", "low"];
   let answerability = allowedAnswerability.includes(value?.answerability) ? value.answerability : "partial";
@@ -316,6 +398,9 @@ function normalizeInsight(value, input) {
   } else if (trend && Number(summary.runCount) >= 8 && Number(coverage.comparisonRuns) >= 8 && Number(coverage.completePeriods) >= 3) {
     if (confidence === "low") confidence = "medium";
   }
+  if (answerability === "insufficient" && limitation === "none") answerability = "partial";
+  if (answerability === "insufficient") confidence = "low";
+  if (answerability === "partial" && confidence === "high") confidence = "medium";
   const limitationCopy = {
     none: "The selected data supports this comparison without a major coverage flag.",
     heart_rate_coverage: `Heart-rate context is limited because ${Math.round(Number(coverage.heartRatePercent) || 0)}% of runs include it.`,
@@ -329,6 +414,8 @@ function normalizeInsight(value, input) {
   return {
     headline: headlineCopy[headlineFocus],
     summary: summaryCopy[summaryAngle] || summaryCopy.trend,
+    analysisLabel,
+    analysis,
     observations,
     nextStep: nextCopy[nextFocus] || nextCopy.hold_baseline,
     answerability: answerabilityCopy[answerability],
@@ -342,6 +429,17 @@ function normalizeRunInsight(value, input) {
   const run = input.run || {};
   const comparison = input.comparison || {};
   const coverage = input.coverage || {};
+  const relationshipCandidates = Array.isArray(input.relationships) ? input.relationships : [];
+  const focusRelationshipIds = {
+    load: ["pace_load", "distance_load"],
+    spacing: ["spacing_load"],
+    standout: ["distance_load", "pace_load"]
+  }[input.focus] || [];
+  const focusedRelationships = relationshipCandidates.filter((candidate) => focusRelationshipIds.includes(candidate.id));
+  const requestedRelationship = relationshipCandidates.find((candidate) => candidate.id === value?.relationshipFocus);
+  const relationship = (requestedRelationship && (!focusRelationshipIds.length || focusRelationshipIds.includes(requestedRelationship.id)))
+    ? requestedRelationship
+    : [...(focusedRelationships.length ? focusedRelationships : relationshipCandidates)].sort((a, b) => Number(b.strength) - Number(a.strength))[0] || null;
   const rankPhrase = (rank, high, middle, low) => rank >= 75 ? high : rank <= 25 ? low : middle;
   const paceVsSimilar = comparison.similarRunCount
     ? Math.abs(comparison.paceDifferenceSeconds || 0) <= 5
@@ -375,6 +473,40 @@ function normalizeRunInsight(value, input) {
       : hrDifference < 0
         ? "Average heart rate was lower than on similar-distance efforts."
         : "Average heart rate was higher than on similar-distance efforts.";
+  const loadRankPhrase = rankPhrase(
+    comparison.loadPercentile,
+    "Total load sat toward the higher end of this selected window.",
+    "Total load sat near the middle of this selected window.",
+    "Total load sat toward the lower end of this selected window."
+  );
+  const relationshipNames = {
+    pace_load: "Pace × load",
+    pace_heart_rate: "Pace × heart rate",
+    terrain_pace: "Terrain × pace",
+    spacing_load: "Spacing × load",
+    distance_load: "Distance × load"
+  };
+  const patternNames = {
+    alignment: "Alignment",
+    divergence: "Divergence",
+    tradeoff: "Tradeoff",
+    stability: "Stable relationship",
+    insufficient: "Limited evidence"
+  };
+  const relationshipCopy = {
+    pace_load: `${paceVsSimilar} ${loadVsSimilar} Reading both together distinguishes a faster or slower result from the estimated cost per mile.`,
+    pace_heart_rate: `${paceVsSimilar} ${heartRatePhrase} The pairing describes this effort against comparable runs without making a fitness or causation claim.`,
+    terrain_pace: `${terrainPhrase} ${paceVsSimilar} This keeps the like-for-like pace result anchored to route profile.`,
+    spacing_load: `${spacingPhrase} ${loadRankPhrase} That combination shows where this effort sat inside its immediate training context.`,
+    distance_load: `${distancePhrase} ${loadRankPhrase} Their relative percentiles show whether total load broadly tracked the run's distance profile.`
+  };
+  const relationshipPattern = relationship?.pattern && patternNames[relationship.pattern] ? relationship.pattern : "insufficient";
+  const analysisLabel = relationship
+    ? `${relationshipNames[relationship.id] || "Relationship"} · ${patternNames[relationshipPattern]}`
+    : "Relationship · Limited evidence";
+  const analysis = relationship
+    ? relationshipCopy[relationship.id] || "The selected relationship is supported by the supplied app-calculated workout metrics."
+    : "This effort needs more comparable runs before a metric relationship is strong enough to prioritize.";
   const signalCopy = {
     distance: { title: "Distance profile", detail: distancePhrase, tone: comparison.distancePercentile >= 75 ? "positive" : "neutral" },
     pace: { title: "Pace comparison", detail: paceVsSimilar, tone: comparison.paceDifferenceSeconds < -5 ? "positive" : "neutral" },
@@ -427,6 +559,13 @@ function normalizeRunInsight(value, input) {
   const focusHeadline = { load: "load", spacing: "spacing" }[input.focus];
   const focusSummary = { load: "comparison", spacing: "spacing", standout: "baseline" }[input.focus];
   const focusWatch = { load: "load_per_mile", spacing: "spacing", standout: "pace_effort" }[input.focus];
+  const relationshipWatch = {
+    pace_load: "load_per_mile",
+    pace_heart_rate: "heart_rate",
+    terrain_pace: "terrain",
+    spacing_load: "spacing",
+    distance_load: "load_per_mile"
+  };
   const allowedAnswerability = ["strong", "partial", "insufficient"];
   const allowedConfidence = ["high", "medium", "low"];
   let answerability = allowedAnswerability.includes(value?.answerability) ? value.answerability : "partial";
@@ -462,8 +601,10 @@ function normalizeRunInsight(value, input) {
   return {
     headline: headlineCopy[focusHeadline || value?.headlineFocus] || headlineCopy.effort,
     read: summaryCopy[focusSummary || value?.summaryAngle] || summaryCopy.comparison,
+    analysisLabel,
+    analysis,
     signals,
-    watchNext: watchCopy[focusWatch || value?.watchFocus] || watchCopy.pace_effort,
+    watchNext: watchCopy[focusWatch || relationshipWatch[relationship?.id] || value?.watchFocus] || watchCopy.pace_effort,
     answerability: answerabilityCopy[answerability],
     confidence: confidenceCopy[confidence],
     limitation: limitation === "none" ? "" : limitationCopy[limitation],
@@ -484,10 +625,10 @@ async function requestInsight(input) {
       think: false,
       format: isRunInsight ? RUN_INSIGHT_SCHEMA : INSIGHT_SCHEMA,
       messages: [
-        { role: "system", content: "Interpret only the supplied app-calculated running data. Preserve units, avoid causal or intent claims, and return only schema-valid JSON." },
+        { role: "system", content: "Act as a conservative running-data analyst. Rank only the supplied app-calculated signals and relationships by relevance, strength, and coverage. Distinguish alignment, divergence, tradeoff, and stability; never infer causation, intent, readiness, recovery, fitness, or injury. Return only schema-valid JSON enum keys." },
         { role: "user", content: isRunInsight ? buildRunInsightPrompt(input) : buildInsightPrompt(input) }
       ],
-      options: { temperature: 0, num_ctx: 4096, num_predict: isRunInsight ? 120 : 160 }
+      options: { temperature: 0, num_ctx: 4096, num_predict: isRunInsight ? 150 : 190 }
     }),
     signal: AbortSignal.timeout(120_000)
   });

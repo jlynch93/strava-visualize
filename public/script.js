@@ -715,6 +715,21 @@ function buildInsightPayload() {
   const comparison = state.comparisonSummary || summarize([], []);
   const hasComparison = comparison.runCount > 0 && els.comparisonSelect.value !== "off";
   const percentChange = (current, earlier) => earlier ? Math.round(((current - earlier) / earlier) * 100) : null;
+  const relationshipStrength = (first, firstThreshold, second, secondThreshold) => {
+    if (first === null || second === null) return 0;
+    const firstWeight = Math.min(2, Math.abs(first) / firstThreshold);
+    const secondWeight = Math.min(2, Math.abs(second) / secondThreshold);
+    return Math.round(((firstWeight + secondWeight) / 4) * 100);
+  };
+  const pairedPattern = (first, firstStable, second, secondStable, alignedWhenSameDirection = true) => {
+    if (first === null || second === null) return "insufficient";
+    const firstIsStable = Math.abs(first) <= firstStable;
+    const secondIsStable = Math.abs(second) <= secondStable;
+    if (firstIsStable && secondIsStable) return "stability";
+    if (firstIsStable || secondIsStable) return "divergence";
+    const sameDirection = Math.sign(first) === Math.sign(second);
+    return sameDirection === alignedWhenSameDirection ? "alignment" : "tradeoff";
+  };
   const direction = (change, inverse = false) => {
     if (change === null || Math.abs(change) < 1) return "stable";
     const higher = change > 0;
@@ -727,6 +742,7 @@ function buildInsightPayload() {
   const longRunShareChange = hasComparison ? Math.round((summary.longRunShare - comparison.longRunShare) * 100) : null;
   const heartRateChange = hasComparison && summary.averageHr && comparison.averageHr ? Math.round(summary.averageHr - comparison.averageHr) : null;
   const spacingChange = hasComparison ? summary.longestRestGap - comparison.longestRestGap : null;
+  const terrainChange = hasComparison ? Math.round(summary.elevationPerMile - comparison.elevationPerMile) : null;
   const hrCoverage = summary.runCount
     ? Math.round((state.filteredRuns.filter((run) => Number(run.average_heartrate) > 0).length / summary.runCount) * 100)
     : 0;
@@ -742,6 +758,50 @@ function buildInsightPayload() {
     { id: "heart_rate", direction: direction(heartRateChange), change: heartRateChange, coverage: hrCoverage },
     { id: "spacing", direction: direction(spacingChange), change: spacingChange, coverage: 100 }
   ];
+  const relationships = [
+    hasComparison ? {
+      id: "volume_pace",
+      pattern: pairedPattern(volumeChange, 5, paceChange, 3, false),
+      strength: relationshipStrength(volumeChange, 5, paceChange, 5),
+      coverage: 100
+    } : null,
+    hasComparison ? {
+      id: "volume_load",
+      pattern: pairedPattern(volumeChange, 5, loadChange, 8, true),
+      strength: relationshipStrength(volumeChange, 5, loadChange, 8),
+      coverage: directLoadCoverage
+    } : null,
+    hasComparison && heartRateChange !== null && hrCoverage >= 50 ? {
+      id: "pace_heart_rate",
+      pattern: pairedPattern(paceChange, 3, heartRateChange, 3, true),
+      strength: relationshipStrength(paceChange, 5, heartRateChange, 3),
+      coverage: hrCoverage
+    } : null,
+    hasComparison ? {
+      id: "load_spacing",
+      pattern: pairedPattern(loadChange, 8, spacingChange, 1, false),
+      strength: relationshipStrength(loadChange, 8, spacingChange, 1),
+      coverage: directLoadCoverage
+    } : null,
+    hasComparison ? {
+      id: "consistency_load",
+      pattern: pairedPattern(consistencyChange, 5, loadChange, 8, true),
+      strength: relationshipStrength(consistencyChange, 5, loadChange, 8),
+      coverage: directLoadCoverage
+    } : null,
+    {
+      id: "long_run_balance",
+      pattern: summary.longRunShare >= 0.25 && summary.longRunShare <= 0.4 ? "stability" : "tradeoff",
+      strength: Math.min(100, Math.round(45 + Math.abs((summary.longRunShare * 100) - 32.5) * 3)),
+      coverage: 100
+    },
+    hasComparison ? {
+      id: "terrain_pace",
+      pattern: pairedPattern(terrainChange, 15, paceChange, 3, true),
+      strength: relationshipStrength(terrainChange, 15, paceChange, 5),
+      coverage: 100
+    } : null
+  ].filter(Boolean).sort((a, b) => b.strength - a.strength);
   const trend = hasComparison ? {
     comparisonMode: els.comparisonSelect.value,
     comparisonLabel: state.comparisonLabel,
@@ -756,7 +816,13 @@ function buildInsightPayload() {
     earlierAverageHr: comparison.averageHr ? Math.round(comparison.averageHr) : null,
     recentAverageHr: summary.averageHr ? Math.round(summary.averageHr) : null,
     earlierAverageLoad: Math.round(comparison.totalLoad),
-    recentAverageLoad: Math.round(summary.totalLoad)
+    recentAverageLoad: Math.round(summary.totalLoad),
+    loadChangePercent: loadChange,
+    consistencyChangePoints: consistencyChange,
+    longRunShareChangePoints: longRunShareChange,
+    heartRateChangeBpm: heartRateChange,
+    longestGapChangeDays: spacingChange,
+    terrainChangeFeetPerMile: terrainChange
   } : null;
   return {
     focus: els.aiFocus.value,
@@ -805,6 +871,7 @@ function buildInsightPayload() {
       completePeriods: Math.max(0, state.buckets.length - 2)
     },
     candidates,
+    relationships,
     trend,
   };
 }
@@ -867,6 +934,14 @@ function renderAiInsight(insight, model) {
     evidence.append(badge);
   });
 
+  const analyticalFrame = document.createElement("div");
+  analyticalFrame.className = "ai-analysis-frame";
+  const analyticalLabel = document.createElement("span");
+  analyticalLabel.textContent = insight.analysisLabel || "Analytical frame";
+  const analyticalCopy = document.createElement("p");
+  analyticalCopy.textContent = insight.analysis || "The strongest supported relationship needs a broader comparison window.";
+  analyticalFrame.append(analyticalLabel, analyticalCopy);
+
   const observations = document.createElement("div");
   observations.className = "ai-observations";
   (insight.observations || []).slice(0, 4).forEach((observation, index) => {
@@ -894,7 +969,7 @@ function renderAiInsight(insight, model) {
   const caution = document.createElement("p");
   caution.className = "ai-caution";
   caution.textContent = insight.caution || "Treat this as a training pattern review, not medical advice.";
-  els.aiInsightContent.replaceChildren(header, evidence, observations, nextStep, caution);
+  els.aiInsightContent.replaceChildren(header, evidence, analyticalFrame, observations, nextStep, caution);
   requestAnimationFrame(() => {
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     els.aiInsightContent.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "start" });
@@ -1828,6 +1903,60 @@ function buildRunInsightPayload(digest) {
   const loadDifferencePercent = digest.similarLoadPerMile
     ? Math.round(((digest.loadPerMile - digest.similarLoadPerMile) / digest.similarLoadPerMile) * 100)
     : 0;
+  const heartRateDifference = averageHr && digest.similarHr ? Math.round(averageHr - digest.similarHr) : null;
+  const terrainDifference = digest.similarElevationDensity
+    ? Math.round(digest.elevationDensity - digest.similarElevationDensity)
+    : null;
+  const relationshipStrength = (first, firstThreshold, second, secondThreshold) => {
+    if (first === null || second === null) return 0;
+    const firstWeight = Math.min(2, Math.abs(first) / firstThreshold);
+    const secondWeight = Math.min(2, Math.abs(second) / secondThreshold);
+    return Math.round(((firstWeight + secondWeight) / 4) * 100);
+  };
+  const paceLoadPattern = Math.abs(paceDifference) <= 5 && Math.abs(loadDifferencePercent) <= 8
+    ? "stability"
+    : paceDifference < -5 && loadDifferencePercent <= 8
+      ? "alignment"
+      : paceDifference < -5 && loadDifferencePercent > 8
+        ? "tradeoff"
+        : "divergence";
+  const relationships = [
+    digest.similarCount && digest.similarLoadPerMile ? {
+      id: "pace_load",
+      pattern: paceLoadPattern,
+      strength: relationshipStrength(paceDifference, 5, loadDifferencePercent, 8),
+      coverage: Number(run.suffer_score) > 0 ? 100 : 60
+    } : null,
+    digest.similarCount && heartRateDifference !== null && digest.hrCoverage >= 50 ? {
+      id: "pace_heart_rate",
+      pattern: Math.abs(paceDifference) <= 5 && Math.abs(heartRateDifference) <= 3
+        ? "stability"
+        : Math.sign(paceDifference) === Math.sign(heartRateDifference) ? "alignment" : "tradeoff",
+      strength: relationshipStrength(paceDifference, 5, heartRateDifference, 3),
+      coverage: digest.hrCoverage
+    } : null,
+    digest.similarCount && terrainDifference !== null ? {
+      id: "terrain_pace",
+      pattern: Math.abs(terrainDifference) <= 15 && Math.abs(paceDifference) <= 5
+        ? "stability"
+        : Math.sign(terrainDifference) === Math.sign(paceDifference) ? "alignment" : "divergence",
+      strength: relationshipStrength(terrainDifference, 15, paceDifference, 5),
+      coverage: 100
+    } : null,
+    digest.previousGap !== null ? {
+      id: "spacing_load",
+      pattern: digest.previousGap <= 1 && digest.loadRank >= 75 ? "tradeoff"
+        : digest.previousGap >= 5 && digest.loadRank >= 75 ? "alignment" : "stability",
+      strength: Math.min(100, Math.round(Math.abs(digest.loadRank - 50) + (digest.previousGap <= 1 || digest.previousGap >= 5 ? 35 : 10))),
+      coverage: 100
+    } : null,
+    {
+      id: "distance_load",
+      pattern: Math.abs(digest.distanceRank - digest.loadRank) <= 15 ? "alignment" : "divergence",
+      strength: Math.min(100, Math.round((Math.abs(digest.distanceRank - 50) + Math.abs(digest.loadRank - 50)))),
+      coverage: Number(run.suffer_score) > 0 ? 100 : 60
+    }
+  ].filter(Boolean).sort((a, b) => b.strength - a.strength);
   return {
     kind: "run",
     focus: state.activeRunFocus,
@@ -1855,12 +1984,13 @@ function buildRunInsightPayload(digest) {
       similarPaceSecondsPerMile: digest.similarPace ? Math.round(digest.similarPace) : null,
       paceDifferenceSeconds: digest.similarPace ? paceDifference : null,
       similarAverageHr: digest.similarHr ? Math.round(digest.similarHr) : null,
-      heartRateDifference: averageHr && digest.similarHr ? Math.round(averageHr - digest.similarHr) : null,
+      heartRateDifference,
       similarLoadPerMile: digest.similarLoadPerMile ? Number(digest.similarLoadPerMile.toFixed(1)) : null,
       loadPerMileDifferencePercent: digest.similarLoadPerMile ? loadDifferencePercent : null,
       daysSincePreviousRun: digest.previousGap,
       daysUntilNextRun: digest.nextGap,
-      similarElevationFeetPerMile: digest.similarElevationDensity ? Math.round(digest.similarElevationDensity) : null
+      similarElevationFeetPerMile: digest.similarElevationDensity ? Math.round(digest.similarElevationDensity) : null,
+      elevationDifferenceFeetPerMile: terrainDifference
     },
     baseline: {
       runCount: summary.runCount,
@@ -1880,6 +2010,7 @@ function buildRunInsightPayload(digest) {
       periodLoadSharePercent: Math.round(digest.periodLoadShare * 100),
       standoutScore: digest.standoutScore
     },
+    relationships,
     coverage: {
       similarRunCount: digest.similarCount,
       similarHeartRatePercent: digest.hrCoverage,
@@ -1916,6 +2047,10 @@ function renderRunInsightResult(result) {
         <span>Evidence: ${escapeHtml(insight.answerability || "Partial")}</span>
         <span>Confidence: ${escapeHtml(insight.confidence || "Medium")}</span>
         ${insight.limitation ? `<span>${escapeHtml(insight.limitation)}</span>` : ""}
+      </div>
+      <div class="workout-ai-analysis">
+        <span>${escapeHtml(insight.analysisLabel || "Analytical frame")}</span>
+        <p>${escapeHtml(insight.analysis || "A stronger relationship read needs more comparable runs.")}</p>
       </div>
       <div class="workout-ai-signals">
         ${insight.signals.map((signal) => `
