@@ -3,6 +3,16 @@ const STRAVA_AUTHORIZE = "https://www.strava.com/oauth/authorize";
 const STRAVA_TOKEN = "https://www.strava.com/oauth/token";
 const DEFAULT_OLLAMA_URL = "https://ollama.jeer.rest";
 const DEFAULT_OLLAMA_MODEL = "qwen3.5:0.8b";
+const WEATHER_HOURLY = [
+  "temperature_2m",
+  "apparent_temperature",
+  "relative_humidity_2m",
+  "precipitation",
+  "weather_code",
+  "wind_speed_10m",
+  "wind_gusts_10m",
+  "is_day"
+].join(",");
 const INSIGHT_SCHEMA = {
   type: "object",
   properties: {
@@ -31,20 +41,20 @@ const RUN_INSIGHT_SCHEMA = {
   properties: {
     answerability: { type: "string", enum: ["strong", "partial", "insufficient"] },
     confidence: { type: "string", enum: ["high", "medium", "low"] },
-    headlineFocus: { type: "string", enum: ["distance", "pace", "load", "effort", "context", "spacing"] },
-    summaryAngle: { type: "string", enum: ["comparison", "baseline", "terrain", "spacing", "limited"] },
-    relationshipFocus: { type: "string", enum: ["pace_load", "pace_heart_rate", "terrain_pace", "spacing_load", "distance_load", "none"] },
-    analysisMode: { type: "string", enum: ["alignment", "divergence", "tradeoff", "stability", "insufficient"] },
+    headlineFocus: { type: "string", enum: ["distance", "pace", "load", "effort", "context", "spacing", "weather"] },
+    summaryAngle: { type: "string", enum: ["comparison", "baseline", "terrain", "spacing", "weather", "limited"] },
+    relationshipFocus: { type: "string", enum: ["pace_load", "pace_heart_rate", "terrain_pace", "spacing_load", "distance_load", "weather_pace", "weather_load", "none"] },
+    analysisMode: { type: "string", enum: ["alignment", "divergence", "tradeoff", "stability", "context", "insufficient"] },
     priority: { type: "string", enum: ["use_as_reference", "monitor_cost", "compare_context", "collect_more"] },
     signals: {
       type: "array",
       minItems: 2,
       maxItems: 3,
       uniqueItems: true,
-      items: { type: "string", enum: ["distance", "pace", "load", "heart_rate", "terrain", "spacing"] }
+      items: { type: "string", enum: ["distance", "pace", "load", "heart_rate", "terrain", "spacing", "weather"] }
     },
-    watchFocus: { type: "string", enum: ["pace_effort", "terrain", "spacing", "heart_rate", "load_per_mile"] },
-    limitation: { type: "string", enum: ["none", "similar_runs", "heart_rate", "load_estimate", "window_edge"] }
+    watchFocus: { type: "string", enum: ["pace_effort", "terrain", "spacing", "heart_rate", "load_per_mile", "weather"] },
+    limitation: { type: "string", enum: ["none", "similar_runs", "heart_rate", "load_estimate", "window_edge", "weather_unavailable"] }
   },
   required: ["answerability", "confidence", "headlineFocus", "summaryAngle", "relationshipFocus", "analysisMode", "priority", "signals", "watchFocus", "limitation"]
 };
@@ -189,6 +199,84 @@ async function handleActivities(env, request) {
   return json({ activities }, 200, headers);
 }
 
+function weatherRequest(url) {
+  const latitude = Number(url.searchParams.get("lat"));
+  const longitude = Number(url.searchParams.get("lng"));
+  const date = String(url.searchParams.get("date") || "");
+  const hour = Math.min(23, Math.max(0, Number(url.searchParams.get("hour") || 0)));
+  if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90) throw new Error("A valid latitude is required.");
+  if (!Number.isFinite(longitude) || longitude < -180 || longitude > 180) throw new Error("A valid longitude is required.");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error("A valid run date is required.");
+  const requested = new Date(`${date}T00:00:00Z`);
+  if (Number.isNaN(requested.valueOf())) throw new Error("The run date is not valid.");
+  const ageDays = Math.floor((Date.now() - requested.valueOf()) / 86400000);
+  const endpoint = ageDays <= 5
+    ? "https://api.open-meteo.com/v1/forecast"
+    : requested >= new Date("2022-01-01T00:00:00Z")
+      ? "https://historical-forecast-api.open-meteo.com/v1/forecast"
+      : "https://archive-api.open-meteo.com/v1/archive";
+  const params = new URLSearchParams({
+    latitude: latitude.toFixed(5),
+    longitude: longitude.toFixed(5),
+    start_date: date,
+    end_date: date,
+    hourly: WEATHER_HOURLY,
+    temperature_unit: "fahrenheit",
+    wind_speed_unit: "mph",
+    precipitation_unit: "inch",
+    timezone: "auto"
+  });
+  return {
+    endpoint: `${endpoint}?${params}`,
+    date,
+    hour: Math.round(hour),
+    sourceType: ageDays <= 5 ? "forecast" : requested >= new Date("2022-01-01T00:00:00Z") ? "historical forecast" : "historical reanalysis"
+  };
+}
+
+function normalizeWeather(data, request) {
+  const hourly = data?.hourly || {};
+  const target = `${request.date}T${String(request.hour).padStart(2, "0")}:00`;
+  let index = Array.isArray(hourly.time) ? hourly.time.indexOf(target) : -1;
+  if (index < 0 && Array.isArray(hourly.time)) {
+    index = hourly.time.findIndex((time) => String(time).startsWith(`${request.date}T${String(request.hour).padStart(2, "0")}`));
+  }
+  if (index < 0) throw new Error("Weather data is unavailable for this run time.");
+  const valueAt = (key) => {
+    const raw = hourly[key]?.[index];
+    if (raw === null || raw === undefined || raw === "") return null;
+    const value = Number(raw);
+    return Number.isFinite(value) ? value : null;
+  };
+  return {
+    observedAt: hourly.time[index],
+    timezone: data.timezone || "local time",
+    source: "Open-Meteo",
+    sourceType: request.sourceType,
+    temperatureF: valueAt("temperature_2m"),
+    feelsLikeF: valueAt("apparent_temperature"),
+    humidityPercent: valueAt("relative_humidity_2m"),
+    precipitationInches: valueAt("precipitation"),
+    weatherCode: valueAt("weather_code"),
+    windSpeedMph: valueAt("wind_speed_10m"),
+    windGustMph: valueAt("wind_gusts_10m"),
+    isDay: valueAt("is_day") === 1
+  };
+}
+
+async function handleWeather(request) {
+  const url = new URL(request.url);
+  const weatherRequestConfig = weatherRequest(url);
+  const response = await fetch(weatherRequestConfig.endpoint, { headers: { accept: "application/json" } });
+  const data = await response.json();
+  if (!response.ok) return json({ error: data.reason || data.error || `Weather provider returned HTTP ${response.status}.` }, 502);
+  return json(
+    { weather: normalizeWeather(data, weatherRequestConfig) },
+    200,
+    { "cache-control": "public, max-age=86400" }
+  );
+}
+
 function buildInsightPrompt(input) {
   const question = String(input.question || "").trim().slice(0, 280);
   const packet = {
@@ -226,21 +314,22 @@ function buildRunInsightPrompt(input) {
     comparison: input.comparison || {},
     baseline: input.baseline || {},
     context: input.context || {},
+    weather: input.weather || null,
     relationships: Array.isArray(input.relationships) ? input.relationships : [],
     coverage: input.coverage || {}
   };
   return [
     JSON.stringify(packet),
     "Choose the primary angle, strongest supported relationship, analytical mode, action priority, 2-3 distinct signals, next comparison, answerability, confidence, and one limitation.",
-    "Prioritize the requested focus: standout emphasizes percentile extremes; load emphasizes load per mile; spacing emphasizes surrounding-run context.",
-    "Keep the relationship on the requested focus: standout uses distance_load or pace_load; load uses pace_load or distance_load; spacing uses spacing_load.",
+    "Prioritize the requested focus: standout emphasizes percentile extremes; load emphasizes load per mile; spacing emphasizes surrounding-run context; weather emphasizes supplied conditions alongside pace or load.",
+    "Keep the relationship on the requested focus: standout uses distance_load or pace_load; load uses pace_load or distance_load; spacing uses spacing_load; weather uses weather_pace or weather_load.",
     "Rank supplied relationship candidates by relevance, strength, and coverage. Choose relationshipFocus only from supplied relationships and match analysisMode to its supplied pattern.",
-    "Use alignment when two measures reinforce the same read, divergence when they separate, tradeoff when an improved result accompanies higher cost or denser context, stability when both sit near benchmark, and insufficient only when no relationship is supported.",
+    "Use alignment when two measures reinforce the same read, divergence when they separate, tradeoff when an improved result accompanies higher cost or denser context, stability when both sit near benchmark, context for a grounded condition pairing without directional evidence, and insufficient only when no relationship is supported.",
     "Do not select heart_rate when similarHeartRatePercent is below 50. Use similar_runs when fewer than 5 similar runs exist.",
     "Use load_estimate when directLoad is false. Use window_edge when previous or next run context is missing.",
-    "The app calculated every supplied value. Rank them; do not recalculate, invent, or write prose.",
+    "The app calculated every supplied value. Weather is sourced modeled context from Open-Meteo, not measured by the watch and not generated by Ollama. Rank the supplied values; do not recalculate, invent, or write prose.",
     "Return only the allowed enum keys in the schema. Do not write numbers, dates, or units.",
-    "Do not infer workout intent, fitness, recovery, readiness, injury, or causation."
+    "Do not infer workout intent, fitness, recovery, readiness, injury, causation, or claim that weather caused the result."
   ].join("\n");
 }
 
@@ -456,11 +545,13 @@ function normalizeRunInsight(value, input) {
   const run = input.run || {};
   const comparison = input.comparison || {};
   const coverage = input.coverage || {};
+  const weather = input.weather || null;
   const relationshipCandidates = Array.isArray(input.relationships) ? input.relationships : [];
   const focusRelationshipIds = {
     load: ["pace_load", "distance_load"],
     spacing: ["spacing_load"],
-    standout: ["distance_load", "pace_load"]
+    standout: ["distance_load", "pace_load"],
+    weather: ["weather_pace", "weather_load"]
   }[input.focus] || [];
   const focusedRelationships = relationshipCandidates.filter((candidate) => focusRelationshipIds.includes(candidate.id));
   const requestedRelationship = relationshipCandidates.find((candidate) => candidate.id === value?.relationshipFocus);
@@ -480,6 +571,9 @@ function normalizeRunInsight(value, input) {
   const spacingPhrase = comparison.daysSincePreviousRun === null ? "There is no earlier run inside this window for spacing context." : comparison.daysSincePreviousRun <= 1 ? "This effort followed closely after the previous run in the window." : comparison.daysSincePreviousRun >= 5 ? "This effort had a wider gap after the previous run in the window." : "This effort had moderate spacing after the previous run in the window.";
   const hrDifference = comparison.heartRateDifference;
   const heartRatePhrase = hrDifference === null || !comparison.similarAverageHr ? "Heart-rate comparison is limited by the available activity data." : Math.abs(hrDifference) <= 3 ? "Average heart rate closely matched similar-distance efforts." : hrDifference < 0 ? "Average heart rate was lower than on similar-distance efforts." : "Average heart rate was higher than on similar-distance efforts.";
+  const weatherPhrase = weather
+    ? `${weather.condition || "Recorded conditions"} at the route start: ${Math.round(Number(weather.temperatureF))}°F, felt like ${Math.round(Number(weather.feelsLikeF))}°F, ${Math.round(Number(weather.humidityPercent))}% humidity, and ${Math.round(Number(weather.windSpeedMph))} mph wind.`
+    : "Run-time weather is unavailable for this activity.";
   const loadRankPhrase = rankPhrase(
     comparison.loadPercentile,
     "Total load sat toward the higher end of this selected window.",
@@ -491,13 +585,16 @@ function normalizeRunInsight(value, input) {
     pace_heart_rate: "Pace × heart rate",
     terrain_pace: "Terrain × pace",
     spacing_load: "Spacing × load",
-    distance_load: "Distance × load"
+    distance_load: "Distance × load",
+    weather_pace: "Weather × pace",
+    weather_load: "Weather × load"
   };
   const patternNames = {
     alignment: "Alignment",
     divergence: "Divergence",
     tradeoff: "Tradeoff",
     stability: "Stable relationship",
+    context: "Context",
     insufficient: "Limited evidence"
   };
   const relationshipCopy = {
@@ -505,7 +602,9 @@ function normalizeRunInsight(value, input) {
     pace_heart_rate: `${paceVsSimilar} ${heartRatePhrase} The pairing describes this effort against comparable runs without making a fitness or causation claim.`,
     terrain_pace: `${terrainPhrase} ${paceVsSimilar} This keeps the like-for-like pace result anchored to route profile.`,
     spacing_load: `${spacingPhrase} ${loadRankPhrase} That combination shows where this effort sat inside its immediate training context.`,
-    distance_load: `${distancePhrase} ${loadRankPhrase} Their relative percentiles show whether total load broadly tracked the run's distance profile.`
+    distance_load: `${distancePhrase} ${loadRankPhrase} Their relative percentiles show whether total load broadly tracked the run's distance profile.`,
+    weather_pace: `${weatherPhrase} ${paceVsSimilar} This is contextual comparison only; the supplied conditions do not establish causation.`,
+    weather_load: `${weatherPhrase} ${loadVsSimilar} This is contextual comparison only; the supplied conditions do not establish causation.`
   };
   const relationshipPattern = relationship?.pattern && patternNames[relationship.pattern] ? relationship.pattern : "insufficient";
   const analysisLabel = relationship
@@ -520,14 +619,15 @@ function normalizeRunInsight(value, input) {
     load: { title: "Relative load", detail: loadVsSimilar, tone: comparison.loadPerMileDifferencePercent > 15 ? "caution" : "neutral" },
     heart_rate: { title: "Heart-rate context", detail: heartRatePhrase, tone: "neutral" },
     terrain: { title: "Terrain context", detail: terrainPhrase, tone: run.elevationFeetPerMile >= 100 ? "caution" : "neutral" },
-    spacing: { title: "Run spacing", detail: spacingPhrase, tone: comparison.daysSincePreviousRun !== null && comparison.daysSincePreviousRun <= 1 ? "caution" : "neutral" }
+    spacing: { title: "Run spacing", detail: spacingPhrase, tone: comparison.daysSincePreviousRun !== null && comparison.daysSincePreviousRun <= 1 ? "caution" : "neutral" },
+    weather: { title: "Weather context", detail: weatherPhrase, tone: Number(weather?.weatherStress) >= 45 ? "caution" : "neutral" }
   };
   const requestedSignals = Array.isArray(value?.signals) ? value.signals : [];
   const signalKeys = [...new Set(requestedSignals.filter((key) => signalCopy[key] && (key !== "heart_rate" || Number(coverage.similarHeartRatePercent) >= 50)))].slice(0, 3);
   ["pace", "load", "distance"].forEach((key) => {
     if (signalKeys.length < 2 && !signalKeys.includes(key)) signalKeys.push(key);
   });
-  const prioritizedSignal = { load: "load", spacing: "spacing", standout: comparison.pacePercentile >= comparison.distancePercentile ? "pace" : "distance" }[input.focus];
+  const prioritizedSignal = { load: "load", spacing: "spacing", standout: comparison.pacePercentile >= comparison.distancePercentile ? "pace" : "distance", weather: "weather" }[input.focus];
   if (prioritizedSignal && !signalKeys.includes(prioritizedSignal)) {
     if (signalKeys.length >= 3) signalKeys.pop();
     signalKeys.unshift(prioritizedSignal);
@@ -540,7 +640,8 @@ function normalizeRunInsight(value, input) {
     distance: distancePhrase, pace: paceVsSimilar, load: loadVsSimilar,
     effort: `${distancePhrase} ${pacePhrase}`,
     context: comparison.similarRunCount ? "This run has a useful like-for-like benchmark." : "This run is best read against the broader selected window.",
-    spacing: spacingPhrase
+    spacing: spacingPhrase,
+    weather: weatherPhrase
   };
   const comparisonSummary = value?.headlineFocus === "pace"
     ? `${loadVsSimilar} Together with the pace comparison, that makes this a clean reference point for another similar effort.`
@@ -550,6 +651,7 @@ function normalizeRunInsight(value, input) {
   const summaryCopy = {
     comparison: comparisonSummary, baseline: `${distancePhrase} ${pacePhrase}`,
     terrain: `${terrainPhrase} ${paceVsSimilar}`, spacing: `${spacingPhrase} ${loadVsSimilar}`,
+    weather: `${weatherPhrase} ${paceVsSimilar} ${loadVsSimilar}`,
     limited: `${distancePhrase} More similar-distance efforts would make the comparison stronger.`
   };
   const watchCopy = {
@@ -557,26 +659,33 @@ function normalizeRunInsight(value, input) {
     terrain: "Compare this with another run over similarly rolling terrain.",
     spacing: "Compare a similar effort after a different gap between runs.",
     heart_rate: "Compare average heart rate on another similar-distance effort.",
-    load_per_mile: "Watch whether load per mile stays near this pattern on a comparable run."
+    load_per_mile: "Watch whether load per mile stays near this pattern on a comparable run.",
+    weather: "Compare another similar-distance run in materially different temperature, humidity, or wind."
   };
-  const focusHeadline = { load: "load", spacing: "spacing" }[input.focus];
-  const focusSummary = { load: "comparison", spacing: "spacing", standout: "baseline" }[input.focus];
-  const focusWatch = { load: "load_per_mile", spacing: "spacing", standout: "pace_effort" }[input.focus];
+  const focusHeadline = { load: "load", spacing: "spacing", weather: "weather" }[input.focus];
+  const focusSummary = { load: "comparison", spacing: "spacing", standout: "baseline", weather: "weather" }[input.focus];
+  const focusWatch = { load: "load_per_mile", spacing: "spacing", standout: "pace_effort", weather: "weather" }[input.focus];
   const relationshipWatch = {
     pace_load: "load_per_mile",
     pace_heart_rate: "heart_rate",
     terrain_pace: "terrain",
     spacing_load: "spacing",
-    distance_load: "load_per_mile"
+    distance_load: "load_per_mile",
+    weather_pace: "weather",
+    weather_load: "weather"
   };
   const allowedAnswerability = ["strong", "partial", "insufficient"];
   const allowedConfidence = ["high", "medium", "low"];
   let answerability = allowedAnswerability.includes(value?.answerability) ? value.answerability : "partial";
   let confidence = allowedConfidence.includes(value?.confidence) ? value.confidence : "medium";
-  let limitation = ["none", "similar_runs", "heart_rate", "load_estimate", "window_edge"].includes(value?.limitation)
+  let limitation = ["none", "similar_runs", "heart_rate", "load_estimate", "window_edge", "weather_unavailable"].includes(value?.limitation)
     ? value.limitation
     : "none";
-  if (Number(coverage.similarRunCount) < 5) {
+  if (input.focus === "weather" && !coverage.hasWeather) {
+    answerability = "insufficient";
+    confidence = "low";
+    limitation = "weather_unavailable";
+  } else if (Number(coverage.similarRunCount) < 5) {
     answerability = Number(coverage.similarRunCount) < 2 ? "insufficient" : "partial";
     confidence = "low";
     limitation = "similar_runs";
@@ -597,7 +706,8 @@ function normalizeRunInsight(value, input) {
     similar_runs: `Only ${Number(coverage.similarRunCount) || 0} similar-distance runs are available for this benchmark.`,
     heart_rate: `Heart-rate comparison is limited to ${Math.round(Number(coverage.similarHeartRatePercent) || 0)}% of similar runs.`,
     load_estimate: "This workout’s load is estimated because no source activity score was supplied.",
-    window_edge: "This run sits near an edge of the selected window, so surrounding-run context is incomplete."
+    window_edge: "This run sits near an edge of the selected window, so surrounding-run context is incomplete.",
+    weather_unavailable: "This activity does not include enough route and timestamp data to retrieve run-time conditions."
   };
   const answerabilityCopy = { strong: "Strong", partial: "Partial", insufficient: "Limited" };
   const confidenceCopy = { high: "High", medium: "Medium", low: "Low" };
@@ -611,7 +721,7 @@ function normalizeRunInsight(value, input) {
     answerability: answerabilityCopy[answerability],
     confidence: confidenceCopy[confidence],
     limitation: limitation === "none" ? "" : limitationCopy[limitation],
-    caution: "Ollama-guided read from app-calculated workout context. Pattern guidance only—not medical advice."
+    caution: "Ollama interprets app-calculated metrics and sourced Open-Meteo context. Weather is modeled, not a watch measurement; pattern guidance only—not medical advice."
   };
 }
 
@@ -658,6 +768,7 @@ async function handleRequest(request, env) {
   const url = new URL(request.url);
   if (url.pathname === "/api/status") return handleStatus(env, request);
   if (url.pathname === "/api/activities") return handleActivities(env, request);
+  if (url.pathname === "/api/weather" && request.method === "GET") return handleWeather(request);
   if (url.pathname === "/api/insights" && request.method === "POST") return handleInsights(env, request);
   if (url.pathname === "/auth/login") return handleLogin(env, request);
   if (url.pathname === "/auth/callback") return handleCallback(env, request);
