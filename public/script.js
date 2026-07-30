@@ -53,6 +53,8 @@ const els = {
   averageHrDelta: document.querySelector("#averageHrDelta"),
   trainingBriefSummary: document.querySelector("#trainingBriefSummary"),
   trainingBriefSignals: document.querySelector("#trainingBriefSignals"),
+  funStatsSubtitle: document.querySelector("#funStatsSubtitle"),
+  funStatsGrid: document.querySelector("#funStatsGrid"),
   mainChartTitle: document.querySelector("#mainChartTitle"),
   mainChartSubtitle: document.querySelector("#mainChartSubtitle"),
   mainChart: document.querySelector("#mainChart"),
@@ -447,6 +449,7 @@ function summarize(runs, buckets) {
     averageWeeklyMiles,
     averageRunMiles,
     averageRunsPerWeek,
+    totalSeconds,
     longRunShare,
     totalElevation,
     totalLoad,
@@ -545,6 +548,7 @@ function render() {
   renderDelta(els.averageHrDelta, summary.averageHr, previous.averageHr, "bpm", false, true);
 
   renderTrainingBrief(summary, previous, start, end);
+  renderFunStats(summary, start, end);
   renderSuggestedQuestions(summary, previous);
   renderIntel(summary, previous, start, end);
   renderAiState();
@@ -556,6 +560,116 @@ function render() {
   renderDistanceMix();
   renderPaceZones();
   renderTable();
+}
+
+function renderFunStats(summary, start, end) {
+  const marathonMiles = 26.2188;
+  const everestFeet = 29032;
+  const totalMeters = state.filteredRuns.reduce((sum, run) => sum + (Number(run.distance) || 0), 0);
+  const marathonEquivalent = summary.totalMiles / marathonMiles;
+  const everestProgress = summary.totalElevation / everestFeet;
+  const trackLaps = totalMeters / 400;
+  const movingHours = summary.totalSeconds / 3600;
+  const weekdayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+  const weekdays = state.filteredRuns.reduce((stats, run) => {
+    const day = weekdayNames[parseActivityDate(run).getDay()];
+    const entry = stats.get(day) || { day, count: 0, miles: 0 };
+    entry.count += 1;
+    entry.miles += miles(run.distance);
+    stats.set(day, entry);
+    return stats;
+  }, new Map());
+  const favoriteDay = [...weekdays.values()].sort((left, right) => right.count - left.count || right.miles - left.miles)[0] || null;
+  const dateLabel = start && end
+    ? `${start.toLocaleDateString(undefined, { month: "short", day: "numeric" })}–${end.toLocaleDateString(undefined, { month: "short", day: "numeric" })}`
+    : "selected window";
+  els.funStatsSubtitle.textContent = summary.runCount
+    ? `${summary.runCount} runs translated from the ${dateLabel} view.`
+    : "Load running data and the selected window will get delightfully specific.";
+
+  const cards = summary.runCount ? [
+    {
+      id: "marathons",
+      index: "26.2",
+      label: "Marathon equivalents",
+      value: marathonEquivalent.toFixed(1),
+      unit: "marathons",
+      detail: `${summary.totalMiles.toFixed(1)} miles across the selected window.`
+    },
+    {
+      id: "everest",
+      index: "29K",
+      label: "Everest progress",
+      value: `${Math.round(everestProgress * 100)}%`,
+      unit: "of Everest",
+      detail: `${Math.round(summary.totalElevation).toLocaleString()} vertical feet climbed.`,
+      progress: Math.min(100, everestProgress * 100)
+    },
+    {
+      id: "moving",
+      index: "24H",
+      label: "Time in motion",
+      value: formatDuration(summary.totalSeconds),
+      unit: "on the move",
+      detail: `${movingHours < 8 ? movingHours.toFixed(1) : (movingHours / 8).toFixed(1)} ${movingHours < 8 ? "total hours" : "eight-hour days"} of running.`
+    },
+    {
+      id: "laps",
+      index: "400M",
+      label: "Track translation",
+      value: Math.round(trackLaps).toLocaleString(),
+      unit: "track laps",
+      detail: "The same distance measured one regulation lap at a time."
+    },
+    {
+      id: "weekday",
+      index: "7D",
+      label: "Favorite run day",
+      value: favoriteDay.day,
+      unit: "shows up most",
+      detail: `${favoriteDay.count} runs · ${Math.round((favoriteDay.count / summary.runCount) * 100)}% of the selected window.`
+    }
+  ] : [
+    { id: "marathons", index: "26.2", label: "Marathon equivalents", value: "—", unit: "waiting on miles", detail: "Your distance translation will appear here." },
+    { id: "everest", index: "29K", label: "Everest progress", value: "—", unit: "waiting on climbs", detail: "Elevation becomes a mountain-sized comparison." },
+    { id: "moving", index: "24H", label: "Time in motion", value: "—", unit: "waiting on time", detail: "Moving time becomes something easier to picture." },
+    { id: "laps", index: "400M", label: "Track translation", value: "—", unit: "waiting on laps", detail: "Every mile becomes four-and-a-bit track laps." },
+    { id: "weekday", index: "7D", label: "Favorite run day", value: "—", unit: "waiting on a pattern", detail: "Your most frequent day will surface here." }
+  ];
+
+  els.funStatsGrid.replaceChildren(...cards.map((card) => {
+    const article = document.createElement("article");
+    article.className = `fun-stat-card ${card.id}`;
+    const top = document.createElement("div");
+    top.className = "fun-stat-top";
+    const label = document.createElement("span");
+    label.textContent = card.label;
+    const index = document.createElement("small");
+    index.setAttribute("aria-hidden", "true");
+    index.textContent = card.index;
+    top.append(label, index);
+    const value = document.createElement("strong");
+    value.textContent = card.value;
+    const unit = document.createElement("em");
+    unit.textContent = card.unit;
+    const detail = document.createElement("p");
+    detail.textContent = card.detail;
+    article.append(top, value, unit, detail);
+    if (Number.isFinite(card.progress)) {
+      const meter = document.createElement("div");
+      meter.className = "fun-stat-meter";
+      meter.setAttribute("role", "meter");
+      meter.setAttribute("aria-label", "Progress toward Everest elevation");
+      meter.setAttribute("aria-valuemin", "0");
+      meter.setAttribute("aria-valuemax", "100");
+      meter.setAttribute("aria-valuenow", String(Math.round(card.progress)));
+      const fill = document.createElement("i");
+      fill.style.width = `${card.progress}%`;
+      meter.append(fill);
+      article.append(meter);
+    }
+    return article;
+  }));
 }
 
 function renderTrainingBrief(summary, previous, start, end) {

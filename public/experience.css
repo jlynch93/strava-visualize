@@ -86,6 +86,7 @@ select:focus-visible,
 .section-nav,
 .kpis,
 .training-brief,
+.fun-stats,
 .feature-chart,
 .ai-insights,
 .analysis-section,
@@ -725,6 +726,194 @@ h1 span {
   font-size: 1.05rem;
   line-height: 1.4;
   letter-spacing: -0.025em;
+}
+
+.fun-stats {
+  position: relative;
+  overflow: hidden;
+  padding: clamp(28px, 3.5vw, 48px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 24px;
+  background:
+    radial-gradient(circle at 6% 18%, rgba(252, 76, 2, 0.2), transparent 25rem),
+    radial-gradient(circle at 92% 110%, rgba(10, 137, 123, 0.2), transparent 28rem),
+    #0d1517;
+  box-shadow: 0 30px 80px rgba(8, 14, 15, 0.2);
+  color: #ffffff;
+}
+
+.fun-stats::after {
+  position: absolute;
+  top: -78px;
+  right: -34px;
+  color: rgba(255, 255, 255, 0.025);
+  font-size: clamp(10rem, 22vw, 22rem);
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: -0.1em;
+  content: "26.2";
+  pointer-events: none;
+}
+
+.fun-stats-intro {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 0.36fr);
+  align-items: end;
+  gap: 30px;
+  margin-bottom: 28px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.fun-stats-intro p {
+  margin: 0 0 9px;
+  color: #ff8350;
+  font-size: 0.64rem;
+  font-weight: 850;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.fun-stats-intro h2 {
+  max-width: 780px;
+  margin: 0;
+  color: #ffffff;
+  font-size: clamp(2.25rem, 4.4vw, 5rem);
+  line-height: 0.92;
+  letter-spacing: -0.065em;
+}
+
+.fun-stats-intro > span {
+  color: #899596;
+  font-size: 0.82rem;
+  line-height: 1.55;
+}
+
+.fun-stats-grid {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: 1.3fr repeat(4, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.fun-stat-card {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  min-height: 230px;
+  flex-direction: column;
+  padding: 18px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.fun-stat-card.marathons {
+  border-color: transparent;
+  background:
+    radial-gradient(circle at 100% 0, rgba(255, 255, 255, 0.2), transparent 68%),
+    var(--orange);
+}
+
+.fun-stat-card.everest {
+  background:
+    linear-gradient(145deg, rgba(10, 137, 123, 0.28), rgba(255, 255, 255, 0.035)),
+    #101a1c;
+}
+
+.fun-stat-card.moving {
+  background:
+    linear-gradient(145deg, rgba(55, 104, 189, 0.25), rgba(255, 255, 255, 0.035)),
+    #111a1c;
+}
+
+.fun-stat-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.fun-stat-top span,
+.fun-stat-top small {
+  color: #8f9b9c;
+  font-size: 0.6rem;
+  font-style: normal;
+  font-weight: 850;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.fun-stat-top small {
+  color: rgba(255, 255, 255, 0.3);
+  letter-spacing: -0.02em;
+}
+
+.fun-stat-card.marathons .fun-stat-top span,
+.fun-stat-card.marathons .fun-stat-top small {
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.fun-stat-card strong {
+  display: block;
+  margin-top: auto;
+  padding-top: 34px;
+  overflow-wrap: anywhere;
+  color: #ffffff;
+  font-size: clamp(2rem, 3.2vw, 3.8rem);
+  line-height: 0.9;
+  letter-spacing: -0.07em;
+}
+
+.fun-stat-card.weekday strong {
+  overflow-wrap: normal;
+  font-size: clamp(1.5rem, 2vw, 2.25rem);
+  white-space: nowrap;
+}
+
+.fun-stat-card em {
+  display: block;
+  margin-top: 8px;
+  color: #b2bcbb;
+  font-size: 0.68rem;
+  font-style: normal;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.fun-stat-card.marathons em {
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.fun-stat-card p {
+  margin: 18px 0 0;
+  color: #7f8b8c;
+  font-size: 0.73rem;
+  line-height: 1.48;
+}
+
+.fun-stat-card.marathons p {
+  color: rgba(255, 255, 255, 0.74);
+}
+
+.fun-stat-meter {
+  height: 4px;
+  margin-top: 14px;
+  overflow: hidden;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.fun-stat-meter i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #44c6b3;
 }
 
 .feature-chart,
@@ -1884,7 +2073,8 @@ th {
 @media (hover: hover) {
   .kpis article,
   .dashboard .chart-panel,
-  .intel-card {
+  .intel-card,
+  .fun-stat-card {
     transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
   }
 
@@ -1897,6 +2087,12 @@ th {
   .intel-card:hover {
     transform: translateY(-3px);
     border-color: rgba(255, 255, 255, 0.22);
+  }
+
+  .fun-stat-card:hover {
+    transform: translateY(-4px);
+    border-color: rgba(255, 255, 255, 0.2);
+    box-shadow: 0 18px 42px rgba(0, 0, 0, 0.18);
   }
 }
 
@@ -1943,6 +2139,19 @@ th {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .fun-stats-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .fun-stat-card.marathons,
+  .fun-stat-card.everest {
+    grid-column: span 1;
+  }
+
+  .fun-stat-card {
+    min-height: 210px;
+  }
+
   .kpis {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
@@ -1983,6 +2192,7 @@ th {
   .section-nav,
   .kpis,
   .training-brief,
+  .fun-stats,
   .feature-chart,
   .ai-insights,
   .analysis-section,
@@ -2216,6 +2426,40 @@ th {
   .training-brief-signals article {
     min-height: 138px;
     scroll-snap-align: start;
+  }
+
+  .fun-stats {
+    padding: 26px 18px 18px;
+  }
+
+  .fun-stats-intro {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .fun-stats-intro h2 {
+    font-size: 2.65rem;
+  }
+
+  .fun-stats-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .fun-stat-card.marathons {
+    grid-column: 1 / -1;
+  }
+
+  .fun-stat-card {
+    min-height: 190px;
+    padding: 16px;
+  }
+
+  .fun-stat-card strong {
+    font-size: clamp(1.75rem, 10vw, 2.75rem);
+  }
+
+  .fun-stat-card.weekday strong {
+    font-size: clamp(1.25rem, 5.5vw, 1.7rem);
   }
 
   .feature-chart {

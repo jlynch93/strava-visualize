@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#0b1112">
     <title>Stride — Running intelligence</title>
     <link rel="stylesheet" href="/styles.css?v=theme-2">
-    <link rel="stylesheet" href="/experience.css?v=workspace-2">
+    <link rel="stylesheet" href="/experience.css?v=workspace-3">
   </head>
   <body>
     <a class="skip-link" href="#overview">Skip to overview</a>
@@ -151,6 +151,17 @@
           <a class="brief-link" href="#coach">Take this to Ollama <span aria-hidden="true">↘</span></a>
         </div>
         <div id="trainingBriefSignals" class="training-brief-signals" aria-live="polite"></div>
+      </section>
+
+      <section class="fun-stats" aria-labelledby="funStatsTitle">
+        <div class="fun-stats-intro">
+          <div>
+            <p>Fun math</p>
+            <h2 id="funStatsTitle">Your running, in oddly useful units.</h2>
+          </div>
+          <span id="funStatsSubtitle">These numbers follow the selected analysis window.</span>
+        </div>
+        <div id="funStatsGrid" class="fun-stats-grid" aria-live="polite"></div>
       </section>
 
       <section class="chart-panel feature-chart" aria-labelledby="mainChartTitle">
@@ -345,6 +356,6 @@
         <div id="workoutModalContent"></div>
       </section>
     </div>
-    <script src="/script.js?v=workspace-2"></script>
+    <script src="/script.js?v=workspace-3"></script>
   </body>
 </html>
