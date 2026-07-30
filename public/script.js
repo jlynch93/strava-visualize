@@ -18,6 +18,12 @@ const state = {
   runInsightAbort: null,
   runWeatherCache: new Map(),
   runWeatherAbort: null,
+  funWeatherAbort: null,
+  funWeatherFingerprint: "",
+  funWeatherActiveFingerprint: "",
+  funWeatherCompletedFingerprint: "",
+  funWeatherSampleKeys: [],
+  funWeatherEligibleCount: 0,
   workoutMap: null,
   activeRunInsightKey: "",
   activeRunId: "",
@@ -518,6 +524,7 @@ function getRampRate(buckets) {
 }
 
 function currentInsightFingerprint() {
+  const weather = funWeatherSummary(state.filteredRuns);
   return JSON.stringify({
     range: [els.startDate.value, els.endDate.value],
     grouping: els.bucketSelect.value,
@@ -532,7 +539,15 @@ function currentInsightFingerprint() {
       run.total_elevation_gain,
       run.average_heartrate,
       run.suffer_score
-    ])
+    ]),
+    weather: [
+      weather.loaded,
+      weather.sampleSize,
+      weather.averageTemperature === null ? null : Math.round(weather.averageTemperature),
+      weather.coldest ? Math.round(weather.coldest.weather.temperatureF) : null,
+      weather.warmest ? Math.round(weather.warmest.weather.temperatureF) : null,
+      weather.commonCondition?.[0] || null
+    ]
   });
 }
 
@@ -566,7 +581,9 @@ function render() {
   renderDelta(els.averageHrDelta, summary.averageHr, previous.averageHr, "bpm", false, true);
 
   renderTrainingBrief(summary, previous, start, end);
+  prepareFunWeatherSample(state.filteredRuns);
   renderFunStats(summary, start, end);
+  hydrateFunStatsWeather(state.filteredRuns);
   renderSuggestedQuestions(summary, previous);
   renderIntel(summary, previous, start, end);
   renderAiState();
@@ -578,6 +595,136 @@ function render() {
   renderDistanceMix();
   renderPaceZones();
   renderTable();
+}
+
+function prepareFunWeatherSample(runs) {
+  const eligible = runs.filter((run) => weatherRequestDetails(run));
+  const fingerprint = eligible.map((run) => runWeatherKey(run)).join("|");
+  if (fingerprint === state.funWeatherFingerprint) return;
+  state.funWeatherAbort?.abort();
+  state.funWeatherAbort = null;
+  state.funWeatherFingerprint = fingerprint;
+  state.funWeatherActiveFingerprint = "";
+  state.funWeatherCompletedFingerprint = "";
+  state.funWeatherEligibleCount = eligible.length;
+  const limit = 80;
+  const sample = eligible.length <= limit
+    ? eligible
+    : Array.from({ length: limit }, (_, index) => eligible[Math.round((index * (eligible.length - 1)) / (limit - 1))]);
+  state.funWeatherSampleKeys = [...new Set(sample.map(runWeatherKey))];
+}
+
+function funWeatherSummary(runs) {
+  const sampleKeys = new Set(state.funWeatherSampleKeys);
+  const sampleRuns = runs.filter((run) => sampleKeys.has(runWeatherKey(run)));
+  const entries = sampleRuns.map((run) => ({
+    run,
+    weather: state.runWeatherCache.get(runWeatherKey(run))
+  })).filter((entry) => Number.isFinite(Number(entry.weather?.temperatureF)));
+  const averageField = (field) => {
+    const values = entries.map((entry) => Number(entry.weather[field])).filter(Number.isFinite);
+    return values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null;
+  };
+  const temperatures = entries.map((entry) => Number(entry.weather.temperatureF));
+  const averageTemperature = averageField("temperatureF");
+  const coldest = [...entries].sort((left, right) => Number(left.weather.temperatureF) - Number(right.weather.temperatureF))[0] || null;
+  const warmest = [...entries].sort((left, right) => Number(right.weather.temperatureF) - Number(left.weather.temperatureF))[0] || null;
+  const conditionCounts = entries.reduce((counts, entry) => {
+    const condition = entry.weather.condition || weatherCodeLabel(entry.weather.weatherCode);
+    counts.set(condition, (counts.get(condition) || 0) + 1);
+    return counts;
+  }, new Map());
+  const commonCondition = [...conditionCounts.entries()].sort((left, right) => right[1] - left[1])[0] || null;
+  return {
+    averageTemperature,
+    averageFeelsLike: averageField("feelsLikeF"),
+    averageHumidity: averageField("humidityPercent"),
+    averageWind: averageField("windSpeedMph"),
+    averageGust: averageField("windGustMph"),
+    rainyStarts: entries.filter((entry) => Number(entry.weather.precipitationInches) > 0.005).length,
+    coldest,
+    warmest,
+    commonCondition,
+    loaded: entries.length,
+    sampleSize: sampleRuns.length,
+    eligible: state.funWeatherEligibleCount,
+    sampled: state.funWeatherEligibleCount > sampleRuns.length
+  };
+}
+
+function refreshFunStats() {
+  const { start, end } = getRangeDates();
+  renderFunStats(summarize(state.filteredRuns, state.buckets), start, end);
+}
+
+function refreshWeatherAiContext() {
+  const summary = summarize(state.filteredRuns, state.buckets);
+  invalidateAiInsight();
+  renderSuggestedQuestions(summary, state.comparisonSummary);
+}
+
+async function requestWeatherForRun(run, signal) {
+  const details = weatherRequestDetails(run);
+  const key = runWeatherKey(run);
+  if (!details || !key) return null;
+  const cached = state.runWeatherCache.get(key);
+  if (cached) return cached;
+  const query = new URLSearchParams({
+    lat: String(details.lat),
+    lng: String(details.lng),
+    date: details.date,
+    hour: String(details.hour)
+  });
+  const response = await fetch(`/api/weather?${query}`, { signal });
+  const data = await readApiJson(response);
+  if (!response.ok) throw new Error(data.error || "Weather service did not return this hour.");
+  const weather = data.weather;
+  if (!weather) throw new Error("Weather service returned no conditions for this hour.");
+  weather.condition = weatherCodeLabel(weather.weatherCode);
+  state.runWeatherCache.set(key, weather);
+  return weather;
+}
+
+async function hydrateFunStatsWeather(runs) {
+  const fingerprint = state.funWeatherFingerprint;
+  if (!fingerprint || state.funWeatherCompletedFingerprint === fingerprint || state.funWeatherActiveFingerprint === fingerprint) return;
+  const sampleKeys = new Set(state.funWeatherSampleKeys);
+  const missing = runs.filter((run) => sampleKeys.has(runWeatherKey(run)) && !state.runWeatherCache.has(runWeatherKey(run)));
+  if (!missing.length) {
+    state.funWeatherCompletedFingerprint = fingerprint;
+    refreshFunStats();
+    refreshWeatherAiContext();
+    return;
+  }
+  state.funWeatherAbort?.abort();
+  const controller = new AbortController();
+  state.funWeatherAbort = controller;
+  state.funWeatherActiveFingerprint = fingerprint;
+  let cursor = 0;
+  let completed = 0;
+  const worker = async () => {
+    while (cursor < missing.length) {
+      const run = missing[cursor];
+      cursor += 1;
+      try {
+        await requestWeatherForRun(run, controller.signal);
+      } catch (error) {
+        if (error.name === "AbortError") return;
+      }
+      completed += 1;
+      if (state.funWeatherFingerprint === fingerprint && (completed % 6 === 0 || completed === missing.length)) {
+        refreshFunStats();
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(4, missing.length) }, worker));
+  if (!controller.signal.aborted && state.funWeatherFingerprint === fingerprint) {
+    state.funWeatherCompletedFingerprint = fingerprint;
+    refreshFunStats();
+    refreshWeatherAiContext();
+  }
+  if (state.funWeatherAbort === controller) state.funWeatherAbort = null;
+  if (state.funWeatherActiveFingerprint === fingerprint) state.funWeatherActiveFingerprint = "";
 }
 
 function renderFunStats(summary, start, end) {
@@ -598,11 +745,18 @@ function renderFunStats(summary, start, end) {
     return stats;
   }, new Map());
   const favoriteDay = [...weekdays.values()].sort((left, right) => right.count - left.count || right.miles - left.miles)[0] || null;
+  const weatherStats = funWeatherSummary(state.filteredRuns);
+  const weatherCoverage = weatherStats.sampleSize
+    ? `${weatherStats.loaded} of ${weatherStats.sampleSize} ${weatherStats.sampled ? "sampled " : ""}run starts matched`
+    : "No route starts available";
+  const warmestRunLabel = weatherStats.warmest
+    ? `${weatherStats.warmest.run.name} · ${parseActivityDate(weatherStats.warmest.run).toLocaleDateString(undefined, { month: "short", day: "numeric" })}`
+    : "";
   const dateLabel = start && end
     ? `${start.toLocaleDateString(undefined, { month: "short", day: "numeric" })}–${end.toLocaleDateString(undefined, { month: "short", day: "numeric" })}`
     : "selected window";
   els.funStatsSubtitle.textContent = summary.runCount
-    ? `${summary.runCount} runs translated from the ${dateLabel} view.`
+    ? `${summary.runCount} runs translated from the ${dateLabel} view.${weatherStats.loaded ? ` Weather matched for ${weatherStats.loaded}${weatherStats.sampled ? ` of an ${weatherStats.sampleSize}-run sample` : ` of ${weatherStats.sampleSize} route starts`}.` : ""}`
     : "Load running data and the selected window will get delightfully specific.";
 
   const cards = summary.runCount ? [
@@ -646,13 +800,48 @@ function renderFunStats(summary, start, end) {
       value: favoriteDay.day,
       unit: "shows up most",
       detail: `${favoriteDay.count} runs · ${Math.round((favoriteDay.count / summary.runCount) * 100)}% of the selected window.`
+    },
+    {
+      id: "temperature",
+      index: "°F",
+      label: "Average run temp",
+      value: weatherStats.averageTemperature === null ? (weatherStats.sampleSize ? "…" : "—") : `${Math.round(weatherStats.averageTemperature)}°`,
+      unit: weatherStats.loaded ? "at the starting hour" : weatherStats.sampleSize ? "matching conditions" : "route data needed",
+      detail: weatherStats.loaded
+        ? `${weatherCoverage}. Sourced modeled temperature—not an Ollama estimate.`
+        : weatherStats.sampleSize
+          ? "Matching Open-Meteo conditions to each run’s starting hour."
+          : "Run coordinates and a local start time are required."
+    },
+    {
+      id: "weather-range",
+      index: "HI/LO",
+      label: "Temperature swing",
+      value: weatherStats.coldest && weatherStats.warmest
+        ? `${Math.round(weatherStats.coldest.weather.temperatureF)}–${Math.round(weatherStats.warmest.weather.temperatureF)}°`
+        : weatherStats.sampleSize ? "…" : "—",
+      unit: weatherStats.loaded ? "coldest to warmest" : "waiting on weather",
+      detail: weatherStats.warmest ? `Warmest start: ${warmestRunLabel}.` : "Your run-start temperature range will appear here."
+    },
+    {
+      id: "conditions",
+      index: "WMO",
+      label: "Most common weather",
+      value: weatherStats.commonCondition?.[0] || (weatherStats.sampleSize ? "…" : "—"),
+      unit: weatherStats.commonCondition ? `${weatherStats.commonCondition[1]} of ${weatherStats.loaded} matched starts` : "waiting on conditions",
+      detail: weatherStats.commonCondition
+        ? "Grouped from Open-Meteo weather codes at each route start."
+        : "The most frequent condition in this window will appear here."
     }
   ] : [
     { id: "marathons", index: "26.2", label: "Marathon equivalents", value: "—", unit: "waiting on miles", detail: "Your distance translation will appear here." },
     { id: "everest", index: "29K", label: "Everest progress", value: "—", unit: "waiting on climbs", detail: "Elevation becomes a mountain-sized comparison." },
     { id: "moving", index: "24H", label: "Time in motion", value: "—", unit: "waiting on time", detail: "Moving time becomes something easier to picture." },
     { id: "laps", index: "400M", label: "Track translation", value: "—", unit: "waiting on laps", detail: "Every mile becomes four-and-a-bit track laps." },
-    { id: "weekday", index: "7D", label: "Favorite run day", value: "—", unit: "waiting on a pattern", detail: "Your most frequent day will surface here." }
+    { id: "weekday", index: "7D", label: "Favorite run day", value: "—", unit: "waiting on a pattern", detail: "Your most frequent day will surface here." },
+    { id: "temperature", index: "°F", label: "Average run temp", value: "—", unit: "waiting on conditions", detail: "Average temperature at your run starts will appear here." },
+    { id: "weather-range", index: "HI/LO", label: "Temperature swing", value: "—", unit: "waiting on conditions", detail: "Your coldest and warmest run starts will appear here." },
+    { id: "conditions", index: "WMO", label: "Most common weather", value: "—", unit: "waiting on conditions", detail: "Your most frequent run-start condition will appear here." }
   ];
 
   els.funStatsGrid.replaceChildren(...cards.map((card) => {
@@ -766,7 +955,16 @@ function renderSuggestedQuestions(summary, comparison) {
   const paceChange = hasComparison && comparison.averagePace
     ? Math.round(summary.averagePace - comparison.averagePace)
     : null;
+  const weather = funWeatherSummary(state.filteredRuns);
+  const weatherCoveragePercent = weather.sampleSize ? Math.round((weather.loaded / weather.sampleSize) * 100) : 0;
 
+  if (weather.loaded >= 5 && weatherCoveragePercent >= 50) {
+    questions.push({
+      focus: "weather",
+      label: `${Math.round(weather.averageTemperature)}° avg conditions`,
+      question: "How should the sourced weather context shape the interpretation of pace and load in this window without assuming causation?"
+    });
+  }
   if (volumeChange !== null && Math.abs(volumeChange) >= 8) {
     questions.push({
       focus: "progression",
@@ -835,7 +1033,7 @@ function renderAiState() {
   title.textContent = state.filteredRuns.length ? "Your selected window is ready" : "Load running data to begin";
   const detail = document.createElement("p");
   detail.textContent = state.filteredRuns.length
-    ? `${state.filteredRuns.length} runs are ready. Ask a question or choose a focus; Ollama will prioritize the most relevant app-calculated signals.`
+    ? `${state.filteredRuns.length} runs are ready. Ask a question or choose a focus; Ollama will prioritize app-calculated signals and sourced weather context when coverage is sufficient.`
     : "Connect Strava, import a file, or try the demo. The app will calculate your dashboard first, then you can ask Ollama for a separate training read.";
   copy.append(title, detail);
   wrapper.append(index, copy);
@@ -845,6 +1043,8 @@ function renderAiState() {
 function buildInsightPayload() {
   const summary = summarize(state.filteredRuns, state.buckets);
   const comparison = state.comparisonSummary || summarize([], []);
+  const weather = funWeatherSummary(state.filteredRuns);
+  const weatherCoveragePercent = weather.sampleSize ? Math.round((weather.loaded / weather.sampleSize) * 100) : 0;
   const hasComparison = comparison.runCount > 0 && els.comparisonSelect.value !== "off";
   const percentChange = (current, earlier) => earlier ? Math.round(((current - earlier) / earlier) * 100) : null;
   const relationshipStrength = (first, firstThreshold, second, secondThreshold) => {
@@ -888,8 +1088,14 @@ function buildInsightPayload() {
     { id: "consistency", direction: direction(consistencyChange), change: consistencyChange, coverage: 100 },
     { id: "long_run", direction: direction(longRunShareChange), change: longRunShareChange, coverage: 100 },
     { id: "heart_rate", direction: direction(heartRateChange), change: heartRateChange, coverage: hrCoverage },
-    { id: "spacing", direction: direction(spacingChange), change: spacingChange, coverage: 100 }
-  ];
+    { id: "spacing", direction: direction(spacingChange), change: spacingChange, coverage: 100 },
+    weather.loaded ? {
+      id: "weather",
+      direction: "context",
+      change: weather.averageTemperature === null ? null : Math.round(weather.averageTemperature),
+      coverage: weatherCoveragePercent
+    } : null
+  ].filter(Boolean);
   const relationships = [
     hasComparison ? {
       id: "volume_pace",
@@ -956,9 +1162,21 @@ function buildInsightPayload() {
     longestGapChangeDays: spacingChange,
     terrainChangeFeetPerMile: terrainChange
   } : null;
+  const verifiedFacts = [
+    `Selected window: ${summary.runCount} runs, ${summary.totalMiles.toFixed(1)} miles, ${summary.averageWeeklyMiles.toFixed(1)} miles per week, and ${summary.averageRunsPerWeek.toFixed(1)} runs per week at ${formatPace(summary.averagePace)}.`,
+    `Window structure: ${Math.round(summary.consistency * 100)}% grouped-period consistency, ${Math.round(summary.longRunShare * 100)}% of mileage from long runs, and a ${summary.longestRestGap}-day longest gap.`,
+    `The app-calculated load-per-mile score is ${summary.averageLoadPerMile.toFixed(1)}; training load is not weight, calories, or a measured intensity unit.`,
+    hasComparison && volumeChange !== null && paceChange !== null && loadChange !== null
+      ? `Compared with ${state.comparisonLabel}, weekly volume was ${Math.abs(volumeChange)}% ${volumeChange >= 0 ? "higher" : "lower"}, average pace was ${Math.abs(paceChange)} sec/mi ${paceChange <= 0 ? "faster" : "slower"}, and training load was ${Math.abs(loadChange)}% ${loadChange >= 0 ? "higher" : "lower"}.`
+      : null,
+    weather.loaded
+      ? `Open-Meteo modeled context matched ${weather.loaded} of ${weather.sampleSize} sampled run starts: ${Math.round(weather.averageTemperature)}°F average temperature, ${Math.round(weather.coldest.weather.temperatureF)}–${Math.round(weather.warmest.weather.temperatureF)}°F range, and ${weather.commonCondition?.[0] || "recorded conditions"} most often.`
+      : null
+  ].filter(Boolean);
   return {
     focus: els.aiFocus.value,
     question: els.aiQuestion.value.trim().slice(0, 280),
+    verifiedFacts,
     range: {
       start: els.startDate.value || null,
       end: els.endDate.value || null,
@@ -995,12 +1213,33 @@ function buildInsightPayload() {
       trainingLoad: Math.round(comparison.totalLoad),
       longestRestGapDays: comparison.longestRestGap
     } : null,
+    weather: weather.loaded ? {
+      source: "Open-Meteo",
+      modeledContext: true,
+      matchedRunStarts: weather.loaded,
+      sampleSize: weather.sampleSize,
+      eligibleRuns: weather.eligible,
+      coveragePercent: weatherCoveragePercent,
+      sampled: weather.sampled,
+      averageTemperatureF: Math.round(weather.averageTemperature),
+      averageFeelsLikeF: weather.averageFeelsLike === null ? null : Math.round(weather.averageFeelsLike),
+      minimumTemperatureF: Math.round(weather.coldest.weather.temperatureF),
+      maximumTemperatureF: Math.round(weather.warmest.weather.temperatureF),
+      averageHumidityPercent: weather.averageHumidity === null ? null : Math.round(weather.averageHumidity),
+      averageWindMph: weather.averageWind === null ? null : Math.round(weather.averageWind),
+      averageGustMph: weather.averageGust === null ? null : Math.round(weather.averageGust),
+      rainyRunStarts: weather.rainyStarts,
+      commonCondition: weather.commonCondition?.[0] || null,
+      commonConditionCount: weather.commonCondition?.[1] || 0
+    } : null,
     coverage: {
       heartRatePercent: hrCoverage,
       directLoadPercent: directLoadCoverage,
       currentRuns: summary.runCount,
       comparisonRuns: comparison.runCount,
-      completePeriods: Math.max(0, state.buckets.length - 2)
+      completePeriods: Math.max(0, state.buckets.length - 2),
+      weatherPercent: weatherCoveragePercent,
+      weatherRuns: weather.loaded
     },
     candidates,
     relationships,
@@ -1889,22 +2128,11 @@ async function hydrateRunWeather(digest) {
   state.runWeatherAbort = controller;
   if (container) container.innerHTML = weatherLoadingMarkup();
   try {
-    const query = new URLSearchParams({
-      lat: String(details.lat),
-      lng: String(details.lng),
-      date: details.date,
-      hour: String(details.hour)
-    });
-    const response = await fetch(`/api/weather?${query}`, { signal: controller.signal });
-    const data = await readApiJson(response);
-    if (!response.ok) throw new Error(data.error || "Weather service did not return this hour.");
-    const weather = data.weather;
-    if (!weather) throw new Error("Weather service returned no conditions for this hour.");
+    const weather = await requestWeatherForRun(digest.run, controller.signal);
     if (state.activeRunId !== String(digest.run.id) || els.workoutModal.hidden) return null;
-    weather.condition = weatherCodeLabel(weather.weatherCode);
-    state.runWeatherCache.set(key, weather);
     digest.weather = weather;
     renderWorkoutWeather(weather);
+    refreshFunStats();
     return weather;
   } catch (error) {
     if (error.name === "AbortError" || state.activeRunId !== String(digest.run.id) || els.workoutModal.hidden) return null;
@@ -2324,9 +2552,27 @@ function buildRunInsightPayload(digest) {
       coverage: 100
     } : null
   ].filter(Boolean).sort((a, b) => b.strength - a.strength);
+  const verifiedFacts = [
+    `This run: ${digest.distance.toFixed(2)} miles at ${formatPace(digest.pace)}, with ${Math.round(digest.elevation)} feet of elevation and an app-calculated ${digest.loadPerMile.toFixed(1)} load-per-mile score.`,
+    averageHr ? `Heart-rate context: ${Math.round(averageHr)} bpm average for this run.` : null,
+    digest.similarCount
+      ? `Across ${digest.similarCount} similar-distance runs, the benchmark pace was ${formatPace(digest.similarPace)}; this run was ${Math.abs(paceDifference)} sec/mi ${paceDifference <= 0 ? "faster" : "slower"}.`
+      : "There are no usable similar-distance runs for a pace benchmark.",
+    digest.similarCount && digest.similarLoadPerMile
+      ? `The similar-run load-per-mile benchmark was ${digest.similarLoadPerMile.toFixed(1)}; this run was ${Math.abs(loadDifferencePercent)}% ${loadDifferencePercent >= 0 ? "higher" : "lower"}.`
+      : null,
+    `Window position: distance percentile ${digest.distanceRank}, pace percentile ${digest.paceRank}, and load percentile ${digest.loadRank}.`,
+    digest.previousGap === null
+      ? "No previous run is available inside the selected window."
+      : `This run started ${digest.previousGap} days after the previous run in the selected window.`,
+    weather
+      ? `Open-Meteo modeled start conditions: ${weather.condition || weatherCodeLabel(weather.weatherCode)}, ${Math.round(weather.temperatureF)}°F, felt like ${Math.round(weather.feelsLikeF)}°F, ${Math.round(weather.humidityPercent)}% humidity, and ${Math.round(weather.windSpeedMph)} mph wind.`
+      : null
+  ].filter(Boolean);
   return {
     kind: "run",
     focus: state.activeRunFocus,
+    verifiedFacts,
     run: {
       name: String(run.name || "Run").slice(0, 100),
       date: localDateValue(digest.date),

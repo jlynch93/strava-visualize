@@ -795,7 +795,7 @@ h1 span {
   position: relative;
   z-index: 1;
   display: grid;
-  grid-template-columns: 1.3fr repeat(4, minmax(0, 1fr));
+  grid-template-columns: 1.25fr repeat(3, minmax(0, 1fr));
   gap: 9px;
 }
 
@@ -829,6 +829,25 @@ h1 span {
   background:
     linear-gradient(145deg, rgba(55, 104, 189, 0.25), rgba(255, 255, 255, 0.035)),
     #111a1c;
+}
+
+.fun-stat-card.temperature {
+  background:
+    radial-gradient(circle at 100% 0, rgba(255, 180, 83, 0.22), transparent 72%),
+    linear-gradient(145deg, rgba(252, 76, 2, 0.18), rgba(255, 255, 255, 0.035)),
+    #171819;
+}
+
+.fun-stat-card.weather-range {
+  background:
+    linear-gradient(145deg, rgba(53, 187, 168, 0.2), rgba(55, 104, 189, 0.15)),
+    #10191b;
+}
+
+.fun-stat-card.conditions {
+  background:
+    radial-gradient(circle at 100% 100%, rgba(129, 104, 190, 0.24), transparent 74%),
+    #12191b;
 }
 
 .fun-stat-top {
@@ -873,6 +892,11 @@ h1 span {
   overflow-wrap: normal;
   font-size: clamp(1.5rem, 2vw, 2.25rem);
   white-space: nowrap;
+}
+
+.fun-stat-card.weather-range strong,
+.fun-stat-card.conditions strong {
+  font-size: clamp(1.55rem, 2.35vw, 2.7rem);
 }
 
 .fun-stat-card em {
@@ -1050,7 +1074,7 @@ h1 span {
 
 .ai-boundary {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 1px;
   margin-top: 26px;
   overflow: hidden;
@@ -2697,6 +2721,10 @@ th {
   }
 
   .fun-stat-card.marathons {
+    grid-column: 1 / -1;
+  }
+
+  .fun-stat-card.conditions {
     grid-column: 1 / -1;
   }
 
