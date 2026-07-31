@@ -23,7 +23,7 @@ STRAVA_CLIENT_ID
 STRAVA_CLIENT_SECRET
 STRAVA_REDIRECT_URI=https://your-domain.example/auth/callback
 OLLAMA_BASE_URL=https://ollama.jeer.rest
-OLLAMA_MODEL=qwen3.5:0.8b
+OLLAMA_MODEL=deepseek-r1:8b
 ```
 
 The dashboard metrics and SVG charts are calculated in the app. Ollama guides
@@ -40,6 +40,10 @@ stored in the page URL so a view can be copied and reopened. It does not send
 route coordinates or the complete
 Strava activity payload. The URL and model above are the defaults, so set the
 Ollama variables only when you want to override them.
+
+`deepseek-r1:8b` is the default workout-analysis model. The request keeps
+reasoning hidden and asks for concise schema-valid JSON so the UI receives only
+the final training read.
 
 Then deploy:
 

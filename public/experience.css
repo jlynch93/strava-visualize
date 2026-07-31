@@ -2172,6 +2172,39 @@ th {
   text-transform: uppercase;
 }
 
+.workout-ai-training-lens {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.24fr) minmax(0, 1fr);
+  gap: 5px 18px;
+  margin: -4px 0 18px;
+  padding: 13px 15px;
+  border-left: 2px solid var(--orange);
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.workout-ai-training-lens > span {
+  color: #f6a17e;
+  font-size: 0.6rem;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+  line-height: 1.5;
+  text-transform: uppercase;
+}
+
+.workout-ai-training-lens strong {
+  color: #ffffff;
+  font-size: 0.86rem;
+  line-height: 1.5;
+}
+
+.workout-ai-training-lens p {
+  grid-column: 2;
+  margin: 0;
+  color: #aebbbb;
+  font-size: 0.77rem;
+  line-height: 1.5;
+}
+
 .workout-ai-analysis {
   display: grid;
   grid-template-columns: minmax(150px, 0.24fr) minmax(0, 1fr);

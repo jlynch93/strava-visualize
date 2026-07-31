@@ -2665,7 +2665,20 @@ function renderRunInsightResult(result) {
   if (!content) return;
   const insight = result.insight;
   const model = document.querySelector("#workoutAiModel");
-  if (model) model.textContent = result.model || "qwen3.5:0.8b";
+  const trainingReadLabels = {
+    easy_aerobic: "Easy / aerobic",
+    recovery: "Recovery",
+    steady: "Steady",
+    long_run: "Long run",
+    tempo_threshold: "Tempo / threshold",
+    intervals: "Intervals",
+    hills: "Hills",
+    progression: "Progression",
+    race_test: "Race / time trial",
+    mixed: "Mixed workout",
+    unknown: "Type not established"
+  };
+  if (model) model.textContent = result.model || "deepseek-r1:8b";
   content.innerHTML = `
     <div class="workout-ai-result">
       <h4>${escapeHtml(insight.headline)}</h4>
@@ -2674,6 +2687,11 @@ function renderRunInsightResult(result) {
         <span>Evidence: ${escapeHtml(insight.answerability || "Partial")}</span>
         <span>Confidence: ${escapeHtml(insight.confidence || "Medium")}</span>
         ${insight.limitation ? `<span>${escapeHtml(insight.limitation)}</span>` : ""}
+      </div>
+      <div class="workout-ai-training-lens">
+        <span>Workout lens</span>
+        <strong>${escapeHtml(trainingReadLabels[insight.trainingRead] || trainingReadLabels.unknown)}</strong>
+        <p>${escapeHtml(insight.trainingReadBasis || "The supplied activity does not establish a specific workout type.")}</p>
       </div>
       <div class="workout-ai-analysis">
         <span>${escapeHtml(insight.analysisLabel || "Analytical frame")}</span>
@@ -2845,7 +2863,7 @@ function showWorkoutModal(runId, trigger = document.activeElement) {
             <p class="workout-ai-kicker"><span class="ai-status-dot" aria-hidden="true"></span> Ollama run read</p>
             <h3 id="workoutAiTitle">A second look at this effort.</h3>
           </div>
-          <span id="workoutAiModel">qwen3.5:0.8b</span>
+          <span id="workoutAiModel">deepseek-r1:8b</span>
         </div>
         <div class="workout-ai-focus" role="group" aria-label="Run analysis focus">
           <button type="button" data-action="run-focus" data-focus="balanced" aria-pressed="true">Overall</button>
