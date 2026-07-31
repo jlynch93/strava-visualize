@@ -1017,9 +1017,7 @@ function renderTrainingBrief(summary, previous, start, end) {
   const structureDetail = `${Math.round(summary.longRunShare * 100)}% of mileage from long runs · ${summary.longestRestGap}d longest gap`;
   const hardest = hardestRun(state.filteredRuns);
   const hardestAction = hardest
-    ? stravaActivityUrl(hardest.run)
-      ? { href: stravaActivityUrl(hardest.run), label: "Open on Strava" }
-      : { runId: String(hardest.run.id), label: "Open run details" }
+    ? { runId: String(hardest.run.id), label: "Open run details" }
     : null;
   const signals = [
     { label: "Direction", detail: volumeDetail, tone: weeklyDelta !== null && Math.abs(weeklyDelta) > 20 ? "caution" : "positive" },
@@ -1040,16 +1038,7 @@ function renderTrainingBrief(summary, previous, start, end) {
     label.textContent = signal.label;
     detail.textContent = signal.detail;
     article.append(label, detail);
-    if (signal.action?.href) {
-      const link = document.createElement("a");
-      link.className = "brief-signal-link";
-      link.href = signal.action.href;
-      link.target = "_blank";
-      link.rel = "noreferrer";
-      link.title = "Open the hardest effort in Strava";
-      link.textContent = signal.action.label;
-      article.append(link);
-    } else if (signal.action?.runId) {
+    if (signal.action?.runId) {
       const button = document.createElement("button");
       button.className = "brief-signal-action";
       button.type = "button";
@@ -2115,11 +2104,6 @@ function formatOrdinal(value) {
 
 function activityLoad(run) {
   return Number(run.suffer_score) || runMinutes(run) * effortMultiplier(run);
-}
-
-function stravaActivityUrl(run) {
-  const activityId = String(run?.id || "");
-  return /^\d+$/.test(activityId) ? `https://www.strava.com/activities/${encodeURIComponent(activityId)}` : "";
 }
 
 function hardestRun(runs) {

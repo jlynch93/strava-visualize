@@ -736,7 +736,6 @@ h1 span {
   background: #fff8f4;
 }
 
-.brief-signal-link,
 .brief-signal-action {
   align-self: flex-start;
   margin-top: auto;
@@ -751,7 +750,6 @@ h1 span {
   cursor: pointer;
 }
 
-.brief-signal-link:hover,
 .brief-signal-action:hover {
   color: #8f3217;
   text-decoration: underline;
