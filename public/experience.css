@@ -678,13 +678,15 @@ h1 span {
 
 .training-brief-signals {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 9px;
   align-content: stretch;
 }
 
 .training-brief-signals article {
   position: relative;
+  display: flex;
+  flex-direction: column;
   min-height: 160px;
   padding: 18px;
   overflow: hidden;
@@ -722,10 +724,37 @@ h1 span {
 .training-brief-signals strong {
   display: block;
   margin-top: 32px;
+  overflow-wrap: anywhere;
   color: var(--ink);
   font-size: 1.05rem;
   line-height: 1.4;
   letter-spacing: -0.025em;
+}
+
+.training-brief-signals .hardest-signal {
+  border-color: #f1c6b4;
+  background: #fff8f4;
+}
+
+.brief-signal-link,
+.brief-signal-action {
+  align-self: flex-start;
+  margin-top: auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #bd4c25;
+  font: inherit;
+  font-size: 0.68rem;
+  font-weight: 850;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.brief-signal-link:hover,
+.brief-signal-action:hover {
+  color: #8f3217;
+  text-decoration: underline;
 }
 
 .fun-stats {

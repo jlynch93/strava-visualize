@@ -977,7 +977,8 @@ function renderTrainingBrief(summary, previous, start, end) {
     els.trainingBriefSignals.replaceChildren(...[
       ["Direction", "Waiting for a training window"],
       ["Effort", "Pace and load will appear here"],
-      ["Structure", "Run spacing will appear here"]
+      ["Structure", "Run spacing will appear here"],
+      ["Hardest effort", "Load, intensity, hills, and time will appear here"]
     ].map(([label, detail]) => {
       const article = document.createElement("article");
       const heading = document.createElement("span");
@@ -1014,19 +1015,49 @@ function renderTrainingBrief(summary, previous, start, end) {
     ? `${formatPace(summary.averagePace)} average pace`
     : `${paceDelta < 0 ? "Faster" : paceDelta > 0 ? "Slower" : "Level"} by ${formatPace(Math.abs(paceDelta)).replace("/mi", "")} vs ${state.comparisonLabel}`;
   const structureDetail = `${Math.round(summary.longRunShare * 100)}% of mileage from long runs · ${summary.longestRestGap}d longest gap`;
+  const hardest = hardestRun(state.filteredRuns);
+  const hardestAction = hardest
+    ? stravaActivityUrl(hardest.run)
+      ? { href: stravaActivityUrl(hardest.run), label: "Open on Strava" }
+      : { runId: String(hardest.run.id), label: "Open run details" }
+    : null;
   const signals = [
     { label: "Direction", detail: volumeDetail, tone: weeklyDelta !== null && Math.abs(weeklyDelta) > 20 ? "caution" : "positive" },
     { label: "Effort", detail: paceDetail, tone: paceDelta !== null && paceDelta < 0 ? "positive" : "neutral" },
-    { label: "Structure", detail: structureDetail, tone: summary.longRunShare > 0.5 || summary.longestRestGap >= 7 ? "caution" : "neutral" }
+    { label: "Structure", detail: structureDetail, tone: summary.longRunShare > 0.5 || summary.longestRestGap >= 7 ? "caution" : "neutral" },
+    {
+      label: "Hardest effort",
+      detail: hardest ? `${hardest.score}/100 - ${hardest.run.name}` : "No effort score available",
+      tone: hardest?.score >= 75 ? "caution" : "neutral",
+      action: hardestAction
+    }
   ];
   els.trainingBriefSignals.replaceChildren(...signals.map((signal) => {
     const article = document.createElement("article");
-    article.className = signal.tone;
+    article.className = [signal.tone, signal.action ? "has-action" : "", signal.label === "Hardest effort" ? "hardest-signal" : ""].filter(Boolean).join(" ");
     const label = document.createElement("span");
     const detail = document.createElement("strong");
     label.textContent = signal.label;
     detail.textContent = signal.detail;
     article.append(label, detail);
+    if (signal.action?.href) {
+      const link = document.createElement("a");
+      link.className = "brief-signal-link";
+      link.href = signal.action.href;
+      link.target = "_blank";
+      link.rel = "noreferrer";
+      link.title = "Open the hardest effort in Strava";
+      link.textContent = signal.action.label;
+      article.append(link);
+    } else if (signal.action?.runId) {
+      const button = document.createElement("button");
+      button.className = "brief-signal-action";
+      button.type = "button";
+      button.dataset.action = "open-hardest-run";
+      button.dataset.runId = signal.action.runId;
+      button.textContent = signal.action.label;
+      article.append(button);
+    }
     return article;
   }));
 }
@@ -2084,6 +2115,39 @@ function formatOrdinal(value) {
 
 function activityLoad(run) {
   return Number(run.suffer_score) || runMinutes(run) * effortMultiplier(run);
+}
+
+function stravaActivityUrl(run) {
+  const activityId = String(run?.id || "");
+  return /^\d+$/.test(activityId) ? `https://www.strava.com/activities/${encodeURIComponent(activityId)}` : "";
+}
+
+function hardestRun(runs) {
+  if (!runs.length) return null;
+  const loadValues = runs.map(activityLoad);
+  const loadPerMileValues = runs.map((run) => {
+    const distance = miles(run.distance);
+    return distance ? activityLoad(run) / distance : 0;
+  });
+  const elevationDensityValues = runs.map((run) => {
+    const distance = miles(run.distance);
+    return distance ? feet(run.total_elevation_gain) / distance : 0;
+  });
+  const durationValues = runs.map(runMinutes);
+  const ranked = runs.map((run) => {
+    const distance = miles(run.distance);
+    const load = activityLoad(run);
+    const loadPerMile = distance ? load / distance : 0;
+    const elevationDensity = distance ? feet(run.total_elevation_gain) / distance : 0;
+    const score = Math.round(
+      percentileRank(loadValues, load, true) * 0.4
+      + percentileRank(loadPerMileValues, loadPerMile, true) * 0.3
+      + percentileRank(elevationDensityValues, elevationDensity, true) * 0.2
+      + percentileRank(durationValues, runMinutes(run), true) * 0.1
+    );
+    return { run, score, load, distance };
+  });
+  return ranked.sort((left, right) => right.score - left.score || right.load - left.load || right.distance - left.distance)[0];
 }
 
 function daysBetween(left, right) {
@@ -3539,6 +3603,11 @@ els.fileInput.addEventListener("change", (event) => {
 els.activityRows.addEventListener("click", (event) => {
   const button = event.target.closest(".row-detail-button");
   if (button) showWorkoutModal(button.dataset.activityId, button);
+});
+
+els.trainingBriefSignals.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-action='open-hardest-run']");
+  if (button?.dataset.runId) showWorkoutModal(button.dataset.runId, button);
 });
 
 els.workoutModalContent.addEventListener("click", (event) => {
