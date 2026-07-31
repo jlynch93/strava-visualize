@@ -7,7 +7,7 @@
     <title>Stride — Running intelligence</title>
     <link rel="stylesheet" href="/styles.css?v=theme-2">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
-    <link rel="stylesheet" href="/experience.css?v=workspace-15">
+    <link rel="stylesheet" href="/experience.css?v=workspace-16">
   </head>
   <body>
     <a class="skip-link" href="#overview">Skip to overview</a>
@@ -258,7 +258,11 @@
               <span><i class="arc-key-baseline" aria-hidden="true"></i>Moving baseline</span>
             </div>
             <div id="trainingArcChart" class="chart training-arc-chart"></div>
-            <p id="trainingArcInsight" class="training-arc-insight" aria-live="polite"></p>
+            <div id="trainingArcInsight" class="training-arc-insight" aria-live="polite">
+              <span class="training-arc-insight-kicker">Block read</span>
+              <strong id="trainingArcInsightTitle">Latest block</strong>
+              <span id="trainingArcInsightText">Load activities to see what this block is doing.</span>
+            </div>
           </div>
           <div class="chart-panel">
             <div class="panel-heading">
@@ -392,6 +396,6 @@
       </section>
     </div>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-    <script src="/script.js?v=workspace-18"></script>
+    <script src="/script.js?v=workspace-19"></script>
   </body>
 </html>

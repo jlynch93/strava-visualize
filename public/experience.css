@@ -1540,6 +1540,10 @@ h1 span {
 }
 
 .training-arc-insight {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  align-items: baseline;
+  gap: 10px;
   min-height: 22px;
   margin: 0;
   padding-top: 11px;
@@ -1547,6 +1551,53 @@ h1 span {
   color: #c3ccca;
   font-size: 0.77rem;
   line-height: 1.45;
+}
+
+.training-arc-insight-kicker {
+  color: #ff8a5c;
+  font-size: 0.62rem;
+  font-weight: 850;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.training-arc-insight strong {
+  color: #ffffff;
+  font-size: 0.78rem;
+}
+
+.training-arc-insight > span:last-child {
+  color: #c3ccca;
+}
+
+.chart-focus {
+  filter: drop-shadow(0 0 5px rgba(252, 76, 2, 0.55));
+}
+
+.training-arc-panel .arc-pace-dot.chart-focus,
+.training-arc-panel .arc-share-dot.chart-focus {
+  stroke: #ffffff;
+  stroke-width: 4;
+}
+
+.training-arc-panel .arc-volume-bar.chart-focus {
+  fill: #ff6a2b;
+}
+
+.scatter-dot.chart-focus {
+  opacity: 1;
+  stroke: #172326;
+  stroke-width: 3;
+}
+
+.structure-run-bar.chart-focus {
+  fill: #fc4c02;
+}
+
+.structure-share-dot.chart-focus,
+.structure-elevation-dot.chart-focus {
+  stroke: #172326;
+  stroke-width: 3;
 }
 
 .dashboard .wide-support {
@@ -3284,6 +3335,8 @@ th {
   }
 
   .training-arc-insight {
+    grid-template-columns: 1fr;
+    gap: 3px;
     font-size: 0.7rem;
   }
 

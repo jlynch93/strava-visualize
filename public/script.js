@@ -12,6 +12,7 @@ const state = {
   stravaConnected: false,
   stravaError: "",
   modalTrigger: null,
+  focusedBucketKey: "",
   insightFingerprint: "",
   renderedInsightFingerprint: "",
   runInsightCache: new Map(),
@@ -76,6 +77,8 @@ const els = {
   mainChart: document.querySelector("#mainChart"),
   trainingArcChart: document.querySelector("#trainingArcChart"),
   trainingArcInsight: document.querySelector("#trainingArcInsight"),
+  trainingArcInsightTitle: document.querySelector("#trainingArcInsightTitle"),
+  trainingArcInsightText: document.querySelector("#trainingArcInsightText"),
   scatterChart: document.querySelector("#scatterChart"),
   structureChart: document.querySelector("#structureChart"),
   heatmapSubtitle: document.querySelector("#heatmapSubtitle"),
@@ -717,6 +720,7 @@ function render() {
   renderRollingWorkload();
   renderDistanceMix();
   renderPaceZones();
+  syncBucketFocus();
   renderTable();
 }
 
@@ -1836,7 +1840,8 @@ function renderTrainingArc() {
   const buckets = state.buckets.filter((bucket) => bucket.distanceMiles > 0);
   if (!buckets.length) {
     renderEmpty(els.trainingArcChart, "Load activities to see your training shape.");
-    els.trainingArcInsight.textContent = "Your selected window will appear here once activities are loaded.";
+    els.trainingArcInsightTitle.textContent = "No block selected";
+    els.trainingArcInsightText.textContent = "Your selected window will appear here once activities are loaded.";
     return;
   }
 
@@ -1910,13 +1915,7 @@ function renderTrainingArc() {
       { label: "Longest run", value: `${bucket.longRunMiles.toFixed(1)} mi` },
       { label: "Runs", value: bucket.runs }
     ]);
-    bar.setAttribute("role", "button");
-    bar.addEventListener("click", () => focusTrainingArcBucket(bucket, bar, root));
-    bar.addEventListener("keydown", (event) => {
-      if (event.key !== "Enter" && event.key !== " ") return;
-      event.preventDefault();
-      focusTrainingArcBucket(bucket, bar, root);
-    });
+    bindBucketFocus(bar, bucket);
     root.appendChild(bar);
   });
 
@@ -1933,8 +1932,7 @@ function renderTrainingArc() {
       { label: "Miles", value: `${bucket.distanceMiles.toFixed(1)} mi` },
       { label: "Average HR", value: bucket.averageHr ? `${Math.round(bucket.averageHr)} bpm` : "-" }
     ]);
-    paceDot.setAttribute("role", "button");
-    paceDot.addEventListener("click", () => focusTrainingArcBucket(bucket, paceDot, root));
+    bindBucketFocus(paceDot, bucket);
     root.appendChild(paceDot);
 
     const shareDot = svg("circle", { class: "arc-share-dot", cx: x, cy: shareY(bucket.longRunShare), r: 5 });
@@ -1942,8 +1940,7 @@ function renderTrainingArc() {
       { label: "Long-run share", value: `${Math.round(bucket.longRunShare * 100)}%` },
       { label: "Longest run", value: `${bucket.longRunMiles.toFixed(1)} mi` }
     ]);
-    shareDot.setAttribute("role", "button");
-    shareDot.addEventListener("click", () => focusTrainingArcBucket(bucket, shareDot, root));
+    bindBucketFocus(shareDot, bucket);
     root.appendChild(shareDot);
 
     if (index % Math.max(1, Math.ceil(buckets.length / 8)) === 0 || index === buckets.length - 1) {
@@ -1963,16 +1960,43 @@ function renderTrainingArc() {
 
   els.trainingArcChart.replaceChildren(root);
   updateTrainingArcInsight(buckets[buckets.length - 1]);
+  syncBucketFocus();
 }
 
-function focusTrainingArcBucket(bucket, target, root) {
-  root.querySelectorAll(".arc-selected").forEach((node) => node.classList.remove("arc-selected"));
-  target.classList.add("arc-selected");
-  updateTrainingArcInsight(bucket);
+function bindBucketFocus(element, bucket) {
+  element.dataset.bucketKey = bucket.key;
+  element.setAttribute("role", "button");
+  element.addEventListener("click", () => focusTrainingBucket(bucket));
+  element.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    focusTrainingBucket(bucket);
+  });
 }
 
-function updateTrainingArcInsight(bucket) {
-  if (!bucket) return;
+function focusTrainingBucket(bucket) {
+  state.focusedBucketKey = state.focusedBucketKey === bucket.key ? "" : bucket.key;
+  syncBucketFocus();
+  updateTrainingArcInsight(state.focusedBucketKey ? bucket : state.buckets[state.buckets.length - 1]);
+}
+
+function syncBucketFocus() {
+  const focused = state.buckets.find((bucket) => bucket.key === state.focusedBucketKey);
+  if (!focused) state.focusedBucketKey = "";
+  document.querySelectorAll("[data-bucket-key]").forEach((node) => {
+    const isFocused = Boolean(state.focusedBucketKey) && node.dataset.bucketKey === state.focusedBucketKey;
+    node.classList.toggle("chart-focus", isFocused);
+    node.classList.toggle("arc-selected", isFocused);
+  });
+  if (focused) updateTrainingArcInsight(focused);
+}
+
+function updateTrainingArcInsightLegacy(bucket) {
+  if (!bucket) {
+    els.trainingArcInsightTitle.textContent = "No block selected";
+    els.trainingArcInsightText.textContent = "Load activities to see what this block is doing.";
+    return;
+  }
   const prior = state.buckets[state.buckets.indexOf(bucket) - 1];
   const milesDelta = prior ? bucket.distanceMiles - prior.distanceMiles : 0;
   const paceDelta = prior ? bucket.averagePace - prior.averagePace : 0;
@@ -1980,7 +2004,38 @@ function updateTrainingArcInsight(bucket) {
   const pacePhrase = prior && bucket.averagePace && paceDelta
     ? `${formatPace(Math.abs(paceDelta)).replace("/mi", "")} ${paceDelta < 0 ? "quicker" : "slower"}`
     : "pace baseline forming";
+  const volumeChange = prior?.distanceMiles ? (milesDelta / prior.distanceMiles) * 100 : 0;
+  let signal = "Steady: the week is close to the recent shape. Repeat it before adding more.";
+  if (!prior) signal = "Baseline: this is the first visible block in the selected window.";
+  else if (volumeChange > 8 && paceDelta <= 0) signal = "Build: volume rose while pace held or improved. Keep the next step modest.";
+  else if (volumeChange > 8) signal = "Build: load rose quickly. Give the next hard effort plenty of room.";
+  else if (volumeChange < -10 && paceDelta < 0) signal = "Absorb: volume eased while pace improved. This looks like a useful consolidation week.";
+  else if (bucket.longRunShare > 0.55) signal = "Durability: the long run carries a large share of the week. Keep the support runs easy.";
   els.trainingArcInsight.textContent = `${bucket.label}: ${bucket.distanceMiles.toFixed(1)} mi · ${formatPace(bucket.averagePace)} average pace · ${Math.round(bucket.longRunShare * 100)}% long-run share · ${volumePhrase} · ${pacePhrase}. Click any mark to focus that block.`;
+}
+
+function updateTrainingArcInsight(bucket) {
+  if (!bucket) {
+    els.trainingArcInsightTitle.textContent = "No block selected";
+    els.trainingArcInsightText.textContent = "Load activities to see what this block is doing.";
+    return;
+  }
+  const prior = state.buckets[state.buckets.indexOf(bucket) - 1];
+  const milesDelta = prior ? bucket.distanceMiles - prior.distanceMiles : 0;
+  const paceDelta = prior ? bucket.averagePace - prior.averagePace : 0;
+  const volumePhrase = prior ? `${milesDelta >= 0 ? "+" : ""}${milesDelta.toFixed(1)} mi vs ${prior.label}` : "first visible block";
+  const pacePhrase = prior && bucket.averagePace && paceDelta
+    ? `${formatPace(Math.abs(paceDelta)).replace("/mi", "")} ${paceDelta < 0 ? "quicker" : "slower"}`
+    : "pace baseline forming";
+  const volumeChange = prior?.distanceMiles ? (milesDelta / prior.distanceMiles) * 100 : 0;
+  let signal = "Steady: the week is close to the recent shape. Repeat it before adding more.";
+  if (!prior) signal = "Baseline: this is the first visible block in the selected window.";
+  else if (volumeChange > 8 && paceDelta <= 0) signal = "Build: volume rose while pace held or improved. Keep the next step modest.";
+  else if (volumeChange > 8) signal = "Build: load rose quickly. Give the next hard effort plenty of room.";
+  else if (volumeChange < -10 && paceDelta < 0) signal = "Absorb: volume eased while pace improved. This looks like a useful consolidation week.";
+  else if (bucket.longRunShare > 0.55) signal = "Durability: the long run carries a large share of the week. Keep the support runs easy.";
+  els.trainingArcInsightTitle.textContent = `${bucket.label} / ${bucket.distanceMiles.toFixed(1)} mi / ${formatPace(bucket.averagePace)}`;
+  els.trainingArcInsightText.textContent = `${volumePhrase} / ${pacePhrase}. ${signal}`;
 }
 
 function renderScatter() {
@@ -2034,6 +2089,7 @@ function renderScatter() {
       { label: "Bubble size", value: `${bucket.runs} runs` },
       { label: "Position", value: index === buckets.length - 1 ? "Latest block" : "Training block" }
     ]);
+    bindBucketFocus(dot, bucket);
     root.appendChild(dot);
     if (index === buckets.length - 1) {
       root.appendChild(svg("text", { class: "label scatter-latest-label", x: x + r + 6, y: y - r - 4 }, [document.createTextNode("latest")]));
@@ -2098,6 +2154,7 @@ function renderStructure() {
       { label: "Avg run", value: `${(bucket.distanceMiles / bucket.runs).toFixed(1)} mi` },
       { label: "Avg pace", value: formatPace(bucket.averagePace) }
     ]);
+    bindBucketFocus(runBar, bucket);
     root.appendChild(runBar);
     const shareDot = svg("circle", {
       class: "structure-share-dot",
@@ -2111,6 +2168,7 @@ function renderStructure() {
       { label: "Week miles", value: `${bucket.distanceMiles.toFixed(1)} mi` },
       { label: "Elevation", value: `${Math.round(bucket.elevationFeet).toLocaleString()} ft` }
     ]);
+    bindBucketFocus(shareDot, bucket);
     root.appendChild(shareDot);
     sharePoints.push(`${x},${shareY(bucket.longRunShare)}`);
     const elevationDot = svg("circle", {
@@ -2124,6 +2182,7 @@ function renderStructure() {
       { label: "Miles", value: `${bucket.distanceMiles.toFixed(1)} mi` },
       { label: "Elevation density", value: `${Math.round(bucket.distanceMiles ? bucket.elevationFeet / bucket.distanceMiles : 0)} ft/mi` }
     ]);
+    bindBucketFocus(elevationDot, bucket);
     root.appendChild(elevationDot);
     elevationPoints.push(`${x},${elevationY(bucket.elevationFeet)}`);
     if (index % Math.max(1, Math.ceil(state.buckets.length / 8)) === 0 || index === state.buckets.length - 1) {
