@@ -31,13 +31,32 @@ function parseCookies(request) {
   const raw = request.headers.get("cookie") || "";
   return raw.split(";").reduce((cookies, part) => {
     const [key, ...value] = part.trim().split("=");
-    if (key) cookies[key] = decodeURIComponent(value.join("="));
+    if (key) {
+      try {
+        cookies[key] = decodeURIComponent(value.join("="));
+      } catch {
+        cookies[key] = value.join("=");
+      }
+    }
     return cookies;
   }, {});
 }
 
 function cookie(name, value, maxAge) {
   return `${name}=${encodeURIComponent(value)}; Path=/; Max-Age=${maxAge}; HttpOnly; Secure; SameSite=Lax`;
+}
+
+function oauthStateCookie(value, maxAge = 600) {
+  return cookie("sv_oauth_state", value, maxAge);
+}
+
+function clearAuthCookies() {
+  return [
+    cookie("sv_access", "", 0),
+    cookie("sv_refresh", "", 0),
+    cookie("sv_expires", "", 0),
+    oauthStateCookie("", 0)
+  ];
 }
 
 function tokenCookies(token) {
@@ -53,7 +72,8 @@ async function exchangeToken(params) {
   const response = await fetch(STRAVA_TOKEN, {
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams(params)
+    body: new URLSearchParams(params),
+    signal: AbortSignal.timeout(20_000)
   });
   const data = await response.json();
   if (!response.ok) throw new Error(data.message || JSON.stringify(data));
@@ -84,7 +104,9 @@ export {
   exchangeToken,
   getAccessToken,
   getConfig,
+  clearAuthCookies,
   json,
+  oauthStateCookie,
   parseCookies,
   tokenCookies
 };

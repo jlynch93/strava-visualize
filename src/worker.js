@@ -2,7 +2,7 @@ const STRAVA_API = "https://www.strava.com/api/v3";
 const STRAVA_AUTHORIZE = "https://www.strava.com/oauth/authorize";
 const STRAVA_TOKEN = "https://www.strava.com/oauth/token";
 const DEFAULT_OLLAMA_URL = "https://ollama.jeer.rest";
-const DEFAULT_OLLAMA_MODEL = "deepseek-r1:8b";
+const DEFAULT_OLLAMA_MODEL = "deepseek-r1:1.5b";
 const WEATHER_HOURLY = [
   "temperature_2m",
   "apparent_temperature",
@@ -95,13 +95,32 @@ function parseCookies(request) {
   const raw = request.headers.get("cookie") || "";
   return raw.split(";").reduce((cookies, part) => {
     const [key, ...value] = part.trim().split("=");
-    if (key) cookies[key] = decodeURIComponent(value.join("="));
+    if (key) {
+      try {
+        cookies[key] = decodeURIComponent(value.join("="));
+      } catch {
+        cookies[key] = value.join("=");
+      }
+    }
     return cookies;
   }, {});
 }
 
 function cookie(name, value, maxAge) {
   return `${name}=${encodeURIComponent(value)}; Path=/; Max-Age=${maxAge}; HttpOnly; Secure; SameSite=Lax`;
+}
+
+function oauthStateCookie(value, maxAge = 600) {
+  return cookie("sv_oauth_state", value, maxAge);
+}
+
+function clearAuthCookies() {
+  return [
+    cookie("sv_access", "", 0),
+    cookie("sv_refresh", "", 0),
+    cookie("sv_expires", "", 0),
+    oauthStateCookie("", 0)
+  ];
 }
 
 function tokenCookies(token) {
@@ -117,7 +136,8 @@ async function exchangeToken(params) {
   const response = await fetch(STRAVA_TOKEN, {
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams(params)
+    body: new URLSearchParams(params),
+    signal: AbortSignal.timeout(20_000)
   });
   const data = await response.json();
   if (!response.ok) throw new Error(data.message || JSON.stringify(data));
@@ -156,15 +176,19 @@ async function handleStatus(env, request) {
 function handleLogin(env, request) {
   const config = getConfig(env, request);
   if (config.error) return json({ error: config.error }, 400);
+  const oauthState = crypto.randomUUID();
   const authUrl = new URL(STRAVA_AUTHORIZE);
   authUrl.search = new URLSearchParams({
     client_id: config.clientId,
     redirect_uri: config.redirectUri,
     response_type: "code",
     approval_prompt: "auto",
-    scope: "read,activity:read_all"
+    scope: "read,activity:read_all",
+    state: oauthState
   }).toString();
-  return Response.redirect(authUrl.toString(), 302);
+  const headers = new Headers({ location: authUrl.toString() });
+  headers.append("set-cookie", oauthStateCookie(oauthState));
+  return new Response(null, { status: 302, headers });
 }
 
 async function handleCallback(env, request) {
@@ -172,7 +196,12 @@ async function handleCallback(env, request) {
   if (config.error) return json({ error: config.error }, 400);
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
+  const returnedState = url.searchParams.get("state");
+  const cookies = parseCookies(request);
   if (!code) return json({ error: "Missing Strava authorization code." }, 400);
+  if (!returnedState || returnedState !== cookies.sv_oauth_state) {
+    return json({ error: "The Strava authorization session expired. Start the connection again." }, 400);
+  }
   const token = await exchangeToken({
     client_id: config.clientId,
     client_secret: config.clientSecret,
@@ -181,6 +210,13 @@ async function handleCallback(env, request) {
   });
   const headers = new Headers({ location: "/?connected=1" });
   tokenCookies(token).forEach((value) => headers.append("set-cookie", value));
+  headers.append("set-cookie", oauthStateCookie("", 0));
+  return new Response(null, { status: 302, headers });
+}
+
+function handleLogout() {
+  const headers = new Headers({ location: "/?disconnected=1" });
+  clearAuthCookies().forEach((value) => headers.append("set-cookie", value));
   return new Response(null, { status: 302, headers });
 }
 
@@ -189,20 +225,24 @@ async function handleActivities(env, request) {
   const { accessToken, setCookies } = await getAccessToken(env, request);
   const after = url.searchParams.get("after");
   const before = url.searchParams.get("before");
-  const perPage = Math.min(Number(url.searchParams.get("per_page") || 100), 200);
-  const maxPages = Math.min(Number(url.searchParams.get("pages") || 6), 12);
+  const requestedPerPage = Number(url.searchParams.get("per_page") || 100);
+  const requestedPages = Number(url.searchParams.get("pages") || 6);
+  const perPage = Number.isFinite(requestedPerPage) ? Math.max(1, Math.min(requestedPerPage, 200)) : 100;
+  const maxPages = Number.isFinite(requestedPages) ? Math.max(1, Math.min(requestedPages, 12)) : 6;
   const activities = [];
   for (let page = 1; page <= maxPages; page += 1) {
     const params = new URLSearchParams({ page: String(page), per_page: String(perPage) });
     if (after) params.set("after", after);
     if (before) params.set("before", before);
     const response = await fetch(`${STRAVA_API}/athlete/activities?${params}`, {
-      headers: { authorization: `Bearer ${accessToken}` }
+      headers: { authorization: `Bearer ${accessToken}` },
+      signal: AbortSignal.timeout(30_000)
     });
     const batch = await response.json();
     if (!response.ok) return json(batch, response.status);
+    if (!Array.isArray(batch)) return json({ error: "Strava returned an invalid activity list." }, 502);
     activities.push(...batch);
-    if (!Array.isArray(batch) || batch.length < perPage) break;
+    if (batch.length < perPage) break;
   }
   const headers = new Headers();
   setCookies.forEach((value) => headers.append("set-cookie", value));
@@ -277,7 +317,7 @@ function normalizeWeather(data, request) {
 async function handleWeather(request) {
   const url = new URL(request.url);
   const weatherRequestConfig = weatherRequest(url);
-  const response = await fetch(weatherRequestConfig.endpoint, { headers: { accept: "application/json" } });
+  const response = await fetch(weatherRequestConfig.endpoint, { headers: { accept: "application/json" }, signal: AbortSignal.timeout(20_000) });
   const data = await response.json();
   if (!response.ok) return json({ error: data.reason || data.error || `Weather provider returned HTTP ${response.status}.` }, 502);
   return json(
@@ -995,9 +1035,14 @@ function normalizeRunInsight(value, input) {
 }
 
 async function handleInsights(env, request) {
-  const contentLength = Number(request.headers.get("content-length") || 0);
-  if (contentLength > 64_000) return json({ error: "The training summary is too large." }, 413);
-  const input = await request.json();
+  const raw = await request.text();
+  if (raw.length > 64_000) return json({ error: "The training summary is too large." }, 413);
+  let input;
+  try {
+    input = JSON.parse(raw || "{}");
+  } catch {
+    return json({ error: "The training summary is not valid JSON." }, 400);
+  }
   const hasRunInput = input?.kind === "run" && input.run;
   const hasWindowInput = input?.kind !== "run" && Number(input?.summary?.runCount) > 0 && Array.isArray(input?.candidates);
   if (!hasRunInput && !hasWindowInput) {
@@ -1041,6 +1086,7 @@ async function handleRequest(request, env) {
   if (url.pathname === "/api/insights" && request.method === "POST") return handleInsights(env, request);
   if (url.pathname === "/auth/login") return handleLogin(env, request);
   if (url.pathname === "/auth/callback") return handleCallback(env, request);
+  if (url.pathname === "/auth/logout") return handleLogout();
   return env.ASSETS.fetch(request);
 }
 

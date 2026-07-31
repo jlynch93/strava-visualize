@@ -7,7 +7,7 @@
     <title>Stride — Running intelligence</title>
     <link rel="stylesheet" href="/styles.css?v=theme-2">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
-    <link rel="stylesheet" href="/experience.css?v=workspace-6">
+    <link rel="stylesheet" href="/experience.css?v=workspace-7">
   </head>
   <body>
     <a class="skip-link" href="#overview">Skip to overview</a>
@@ -29,12 +29,13 @@
         </div>
         <div class="actions">
           <p class="actions-label"><span>Start your read</span><strong>Choose a data source</strong></p>
-          <button id="connectButton" class="primary">Connect Strava</button>
+          <button id="connectButton" class="primary" type="button">Connect Strava</button>
+          <button id="disconnectButton" type="button" hidden>Disconnect</button>
           <label class="file-button">
             Import JSON/CSV
             <input id="fileInput" type="file" accept=".json,.csv,text/csv,application/json">
           </label>
-          <button id="demoButton">Demo data</button>
+          <button id="demoButton" type="button">Demo data</button>
         </div>
       </section>
 
@@ -100,6 +101,7 @@
               </select>
             </div>
             <button id="copyViewButton" class="copy-view-button" type="button" title="Copy a link to this view">Copy view</button>
+            <button id="exportViewButton" class="copy-view-button" type="button" title="Download the selected runs as CSV" disabled>Export CSV</button>
           </div>
         </div>
       </section>
@@ -219,7 +221,7 @@
             <div id="aiPromptChips" class="ai-prompt-chips" aria-label="Suggested questions"></div>
             <button id="aiAnalyzeButton" class="ai-action" type="button" disabled>Ask Ollama</button>
           </div>
-          <p class="ai-model-note">Ollama · <span id="aiModelName">deepseek-r1:8b</span> · compact context · runs only when you ask</p>
+          <p class="ai-model-note">Ollama · <span id="aiModelName">deepseek-r1:1.5b</span> · compact context · runs only when you ask</p>
         </div>
         <div id="aiInsightContent" class="ai-insight-content" aria-live="polite">
           <div class="ai-empty">
@@ -363,6 +365,6 @@
       </section>
     </div>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-    <script src="/script.js?v=workspace-6"></script>
+    <script src="/script.js?v=workspace-9"></script>
   </body>
 </html>

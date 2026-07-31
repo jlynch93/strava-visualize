@@ -1,5 +1,6 @@
 const http = require("http");
 const https = require("https");
+const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 const { URL, URLSearchParams } = require("url");
@@ -10,7 +11,7 @@ const TOKEN_FILE = path.join(__dirname, ".strava-token.json");
 const STRAVA_API = "https://www.strava.com/api/v3";
 const STRAVA_OAUTH_TOKEN = "https://www.strava.com/oauth/token";
 const DEFAULT_OLLAMA_URL = "https://ollama.jeer.rest";
-const DEFAULT_OLLAMA_MODEL = "deepseek-r1:8b";
+const DEFAULT_OLLAMA_MODEL = "deepseek-r1:1.5b";
 const WEATHER_HOURLY = [
   "temperature_2m",
   "apparent_temperature",
@@ -112,9 +113,26 @@ function sendJson(res, status, payload) {
   res.end(JSON.stringify(payload));
 }
 
-function sendRedirect(res, location) {
-  res.writeHead(302, { Location: location });
+function sendRedirect(res, location, headers = {}) {
+  res.writeHead(302, { Location: location, ...headers });
   res.end();
+}
+
+function parseCookies(raw) {
+  return String(raw || "").split(";").reduce((cookies, part) => {
+    const [key, ...value] = part.trim().split("=");
+    if (!key) return cookies;
+    try {
+      cookies[key] = decodeURIComponent(value.join("="));
+    } catch {
+      cookies[key] = value.join("=");
+    }
+    return cookies;
+  }, {});
+}
+
+function sessionCookie(name, value, maxAge) {
+  return `${name}=${encodeURIComponent(value)}; Path=/; Max-Age=${maxAge}; HttpOnly; SameSite=Lax`;
 }
 
 function readToken() {
@@ -149,7 +167,14 @@ function requestJson(url, options = {}, body = null) {
       });
       response.on("end", () => {
         const contentType = response.headers["content-type"] || "";
-        const parsed = contentType.includes("application/json") && raw ? JSON.parse(raw) : raw;
+        let parsed = raw;
+        if (contentType.includes("application/json") && raw) {
+          try {
+            parsed = JSON.parse(raw);
+          } catch {
+            parsed = raw;
+          }
+        }
         if (response.statusCode >= 400) {
           reject(new Error(typeof parsed === "string" ? parsed : JSON.stringify(parsed)));
           return;
@@ -158,6 +183,7 @@ function requestJson(url, options = {}, body = null) {
       });
     });
     request.on("error", reject);
+    request.setTimeout(30_000, () => request.destroy(new Error("The upstream service timed out.")));
     if (body) request.write(body);
     request.end();
   });
@@ -169,13 +195,19 @@ function readRequestJson(req, limit = 64_000) {
     req.setEncoding("utf8");
     req.on("data", (chunk) => {
       raw += chunk;
-      if (raw.length > limit) reject(new Error("The training summary is too large."));
+      if (raw.length > limit) {
+        const error = new Error("The training summary is too large.");
+        error.status = 413;
+        reject(error);
+      }
     });
     req.on("end", () => {
       try {
         resolve(JSON.parse(raw || "{}"));
       } catch {
-        reject(new Error("The training summary is not valid JSON."));
+        const error = new Error("The training summary is not valid JSON.");
+        error.status = 400;
+        reject(error);
       }
     });
     req.on("error", reject);
@@ -249,7 +281,7 @@ function normalizeWeather(data, request) {
 
 async function getRunWeather(url) {
   const request = weatherRequest(url);
-  const response = await fetch(request.endpoint, { headers: { accept: "application/json" } });
+  const response = await fetch(request.endpoint, { headers: { accept: "application/json" }, signal: AbortSignal.timeout(20_000) });
   const data = await response.json();
   if (!response.ok) throw new Error(data.reason || data.error || `Weather provider returned HTTP ${response.status}.`);
   return normalizeWeather(data, request);
@@ -1056,7 +1088,8 @@ function serveStatic(req, res) {
   const requestedPath = url.pathname === "/" ? "/index.html" : decodeURIComponent(url.pathname);
   const safePath = path.normalize(requestedPath).replace(/^(\.\.[/\\])+/, "");
   const filePath = path.join(PUBLIC_DIR, safePath);
-  if (!filePath.startsWith(PUBLIC_DIR)) {
+  const relativePath = path.relative(PUBLIC_DIR, filePath);
+  if (relativePath.startsWith("..") || path.isAbsolute(relativePath)) {
     res.writeHead(403);
     res.end("Forbidden");
     return;
@@ -1067,7 +1100,11 @@ function serveStatic(req, res) {
       res.end("Not found");
       return;
     }
-    res.writeHead(200, { "Content-Type": MIME_TYPES[path.extname(filePath)] || "application/octet-stream" });
+    res.writeHead(200, {
+      "Content-Type": MIME_TYPES[path.extname(filePath)] || "application/octet-stream",
+      "X-Content-Type-Options": "nosniff",
+      "Referrer-Policy": "same-origin"
+    });
     res.end(data);
   });
 }
@@ -1091,15 +1128,17 @@ async function handleApi(req, res) {
       sendJson(res, 400, { error: config.error });
       return;
     }
+    const oauthState = crypto.randomBytes(24).toString("hex");
     const authUrl = new URL("https://www.strava.com/oauth/authorize");
     authUrl.search = new URLSearchParams({
       client_id: config.clientId,
       redirect_uri: config.redirectUri,
       response_type: "code",
       approval_prompt: "auto",
-      scope: "read,activity:read_all"
+      scope: "read,activity:read_all",
+      state: oauthState
     }).toString();
-    sendRedirect(res, authUrl.toString());
+    sendRedirect(res, authUrl.toString(), { "Set-Cookie": sessionCookie("sv_oauth_state", oauthState, 600) });
     return;
   }
 
@@ -1110,8 +1149,14 @@ async function handleApi(req, res) {
       return;
     }
     const code = url.searchParams.get("code");
+    const returnedState = url.searchParams.get("state");
+    const cookies = parseCookies(req.headers.cookie);
     if (!code) {
       sendJson(res, 400, { error: "Missing Strava authorization code." });
+      return;
+    }
+    if (!returnedState || returnedState !== cookies.sv_oauth_state) {
+      sendJson(res, 400, { error: "The Strava authorization session expired. Start the connection again." });
       return;
     }
     const token = await exchangeToken({
@@ -1121,7 +1166,13 @@ async function handleApi(req, res) {
       grant_type: "authorization_code"
     });
     writeToken(token);
-    sendRedirect(res, "/?connected=1");
+    sendRedirect(res, "/?connected=1", { "Set-Cookie": sessionCookie("sv_oauth_state", "", 0) });
+    return;
+  }
+
+  if (url.pathname === "/auth/logout") {
+    fs.rmSync(TOKEN_FILE, { force: true });
+    sendRedirect(res, "/?disconnected=1", { "Set-Cookie": sessionCookie("sv_oauth_state", "", 0) });
     return;
   }
 
@@ -1129,8 +1180,10 @@ async function handleApi(req, res) {
     const accessToken = await getAccessToken();
     const after = url.searchParams.get("after");
     const before = url.searchParams.get("before");
-    const perPage = Math.min(Number(url.searchParams.get("per_page") || 100), 200);
-    const maxPages = Math.min(Number(url.searchParams.get("pages") || 6), 12);
+    const requestedPerPage = Number(url.searchParams.get("per_page") || 100);
+    const requestedPages = Number(url.searchParams.get("pages") || 6);
+    const perPage = Number.isFinite(requestedPerPage) ? Math.max(1, Math.min(requestedPerPage, 200)) : 100;
+    const maxPages = Number.isFinite(requestedPages) ? Math.max(1, Math.min(requestedPages, 12)) : 6;
     const activities = [];
     for (let page = 1; page <= maxPages; page += 1) {
       const params = new URLSearchParams({ page: String(page), per_page: String(perPage) });
@@ -1139,8 +1192,9 @@ async function handleApi(req, res) {
       const batch = await requestJson(`${STRAVA_API}/athlete/activities?${params}`, {
         headers: { Authorization: `Bearer ${accessToken}` }
       });
+      if (!Array.isArray(batch)) throw new Error("Strava returned an invalid activity list.");
       activities.push(...batch);
-      if (!Array.isArray(batch) || batch.length < perPage) break;
+      if (batch.length < perPage) break;
     }
     sendJson(res, 200, { activities });
     return;
@@ -1171,7 +1225,7 @@ async function handleApi(req, res) {
 const server = http.createServer((req, res) => {
   if (req.url.startsWith("/api/") || req.url.startsWith("/auth/")) {
     handleApi(req, res).catch((error) => {
-      sendJson(res, 500, { error: error.message });
+      sendJson(res, Number(error.status) || 500, { error: error.message });
     });
   } else {
     serveStatic(req, res);

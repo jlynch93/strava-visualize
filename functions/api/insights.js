@@ -1,7 +1,7 @@
 import { json } from "../_shared.js";
 
 const DEFAULT_OLLAMA_URL = "https://ollama.jeer.rest";
-const DEFAULT_OLLAMA_MODEL = "deepseek-r1:8b";
+const DEFAULT_OLLAMA_MODEL = "deepseek-r1:1.5b";
 const INSIGHT_SCHEMA = {
   type: "object",
   properties: {
@@ -766,9 +766,14 @@ function normalizeRunInsight(value, input) {
 }
 
 export async function onRequestPost({ env, request }) {
-  const contentLength = Number(request.headers.get("content-length") || 0);
-  if (contentLength > 64_000) return json({ error: "The training summary is too large." }, 413);
-  const input = await request.json();
+  const raw = await request.text();
+  if (raw.length > 64_000) return json({ error: "The training summary is too large." }, 413);
+  let input;
+  try {
+    input = JSON.parse(raw || "{}");
+  } catch {
+    return json({ error: "The training summary is not valid JSON." }, 400);
+  }
   const hasRunInput = input?.kind === "run" && input.run;
   const hasWindowInput = input?.kind !== "run" && Number(input?.summary?.runCount) > 0 && Array.isArray(input?.candidates);
   if (!hasRunInput && !hasWindowInput) {

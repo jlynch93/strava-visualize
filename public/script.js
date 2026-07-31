@@ -34,6 +34,7 @@ const state = {
 
 const els = {
   connectButton: document.querySelector("#connectButton"),
+  disconnectButton: document.querySelector("#disconnectButton"),
   demoButton: document.querySelector("#demoButton"),
   fileInput: document.querySelector("#fileInput"),
   rangeSelect: document.querySelector("#rangeSelect"),
@@ -47,6 +48,7 @@ const els = {
   bucketSelect: document.querySelector("#bucketSelect"),
   metricSelect: document.querySelector("#metricSelect"),
   copyViewButton: document.querySelector("#copyViewButton"),
+  exportViewButton: document.querySelector("#exportViewButton"),
   navWindowLabel: document.querySelector("#navWindowLabel"),
   status: document.querySelector("#status"),
   tooltip: document.querySelector("#chartTooltip"),
@@ -160,7 +162,62 @@ function isRun(activity) {
   return sport.includes("run");
 }
 
-function normalizeActivity(activity) {
+function normalizedFieldKey(value) {
+  return String(value || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+function readActivityField(activity, aliases) {
+  const entries = Object.entries(activity || {});
+  for (const alias of aliases) {
+    const exact = entries.find(([key]) => key === alias);
+    if (exact && exact[1] !== null && exact[1] !== undefined && exact[1] !== "") return exact[1];
+  }
+  const wanted = aliases.map(normalizedFieldKey);
+  const loose = entries.find(([key, value]) => wanted.includes(normalizedFieldKey(key)) && value !== null && value !== undefined && value !== "");
+  return loose ? loose[1] : null;
+}
+
+function hasActivityField(activity, aliases) {
+  const wanted = aliases.map(normalizedFieldKey);
+  return Object.keys(activity || {}).some((key) => wanted.includes(normalizedFieldKey(key)));
+}
+
+function numericActivityValue(value) {
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+  const parsed = Number(String(value ?? "").replace(/,/g, "").trim());
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function durationActivityValue(value) {
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+  const text = String(value ?? "").trim();
+  if (!text) return 0;
+  if (!text.includes(":")) return numericActivityValue(text);
+  const parts = text.split(":").map((part) => numericActivityValue(part));
+  if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+  if (parts.length === 2) return parts[0] * 60 + parts[1];
+  return 0;
+}
+
+function stableActivityId(activity, index) {
+  const explicit = readActivityField(activity, ["id", "Activity ID", "activity_id"]);
+  if (explicit !== null) return String(explicit);
+  const fingerprint = [
+    readActivityField(activity, ["start_date_local", "start_date", "Activity Date"]),
+    readActivityField(activity, ["name", "Activity Name"]),
+    readActivityField(activity, ["distance", "Distance"]),
+    readActivityField(activity, ["moving_time", "Moving Time"]),
+    index
+  ].join("|");
+  let hash = 2166136261;
+  for (const character of fingerprint) {
+    hash ^= character.charCodeAt(0);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `activity-${index}-${(hash >>> 0).toString(36)}`;
+}
+
+function normalizeActivity(activity, index = 0) {
   const point = (value) => {
     if (!Array.isArray(value) || value.length < 2) return [];
     const latitude = Number(value[0]);
@@ -170,30 +227,39 @@ function normalizeActivity(activity) {
       ? [latitude, longitude]
       : [];
   };
+  const isStravaExport = hasActivityField(activity, ["Activity Date", "Activity Name", "Activity Type"]);
+  const distanceValue = numericActivityValue(readActivityField(activity, ["distance", "Distance"]));
+  const elevationValue = numericActivityValue(readActivityField(activity, ["total_elevation_gain", "Elevation Gain"]));
+  const maxSpeedValue = numericActivityValue(readActivityField(activity, ["max_speed", "Max Speed"]));
+  const startLat = numericActivityValue(readActivityField(activity, ["start_latitude", "Start Latitude"]));
+  const startLng = numericActivityValue(readActivityField(activity, ["start_longitude", "Start Longitude"]));
+  const apiPoint = readActivityField(activity, ["start_latlng"]);
+  const exportPoint = startLat || startLng ? [startLat, startLng] : [];
+  const parsedApiPoint = point(apiPoint);
   return {
-    id: activity.id || crypto.randomUUID(),
-    name: activity.name || "Untitled run",
-    sport_type: activity.sport_type || activity.type || "Run",
-    start_date: activity.start_date || activity.start_date_local,
-    start_date_local: activity.start_date_local || activity.start_date,
-    distance: Number(activity.distance || activity.Distance || 0),
-    moving_time: Number(activity.moving_time || activity["Moving Time"] || activity.elapsed_time || 0),
-    elapsed_time: Number(activity.elapsed_time || activity["Elapsed Time"] || activity.moving_time || 0),
-    total_elevation_gain: Number(activity.total_elevation_gain || activity["Elevation Gain"] || 0),
-    average_heartrate: Number(activity.average_heartrate || activity["Average Heart Rate"] || 0),
-    max_heartrate: Number(activity.max_heartrate || activity["Max Heart Rate"] || 0),
-    average_cadence: Number(activity.average_cadence || activity["Average Cadence"] || 0),
-    average_watts: Number(activity.average_watts || activity["Average Watts"] || 0),
-    max_speed: Number(activity.max_speed || activity["Max Speed"] || 0),
-    suffer_score: Number(activity.suffer_score || activity["Relative Effort"] || 0),
-    kudos_count: Number(activity.kudos_count || activity.Kudos || 0),
-    achievement_count: Number(activity.achievement_count || activity.Achievements || 0),
-    pr_count: Number(activity.pr_count || activity.PRs || 0),
-    workout_type: Number(activity.workout_type || activity["Workout Type"] || 0),
-    device_name: activity.device_name || activity["Device Name"] || "",
-    description: activity.description || activity.Description || "",
-    start_latlng: point(activity.start_latlng),
-    end_latlng: point(activity.end_latlng),
+    id: stableActivityId(activity, index),
+    name: readActivityField(activity, ["name", "Activity Name"]) || "Untitled run",
+    sport_type: readActivityField(activity, ["sport_type", "type", "Activity Type"]) || "Run",
+    start_date: readActivityField(activity, ["start_date", "start_date_local", "Activity Date"]),
+    start_date_local: readActivityField(activity, ["start_date_local", "start_date", "Activity Date"]),
+    distance: isStravaExport ? distanceValue * 1609.344 : distanceValue,
+    moving_time: durationActivityValue(readActivityField(activity, ["moving_time", "Moving Time", "elapsed_time"])),
+    elapsed_time: durationActivityValue(readActivityField(activity, ["elapsed_time", "Elapsed Time", "moving_time"])),
+    total_elevation_gain: isStravaExport ? elevationValue / 3.28084 : elevationValue,
+    average_heartrate: numericActivityValue(readActivityField(activity, ["average_heartrate", "Average Heart Rate"])),
+    max_heartrate: numericActivityValue(readActivityField(activity, ["max_heartrate", "Max Heart Rate"])),
+    average_cadence: numericActivityValue(readActivityField(activity, ["average_cadence", "Average Cadence"])),
+    average_watts: numericActivityValue(readActivityField(activity, ["average_watts", "Average Watts"])),
+    max_speed: isStravaExport ? maxSpeedValue * 0.44704 : maxSpeedValue,
+    suffer_score: numericActivityValue(readActivityField(activity, ["suffer_score", "Relative Effort"])),
+    kudos_count: numericActivityValue(readActivityField(activity, ["kudos_count", "Kudos"])),
+    achievement_count: numericActivityValue(readActivityField(activity, ["achievement_count", "Achievements"])),
+    pr_count: numericActivityValue(readActivityField(activity, ["pr_count", "PRs"])),
+    workout_type: numericActivityValue(readActivityField(activity, ["workout_type", "Workout Type"])),
+    device_name: readActivityField(activity, ["device_name", "Device Name"]) || "",
+    description: readActivityField(activity, ["description", "Description"]) || "",
+    start_latlng: parsedApiPoint.length ? parsedApiPoint : point(exportPoint),
+    end_latlng: point(readActivityField(activity, ["end_latlng"])),
     route_points: Array.isArray(activity.route_points) ? activity.route_points.map(point).filter((candidate) => candidate.length === 2) : [],
     map: {
       summary_polyline: String(activity.map?.summary_polyline || activity.summary_polyline || "")
@@ -303,14 +369,30 @@ function restoreViewFromUrl() {
   const comparison = params.get("compare");
   const grouping = params.get("group");
   const metric = params.get("metric");
+  const search = params.get("q");
+  const type = params.get("type");
+  const sort = params.get("sort");
   if (["28", "56", "84", "180", "365", "all", "custom"].includes(range)) els.rangeSelect.value = range;
   if (["previous", "year", "off"].includes(comparison)) els.comparisonSelect.value = comparison;
   if (["auto", "week", "month"].includes(grouping)) els.bucketSelect.value = grouping;
   if (METRICS[metric]) els.metricSelect.value = metric;
+  if (search) els.activitySearch.value = search.slice(0, 120);
+  if (["all", "Quality", "Long", "Easy", "Steady", "Race"].includes(type)) els.activityType.value = type;
+  if (["newest", "distance", "pace", "load"].includes(sort)) els.activitySort.value = sort;
   if (range === "custom") {
     if (/^\d{4}-\d{2}-\d{2}$/.test(params.get("start") || "")) els.startDate.value = params.get("start");
     if (/^\d{4}-\d{2}-\d{2}$/.test(params.get("end") || "")) els.endDate.value = params.get("end");
     els.customRangePanel.hidden = false;
+  }
+  if (params.get("source") === "demo") {
+    state.rawActivities = makeDemoData();
+    state.dataSource = "Demo";
+  }
+  if (params.has("connected") || params.has("disconnected")) {
+    const cleanUrl = new URL(window.location.href);
+    cleanUrl.searchParams.delete("connected");
+    cleanUrl.searchParams.delete("disconnected");
+    window.history.replaceState(null, "", cleanUrl);
   }
 }
 
@@ -320,6 +402,14 @@ function syncViewUrl() {
   url.searchParams.set("compare", els.comparisonSelect.value);
   url.searchParams.set("group", els.bucketSelect.value);
   url.searchParams.set("metric", els.metricSelect.value);
+  if (els.activitySearch.value.trim()) url.searchParams.set("q", els.activitySearch.value.trim().slice(0, 120));
+  else url.searchParams.delete("q");
+  if (els.activityType.value !== "all") url.searchParams.set("type", els.activityType.value);
+  else url.searchParams.delete("type");
+  if (els.activitySort.value !== "newest") url.searchParams.set("sort", els.activitySort.value);
+  else url.searchParams.delete("sort");
+  if (state.dataSource === "Demo") url.searchParams.set("source", "demo");
+  else url.searchParams.delete("source");
   if (els.rangeSelect.value === "custom") {
     url.searchParams.set("start", els.startDate.value);
     url.searchParams.set("end", els.endDate.value);
@@ -332,7 +422,7 @@ function syncViewUrl() {
 
 function getActivityBounds() {
   const dates = state.rawActivities
-    .map(normalizeActivity)
+    .map((activity, index) => normalizeActivity(activity, index))
     .filter(isRun)
     .map(parseActivityDate)
     .filter((date) => !Number.isNaN(date.valueOf()));
@@ -553,7 +643,7 @@ function currentInsightFingerprint() {
 
 function render() {
   applyRangeInputs();
-  const normalized = state.rawActivities.map(normalizeActivity);
+  const normalized = state.rawActivities.map((activity, index) => normalizeActivity(activity, index));
   const { start, end } = getRangeDates();
   state.bucketMode = resolvedBucketMode(start, end);
   state.filteredRuns = runsInWindow(normalized, start, end);
@@ -1020,6 +1110,7 @@ function renderSuggestedQuestions(summary, comparison) {
 
 function renderAiState() {
   els.aiAnalyzeButton.disabled = !state.filteredRuns.length;
+  els.exportViewButton.disabled = !state.filteredRuns.length;
   if (state.renderedInsightFingerprint === state.insightFingerprint) return;
   state.renderedInsightFingerprint = "";
   els.aiInsightContent.removeAttribute("aria-busy");
@@ -1351,6 +1442,12 @@ async function analyzeWithOllama() {
   if (!state.filteredRuns.length) return;
   state.insightFingerprint = currentInsightFingerprint();
   const requestedFingerprint = state.insightFingerprint;
+  const controller = new AbortController();
+  let timedOut = false;
+  const timeoutId = window.setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, 130_000);
   els.aiAnalyzeButton.disabled = true;
   els.aiAnalyzeButton.textContent = "Asking Ollama…";
   renderAiLoading();
@@ -1358,7 +1455,8 @@ async function analyzeWithOllama() {
     const response = await fetch("/api/insights", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify(buildInsightPayload())
+      body: JSON.stringify(buildInsightPayload()),
+      signal: controller.signal
     });
     const data = await readApiJson(response);
     if (!response.ok) throw new Error(data.error || "Ollama could not analyze this training window.");
@@ -1371,8 +1469,9 @@ async function analyzeWithOllama() {
     renderAiInsight(data.insight, data.model);
   } catch (error) {
     state.renderedInsightFingerprint = "";
-    renderAiError(error.message || "Check that the Ollama URL is reachable and try again.");
+    renderAiError(timedOut ? "The model took too long to answer. Try again once the Ollama service is warm." : error.message || "Check that the Ollama URL is reachable and try again.");
   } finally {
+    window.clearTimeout(timeoutId);
     els.aiAnalyzeButton.disabled = !state.filteredRuns.length;
     els.aiAnalyzeButton.textContent = "Ask Ollama";
   }
@@ -2197,7 +2296,7 @@ function percentileRank(values, value, higherIsBetter = true) {
 }
 
 function classifyRun(run, distanceMiles, pace, distanceRank, paceRank) {
-  const name = run.name.toLowerCase();
+  const name = String(run.name || "").toLowerCase();
   if (name.includes("race")) return "Race";
   if (name.includes("tempo") || name.includes("interval") || name.includes("workout")) return "Quality";
   if (name.includes("easy") || name.includes("recovery")) return "Easy";
@@ -2678,7 +2777,7 @@ function renderRunInsightResult(result) {
     mixed: "Mixed workout",
     unknown: "Type not established"
   };
-  if (model) model.textContent = result.model || "deepseek-r1:8b";
+  if (model) model.textContent = result.model || "deepseek-r1:1.5b";
   content.innerHTML = `
     <div class="workout-ai-result">
       <h4>${escapeHtml(insight.headline)}</h4>
@@ -2738,6 +2837,11 @@ async function requestRunInsight(digest, { force = false } = {}) {
   }
   state.runInsightAbort?.abort();
   const controller = new AbortController();
+  let timedOut = false;
+  const timeoutId = window.setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, 130_000);
   state.runInsightAbort = controller;
   const content = document.querySelector("#workoutAiContent");
   if (content) content.innerHTML = runInsightLoadingMarkup();
@@ -2754,9 +2858,10 @@ async function requestRunInsight(digest, { force = false } = {}) {
     state.runInsightCache.set(key, data);
     renderRunInsightResult(data);
   } catch (error) {
-    if (error.name === "AbortError" || state.activeRunInsightKey !== key || els.workoutModal.hidden) return;
-    renderRunInsightError(error.message, digest.run.id);
+    if ((error.name === "AbortError" && !timedOut) || state.activeRunInsightKey !== key || els.workoutModal.hidden) return;
+    renderRunInsightError(timedOut ? "The model took too long to answer. Try again once the Ollama service is warm." : error.message, digest.run.id);
   } finally {
+    window.clearTimeout(timeoutId);
     if (state.runInsightAbort === controller) state.runInsightAbort = null;
   }
 }
@@ -2863,7 +2968,7 @@ function showWorkoutModal(runId, trigger = document.activeElement) {
             <p class="workout-ai-kicker"><span class="ai-status-dot" aria-hidden="true"></span> Ollama run read</p>
             <h3 id="workoutAiTitle">A second look at this effort.</h3>
           </div>
-          <span id="workoutAiModel">deepseek-r1:8b</span>
+          <span id="workoutAiModel">deepseek-r1:1.5b</span>
         </div>
         <div class="workout-ai-focus" role="group" aria-label="Run analysis focus">
           <button type="button" data-action="run-focus" data-focus="balanced" aria-pressed="true">Overall</button>
@@ -3066,6 +3171,46 @@ function resetRunBrowser() {
   state.activityVisible = 15;
 }
 
+function csvCell(value) {
+  const text = String(value ?? "");
+  return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+}
+
+function exportCurrentView() {
+  if (!state.filteredRuns.length) return;
+  const types = activityRunTypes(state.filteredRuns);
+  const headers = ["Date", "Name", "Profile", "Distance (mi)", "Pace (sec/mi)", "Moving time (sec)", "Elevation (ft)", "Average HR (bpm)", "Training load", "Load per mile"];
+  const rows = state.filteredRuns.map((run) => {
+    const distance = miles(run.distance);
+    const load = activityLoad(run);
+    return [
+      localDateValue(parseActivityDate(run)),
+      run.name,
+      types.get(String(run.id)) || "Run",
+      distance.toFixed(2),
+      Math.round(paceSeconds(run)),
+      Math.round(Number(run.moving_time) || 0),
+      Math.round(feet(run.total_elevation_gain)),
+      run.average_heartrate ? Math.round(run.average_heartrate) : "",
+      Math.round(load),
+      distance ? (load / distance).toFixed(1) : ""
+    ].map(csvCell).join(",");
+  });
+  const csv = `${headers.map(csvCell).join(",")}\r\n${rows.join("\r\n")}\r\n`;
+  const blob = new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" });
+  const link = document.createElement("a");
+  const { start, end } = getRangeDates();
+  const startName = start ? localDateValue(start) : "window";
+  const endName = end ? localDateValue(end) : "current";
+  link.href = URL.createObjectURL(blob);
+  link.download = `stride-${startName}-to-${endName}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+  setStatus(`Exported ${state.filteredRuns.length} runs from the selected window.`);
+}
+
 async function fetchActivities() {
   setStatus("Pulling activities from Strava...");
   const { start, end } = getRangeDates();
@@ -3076,12 +3221,12 @@ async function fetchActivities() {
     params.set("after", Math.floor(fetchStart.getTime() / 1000));
   }
   if (end) params.set("before", Math.floor(end.getTime() / 1000));
-  const response = await fetch(`/api/activities?${params}`);
+  const response = await fetch(`/api/activities?${params}`, { signal: AbortSignal.timeout(45_000) });
   const data = await readApiJson(response);
   if (!response.ok) throw new Error(data.error || "Unable to fetch Strava activities.");
+  if (!Array.isArray(data.activities)) throw new Error("Strava returned no activity list.");
   state.rawActivities = data.activities;
   state.dataSource = "Strava";
-  resetRunBrowser();
   syncRangeInputs();
   setStatus(`Loaded ${data.activities.length} activities from Strava.`);
   render();
@@ -3103,7 +3248,7 @@ async function readApiJson(response) {
 }
 
 async function checkStatus() {
-  const response = await fetch("/api/status");
+  const response = await fetch("/api/status", { signal: AbortSignal.timeout(15_000) });
   const data = await readApiJson(response);
   if (!response.ok) {
     state.stravaReady = false;
@@ -3112,6 +3257,7 @@ async function checkStatus() {
     els.connectButton.disabled = false;
     els.connectButton.textContent = "Connect Strava";
     els.connectButton.title = state.stravaError;
+    els.disconnectButton.hidden = true;
     setStatus(state.stravaError, true);
     return;
   }
@@ -3122,6 +3268,11 @@ async function checkStatus() {
     els.connectButton.disabled = false;
     els.connectButton.textContent = "Connect Strava";
     els.connectButton.title = state.stravaError;
+    els.disconnectButton.hidden = true;
+    if (state.dataSource === "Demo") {
+      setStatus("Loaded demo running history. Strava is not configured for this server.");
+      return;
+    }
     setStatus(`${state.stravaError} You can still import an export file or use demo data.`, true);
     return;
   }
@@ -3130,34 +3281,73 @@ async function checkStatus() {
   state.stravaError = "";
   els.connectButton.disabled = false;
   els.connectButton.title = "";
+  els.disconnectButton.hidden = !data.connected;
   if (data.connected) {
     els.connectButton.textContent = "Refresh Strava";
-    await fetchActivities();
+    if (state.dataSource !== "Demo") await fetchActivities();
+    else setStatus("Loaded demo running history.");
+  } else if (state.dataSource === "Demo") {
+    setStatus("Loaded demo running history. Connect Strava to replace it.");
   } else {
     setStatus(`Ready to connect. Callback URL: ${data.redirectUri}`);
   }
 }
 
 function parseCsv(text) {
-  const lines = text.trim().split(/\r?\n/);
-  const headers = lines.shift().split(",").map((h) => h.trim());
-  return lines.map((line) => {
-    const values = line.match(/("([^"]|"")*"|[^,]+)/g) || [];
-    return headers.reduce((row, header, index) => {
-      row[header] = (values[index] || "").replace(/^"|"$/g, "").replace(/""/g, "\"");
-      return row;
-    }, {});
-  });
+  const rows = [];
+  let row = [];
+  let field = "";
+  let quoted = false;
+  for (let index = 0; index < text.length; index += 1) {
+    const character = text[index];
+    if (quoted) {
+      if (character === '"' && text[index + 1] === '"') {
+        field += '"';
+        index += 1;
+      } else if (character === '"') {
+        quoted = false;
+      } else {
+        field += character;
+      }
+    } else if (character === '"' && field.length === 0) {
+      quoted = true;
+    } else if (character === ",") {
+      row.push(field);
+      field = "";
+    } else if (character === "\n" || character === "\r") {
+      if (character === "\r" && text[index + 1] === "\n") index += 1;
+      row.push(field);
+      if (row.some((value) => value.trim())) rows.push(row);
+      row = [];
+      field = "";
+    } else {
+      field += character;
+    }
+  }
+  if (field || row.length) {
+    row.push(field);
+    if (row.some((value) => value.trim())) rows.push(row);
+  }
+  const headers = (rows.shift() || []).map((header, index) => (index === 0 ? header.replace(/^\uFEFF/, "") : header).trim());
+  return rows.map((values) => headers.reduce((result, header, index) => {
+    if (header) result[header] = values[index] || "";
+    return result;
+  }, {}));
 }
 
 async function importFile(file) {
+  if (file.size > 20 * 1024 * 1024) throw new Error("Choose an export smaller than 20 MB.");
   const text = await file.text();
   const data = file.name.toLowerCase().endsWith(".csv") ? parseCsv(text) : JSON.parse(text);
-  state.rawActivities = Array.isArray(data) ? data : data.activities || [];
+  const activities = Array.isArray(data) ? data : Array.isArray(data?.activities) ? data.activities : [];
+  if (!activities.length) throw new Error("The file did not contain any activities.");
+  state.rawActivities = activities;
   state.dataSource = "Import";
   resetRunBrowser();
   syncRangeInputs();
-  setStatus(`Imported ${state.rawActivities.length} activities.`);
+  const runCount = state.rawActivities.filter((activity) => isRun(normalizeActivity(activity))).length;
+  if (!runCount) throw new Error("The file did not contain any running activities.");
+  setStatus(`Imported ${state.rawActivities.length} activities, including ${runCount} runs.`);
   render();
 }
 
@@ -3228,6 +3418,10 @@ els.connectButton.addEventListener("click", () => {
   }
 });
 
+els.disconnectButton.addEventListener("click", () => {
+  window.location.href = "/auth/logout";
+});
+
 els.demoButton.addEventListener("click", () => {
   state.rawActivities = makeDemoData();
   state.dataSource = "Demo";
@@ -3236,6 +3430,8 @@ els.demoButton.addEventListener("click", () => {
   setStatus("Loaded demo running history.");
   render();
 });
+
+els.exportViewButton.addEventListener("click", exportCurrentView);
 
 els.aiAnalyzeButton.addEventListener("click", analyzeWithOllama);
 
@@ -3408,12 +3604,14 @@ els.copyViewButton.addEventListener("click", async () => {
 
 els.activitySearch.addEventListener("input", () => {
   state.activityVisible = 15;
+  syncViewUrl();
   renderTable();
 });
 
 [els.activityType, els.activitySort].forEach((element) => {
   element.addEventListener("change", () => {
     state.activityVisible = 15;
+    syncViewUrl();
     renderTable();
   });
 });
@@ -3442,9 +3640,9 @@ function setupSectionNavigation() {
   sections.forEach((section) => observer.observe(section));
 }
 
-checkStatus().catch((error) => setStatus(error.message, true));
 restoreViewFromUrl();
 syncRangeInputs();
 bindTooltips();
 setupSectionNavigation();
 render();
+checkStatus().catch((error) => setStatus(error.message, true));

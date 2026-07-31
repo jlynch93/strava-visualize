@@ -84,7 +84,7 @@ function normalizeWeather(data, request) {
 export async function onRequestGet({ request }) {
   try {
     const weatherRequestConfig = weatherRequest(new URL(request.url));
-    const response = await fetch(weatherRequestConfig.endpoint, { headers: { accept: "application/json" } });
+    const response = await fetch(weatherRequestConfig.endpoint, { headers: { accept: "application/json" }, signal: AbortSignal.timeout(20_000) });
     const data = await response.json();
     if (!response.ok) return json({ error: data.reason || data.error || `Weather provider returned HTTP ${response.status}.` }, 502);
     return json(
