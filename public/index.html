@@ -7,7 +7,7 @@
     <title>Stride — Running intelligence</title>
     <link rel="stylesheet" href="/styles.css?v=theme-2">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
-    <link rel="stylesheet" href="/experience.css?v=workspace-14">
+    <link rel="stylesheet" href="/experience.css?v=workspace-15">
   </head>
   <body>
     <a class="skip-link" href="#overview">Skip to overview</a>
@@ -280,6 +280,16 @@
               <span id="heatmapSubtitle">Daily miles by week</span>
             </div>
             <div id="heatmapChart" class="chart compact-chart"></div>
+            <div class="heatmap-key" aria-label="Training calendar intensity legend">
+              <span>Less</span>
+              <i class="heat-empty" aria-hidden="true"></i>
+              <i class="heat-1" aria-hidden="true"></i>
+              <i class="heat-2" aria-hidden="true"></i>
+              <i class="heat-3" aria-hidden="true"></i>
+              <i class="heat-4" aria-hidden="true"></i>
+              <i class="heat-5" aria-hidden="true"></i>
+              <span>More miles</span>
+            </div>
           </div>
           <div class="chart-panel rolling-panel">
             <div class="panel-heading">
@@ -291,14 +301,14 @@
           <div class="chart-panel">
             <div class="panel-heading">
               <h2>Run distance mix</h2>
-              <span>Easy volume vs long-run load</span>
+              <span>Miles by run distance</span>
             </div>
             <div id="distanceMixChart" class="chart"></div>
           </div>
           <div class="chart-panel">
             <div class="panel-heading">
-              <h2>Pace zones</h2>
-              <span>Distribution of run paces</span>
+              <h2>Pace bands</h2>
+              <span>How often each pace shows up</span>
             </div>
             <div id="paceZoneChart" class="chart"></div>
           </div>
@@ -382,6 +392,6 @@
       </section>
     </div>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-    <script src="/script.js?v=workspace-17"></script>
+    <script src="/script.js?v=workspace-18"></script>
   </body>
 </html>

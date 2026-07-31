@@ -1550,11 +1550,11 @@ h1 span {
 }
 
 .dashboard .wide-support {
-  grid-column: span 7;
+  grid-column: span 5;
 }
 
 .dashboard .rolling-panel {
-  grid-column: span 5;
+  grid-column: span 7;
   background:
     radial-gradient(circle at 100% 0, rgba(252, 76, 2, 0.14), transparent 18rem),
     #10191b;
@@ -1579,6 +1579,122 @@ h1 span {
 
 .dashboard .compact-chart {
   height: 300px;
+}
+
+.dashboard .rolling-panel .chart {
+  height: 320px;
+}
+
+.scatter-grid,
+.structure-grid {
+  stroke: rgba(16, 23, 25, 0.1);
+}
+
+.scatter-guide {
+  stroke: rgba(40, 95, 168, 0.34);
+  stroke-dasharray: 5 5;
+}
+
+.scatter-tick,
+.structure-axis-label {
+  font-size: 10px;
+}
+
+.scatter-axis-title,
+.structure-lane-label {
+  fill: #647174;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1.2px;
+}
+
+.scatter-guide-label,
+.scatter-latest-label {
+  fill: #647174;
+  font-size: 10px;
+  font-weight: 750;
+}
+
+.scatter-dot {
+  cursor: pointer;
+}
+
+.scatter-dot:hover,
+.scatter-dot:focus {
+  opacity: 1;
+  outline: none;
+  stroke: #172326;
+  stroke-width: 2;
+}
+
+.scatter-dot.scatter-latest {
+  stroke: #172326;
+  stroke-width: 2;
+}
+
+.structure-run-bar {
+  fill: #168f80;
+}
+
+.structure-share-line,
+.structure-elevation-line {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+.structure-share-line {
+  stroke: #b77b15;
+  stroke-width: 3;
+}
+
+.structure-elevation-line {
+  stroke: #fc4c02;
+  stroke-width: 3;
+}
+
+.structure-share-dot,
+.structure-elevation-dot {
+  cursor: pointer;
+}
+
+.structure-share-dot {
+  fill: #b77b15;
+  stroke: #ffffff;
+  stroke-width: 2;
+}
+
+.structure-elevation-dot {
+  fill: #fc4c02;
+  stroke: #ffffff;
+  stroke-width: 2;
+}
+
+.structure-share-dot:hover,
+.structure-share-dot:focus,
+.structure-elevation-dot:hover,
+.structure-elevation-dot:focus {
+  stroke: #172326;
+  stroke-width: 3;
+  outline: none;
+}
+
+.heatmap-key {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 5px;
+  margin-top: -4px;
+  color: #7f8b8c;
+  font-size: 0.64rem;
+  font-weight: 750;
+}
+
+.heatmap-key i {
+  width: 13px;
+  height: 13px;
+  border-radius: 3px;
 }
 
 .panel-heading {
@@ -3140,6 +3256,10 @@ th {
     height: 250px;
   }
 
+  .dashboard .rolling-panel .chart {
+    height: 250px;
+  }
+
   .training-arc-panel {
     min-height: 430px;
   }
@@ -3165,6 +3285,11 @@ th {
 
   .training-arc-insight {
     font-size: 0.7rem;
+  }
+
+  .heatmap-key {
+    justify-content: flex-start;
+    flex-wrap: wrap;
   }
 
   #heatmapChart {

@@ -1989,35 +1989,57 @@ function renderScatter() {
     renderEmpty(els.scatterChart);
     return;
   }
-  const width = 560;
-  const height = 270;
-  const pad = { top: 16, right: 18, bottom: 40, left: 48 };
+  const width = 800;
+  const height = 310;
+  const pad = { top: 28, right: 28, bottom: 56, left: 70 };
+  const plotWidth = width - pad.left - pad.right;
+  const plotHeight = height - pad.top - pad.bottom;
   const maxMiles = Math.max(...buckets.map((b) => b.distanceMiles), 1);
   const paces = buckets.map((b) => b.averagePace);
-  const minPace = Math.min(...paces);
-  const maxPace = Math.max(...paces);
-  const root = svg("svg", { viewBox: `0 0 ${width} ${height}`, role: "img", "aria-label": "Volume versus pace" });
-  root.appendChild(svg("line", { class: "axis", x1: pad.left, y1: height - pad.bottom, x2: width - pad.right, y2: height - pad.bottom }));
-  root.appendChild(svg("line", { class: "axis", x1: pad.left, y1: pad.top, x2: pad.left, y2: height - pad.bottom }));
-  buckets.forEach((bucket) => {
-    const x = pad.left + (bucket.distanceMiles / maxMiles) * (width - pad.left - pad.right);
-    const paceRange = Math.max(maxPace - minPace, 1);
-    const y = pad.top + ((bucket.averagePace - minPace) / paceRange) * (height - pad.top - pad.bottom);
+  const pacePadding = Math.max((Math.max(...paces) - Math.min(...paces)) * 0.14, 12);
+  const minPace = Math.max(1, Math.min(...paces) - pacePadding);
+  const maxPace = Math.max(...paces) + pacePadding;
+  const paceRange = Math.max(maxPace - minPace, 30);
+  const xFor = (miles) => pad.left + (miles / maxMiles) * plotWidth;
+  const yFor = (pace) => pad.top + ((pace - minPace) / paceRange) * plotHeight;
+  const root = svg("svg", { viewBox: `0 0 ${width} ${height}`, role: "img", "aria-label": "Volume versus pace effort map" });
+  for (let index = 0; index <= 4; index += 1) {
+    const x = pad.left + (plotWidth / 4) * index;
+    const y = pad.top + (plotHeight / 4) * index;
+    root.appendChild(svg("line", { class: "axis scatter-grid", x1: x, y1: pad.top, x2: x, y2: height - pad.bottom }));
+    root.appendChild(svg("line", { class: "axis scatter-grid", x1: pad.left, y1: y, x2: width - pad.right, y2: y }));
+    root.appendChild(svg("text", { class: "label scatter-tick", x: x - 12, y: height - pad.bottom + 18 }, [document.createTextNode(`${Math.round((maxMiles / 4) * index)} mi`)]));
+    root.appendChild(svg("text", { class: "label scatter-tick", x: 8, y: y + 4 }, [document.createTextNode(formatPace(minPace + (paceRange / 4) * index))]));
+  }
+  const medianMiles = [...buckets.map((bucket) => bucket.distanceMiles)].sort((a, b) => a - b)[Math.floor(buckets.length / 2)];
+  const medianPace = [...paces].sort((a, b) => a - b)[Math.floor(paces.length / 2)];
+  root.appendChild(svg("line", { class: "scatter-guide", x1: xFor(medianMiles), y1: pad.top, x2: xFor(medianMiles), y2: height - pad.bottom }));
+  root.appendChild(svg("line", { class: "scatter-guide", x1: pad.left, y1: yFor(medianPace), x2: width - pad.right, y2: yFor(medianPace) }));
+  root.appendChild(svg("text", { class: "label scatter-guide-label", x: xFor(medianMiles) + 5, y: pad.top + 12 }, [document.createTextNode("median volume")]));
+  root.appendChild(svg("text", { class: "label scatter-guide-label", x: pad.left + 6, y: yFor(medianPace) - 6 }, [document.createTextNode("median pace")]));
+  root.appendChild(svg("text", { class: "label scatter-axis-title", x: pad.left + plotWidth / 2 - 44, y: height - 10 }, [document.createTextNode("WEEKLY MILES")]));
+  root.appendChild(svg("text", { class: "label scatter-axis-title", x: 16, y: pad.top + plotHeight / 2 + 28, transform: `rotate(-90 16 ${pad.top + plotHeight / 2 + 28})` }, [document.createTextNode("AVERAGE PACE")]));
+  buckets.forEach((bucket, index) => {
+    const x = xFor(bucket.distanceMiles);
+    const y = yFor(bucket.averagePace);
     const r = 4 + Math.min(bucket.runs, 8);
     const color = bucket.averageHr >= 155 ? "#fc4c02" : bucket.averageHr >= 140 ? "#b77b15" : "#2867b2";
-    const dot = svg("circle", { class: "dot", cx: x, cy: y, r, style: `fill: ${color}` });
+    const dot = svg("circle", { class: `dot scatter-dot${index === buckets.length - 1 ? " scatter-latest" : ""}`, cx: x, cy: y, r, style: `fill: ${color}` });
     attachTooltip(dot, `${bucket.label} volume vs pace`, [
       { label: "Miles", value: `${bucket.distanceMiles.toFixed(1)} mi` },
       { label: "Avg pace", value: formatPace(bucket.averagePace) },
       { label: "Runs", value: bucket.runs },
       { label: "Avg run", value: `${(bucket.distanceMiles / bucket.runs).toFixed(1)} mi` },
       { label: "Avg HR", value: bucket.averageHr ? `${Math.round(bucket.averageHr)} bpm` : "-" },
-      { label: "Bubble size", value: `${bucket.runs} runs` }
+      { label: "Bubble size", value: `${bucket.runs} runs` },
+      { label: "Position", value: index === buckets.length - 1 ? "Latest block" : "Training block" }
     ]);
     root.appendChild(dot);
+    if (index === buckets.length - 1) {
+      root.appendChild(svg("text", { class: "label scatter-latest-label", x: x + r + 6, y: y - r - 4 }, [document.createTextNode("latest")]));
+    }
   });
-  root.appendChild(svg("text", { class: "label", x: width - 112, y: height - 10 }, [document.createTextNode("more miles")]));
-  root.appendChild(svg("text", { class: "label", x: 4, y: 24 }, [document.createTextNode("faster")]));
+  root.appendChild(svg("text", { class: "label chart-legend", x: width - 330, y: 18 }, [document.createTextNode("blue: lower HR  gold: mid HR  orange: higher HR  size: runs")]));
   els.scatterChart.replaceChildren(root);
 }
 
@@ -2026,23 +2048,49 @@ function renderStructure() {
     renderEmpty(els.structureChart);
     return;
   }
-  const width = 560;
-  const height = 270;
-  const pad = { top: 18, right: 20, bottom: 34, left: 42 };
-  const root = svg("svg", { viewBox: `0 0 ${width} ${height}`, role: "img", "aria-label": "Week structure" });
+  const width = 800;
+  const height = 310;
+  const pad = { top: 18, right: 28, bottom: 34, left: 72 };
+  const plotWidth = width - pad.left - pad.right;
+  const step = plotWidth / state.buckets.length;
+  const xFor = (index) => pad.left + index * step + step / 2;
+  const runTop = 34;
+  const runBottom = 102;
+  const shareTop = 134;
+  const shareBottom = 196;
+  const elevationTop = 226;
+  const elevationBottom = 274;
+  const root = svg("svg", { viewBox: `0 0 ${width} ${height}`, role: "img", "aria-label": "Week structure showing run count, long-run share, and elevation" });
   const maxRuns = Math.max(...state.buckets.map((b) => b.runs), 1);
-  const step = (width - pad.left - pad.right) / state.buckets.length;
+  const maxElevation = Math.max(...state.buckets.map((b) => b.elevationFeet), 1);
+  const runY = (value) => runBottom - (value / maxRuns) * (runBottom - runTop);
+  const shareY = (value) => shareBottom - value * (shareBottom - shareTop);
+  const elevationY = (value) => elevationBottom - (value / maxElevation) * (elevationBottom - elevationTop);
+  const drawLane = (top, bottom, labels) => {
+    root.appendChild(svg("line", { class: "axis structure-grid", x1: pad.left, y1: top, x2: width - pad.right, y2: top }));
+    root.appendChild(svg("line", { class: "axis structure-grid", x1: pad.left, y1: bottom, x2: width - pad.right, y2: bottom }));
+    root.appendChild(svg("text", { class: "label structure-axis-label", x: 10, y: top + 4 }, [document.createTextNode(labels[0])]));
+    root.appendChild(svg("text", { class: "label structure-axis-label", x: 10, y: bottom + 4 }, [document.createTextNode(labels[1])]));
+  };
+  drawLane(runTop, runBottom, [`${maxRuns} runs`, "0"]);
+  drawLane(shareTop, shareBottom, ["100%", "0%"]);
+  drawLane(elevationTop, elevationBottom, [`${Math.round(maxElevation).toLocaleString()} ft`, "0"]);
+  root.appendChild(svg("text", { class: "label structure-lane-label", x: pad.left, y: 22 }, [document.createTextNode("RUN COUNT")]));
+  root.appendChild(svg("text", { class: "label structure-lane-label", x: pad.left, y: 122 }, [document.createTextNode("LONG-RUN SHARE")]));
+  root.appendChild(svg("text", { class: "label structure-lane-label", x: pad.left, y: 214 }, [document.createTextNode("ELEVATION")]));
+  const sharePoints = [];
+  const elevationPoints = [];
   state.buckets.forEach((bucket, index) => {
-    const x = pad.left + index * step + step * 0.25;
-    const runHeight = (bucket.runs / maxRuns) * (height - pad.top - pad.bottom);
-    const longHeight = bucket.longRunShare * (height - pad.top - pad.bottom);
+    const x = xFor(index);
+    const barWidth = Math.max(6, Math.min(28, step * 0.55));
+    const runHeight = runBottom - runY(bucket.runs);
     const runBar = svg("rect", {
-      class: "bar",
-      x,
-      y: height - pad.bottom - runHeight,
-      width: Math.max(3, step * 0.25),
+      class: "structure-run-bar",
+      x: x - barWidth / 2,
+      y: runY(bucket.runs),
+      width: barWidth,
       height: Math.max(1, runHeight),
-      rx: 2
+      rx: 4
     });
     attachTooltip(runBar, `${bucket.label} run count`, [
       { label: "Runs", value: bucket.runs },
@@ -2051,24 +2099,40 @@ function renderStructure() {
       { label: "Avg pace", value: formatPace(bucket.averagePace) }
     ]);
     root.appendChild(runBar);
-    const longRunBar = svg("rect", {
-      class: "bar secondary",
-      x: x + Math.max(4, step * 0.3),
-      y: height - pad.bottom - longHeight,
-      width: Math.max(3, step * 0.25),
-      height: Math.max(1, longHeight),
-      rx: 2
+    const shareDot = svg("circle", {
+      class: "structure-share-dot",
+      cx: x,
+      cy: shareY(bucket.longRunShare),
+      r: 5
     });
-    attachTooltip(longRunBar, `${bucket.label} long-run share`, [
+    attachTooltip(shareDot, `${bucket.label} long-run share`, [
       { label: "Long run", value: `${bucket.longRunMiles.toFixed(1)} mi` },
       { label: "Share", value: `${Math.round(bucket.longRunShare * 100)}%` },
       { label: "Week miles", value: `${bucket.distanceMiles.toFixed(1)} mi` },
       { label: "Elevation", value: `${Math.round(bucket.elevationFeet).toLocaleString()} ft` }
     ]);
-    root.appendChild(longRunBar);
+    root.appendChild(shareDot);
+    sharePoints.push(`${x},${shareY(bucket.longRunShare)}`);
+    const elevationDot = svg("circle", {
+      class: "structure-elevation-dot",
+      cx: x,
+      cy: elevationY(bucket.elevationFeet),
+      r: 4
+    });
+    attachTooltip(elevationDot, `${bucket.label} elevation`, [
+      { label: "Elevation", value: `${Math.round(bucket.elevationFeet).toLocaleString()} ft` },
+      { label: "Miles", value: `${bucket.distanceMiles.toFixed(1)} mi` },
+      { label: "Elevation density", value: `${Math.round(bucket.distanceMiles ? bucket.elevationFeet / bucket.distanceMiles : 0)} ft/mi` }
+    ]);
+    root.appendChild(elevationDot);
+    elevationPoints.push(`${x},${elevationY(bucket.elevationFeet)}`);
+    if (index % Math.max(1, Math.ceil(state.buckets.length / 8)) === 0 || index === state.buckets.length - 1) {
+      root.appendChild(svg("text", { class: "label structure-x-label", x: x - 18, y: height - 8 }, [document.createTextNode(bucket.label)]));
+    }
   });
-  root.appendChild(svg("line", { class: "axis", x1: pad.left, y1: height - pad.bottom, x2: width - pad.right, y2: height - pad.bottom }));
-  root.appendChild(svg("text", { class: "label", x: pad.left, y: height - 8 }, [document.createTextNode("teal: run count  gold: long run share")]));
+  root.appendChild(svg("polyline", { class: "structure-share-line", points: sharePoints.join(" ") }));
+  root.appendChild(svg("polyline", { class: "structure-elevation-line", points: elevationPoints.join(" ") }));
+  root.appendChild(svg("text", { class: "label chart-legend", x: width - 288, y: 18 }, [document.createTextNode("teal: runs  gold: long-run share  orange: elevation")]));
   els.structureChart.replaceChildren(root);
 }
 
@@ -2092,10 +2156,11 @@ function renderHeatmap() {
     dayMap.set(key, day);
   });
   const weeks = Math.max(1, Math.ceil((last - first) / (7 * 86400000)) + 1);
-  const width = Math.max(720, weeks * 16 + 70);
-  const height = 170;
-  const cell = 12;
-  const gap = 4;
+  const cell = weeks <= 12 ? 25 : weeks <= 26 ? 18 : 12;
+  const gap = cell >= 24 ? 6 : 4;
+  const left = 64;
+  const width = Math.max(360, left + weeks * (cell + gap) + 24);
+  const height = 7 * (cell + gap) + 46;
   const root = svg("svg", { viewBox: `0 0 ${width} ${height}`, role: "img", "aria-label": "Training calendar heatmap" });
   const maxMiles = Math.max(...[...dayMap.values()].map((day) => day.miles), 1);
   for (let week = 0; week < weeks; week += 1) {
@@ -2108,7 +2173,7 @@ function renderHeatmap() {
       const level = value === 0 ? 0 : Math.min(5, Math.ceil((value / maxMiles) * 5));
       const rect = svg("rect", {
         class: level ? `heat-${level}` : "heat-empty",
-        x: 52 + week * (cell + gap),
+        x: left + week * (cell + gap),
         y: 24 + day * (cell + gap),
         width: cell,
         height: cell,
@@ -2126,13 +2191,14 @@ function renderHeatmap() {
     if (week % Math.max(1, Math.ceil(weeks / 8)) === 0) {
       const labelDate = new Date(first);
       labelDate.setDate(first.getDate() + week * 7);
-      root.appendChild(svg("text", { class: "label", x: 52 + week * (cell + gap), y: 15 }, [document.createTextNode(labelDate.toLocaleDateString(undefined, { month: "short" }))]));
+      root.appendChild(svg("text", { class: "label", x: left + week * (cell + gap), y: 15 }, [document.createTextNode(labelDate.toLocaleDateString(undefined, { month: "short" }))]));
     }
   }
   ["Mon", "Wed", "Fri", "Sun"].forEach((label, index) => {
-    root.appendChild(svg("text", { class: "label", x: 14, y: 34 + index * 2 * (cell + gap) }, [document.createTextNode(label)]));
+    root.appendChild(svg("text", { class: "label", x: 10, y: 34 + index * 2 * (cell + gap) }, [document.createTextNode(label)]));
   });
-  els.heatmapSubtitle.textContent = `${state.filteredRuns.length} runs across ${weeks} weeks`;
+  const totalMiles = state.filteredRuns.reduce((sum, run) => sum + miles(run.distance), 0);
+  els.heatmapSubtitle.textContent = `${state.filteredRuns.length} runs / ${totalMiles.toFixed(0)} mi / ${weeks} weeks`;
   els.heatmapChart.replaceChildren(root);
 }
 
@@ -2152,7 +2218,8 @@ function renderDistanceMix() {
     bin.count += 1;
     bin.miles += distance;
   });
-  renderHorizontalBars(els.distanceMixChart, bins, "miles", (bin) => `${bin.miles.toFixed(1)} mi`, "#157f74");
+  const totalMiles = bins.reduce((sum, bin) => sum + bin.miles, 0);
+  renderHorizontalBars(els.distanceMixChart, bins, "miles", (bin) => `${bin.miles.toFixed(1)} mi / ${totalMiles ? Math.round((bin.miles / totalMiles) * 100) : 0}%`, "#157f74");
 }
 
 function renderRollingWorkload() {
@@ -2241,7 +2308,8 @@ function renderPaceZones() {
     bin.count += 1;
     bin.miles += miles(run.distance);
   });
-  renderHorizontalBars(els.paceZoneChart, bins, "count", (bin) => `${bin.count} runs`, "#2867b2");
+  const totalRuns = state.filteredRuns.length;
+  renderHorizontalBars(els.paceZoneChart, bins, "count", (bin) => `${bin.count} runs / ${totalRuns ? Math.round((bin.count / totalRuns) * 100) : 0}%`, "#2867b2");
 }
 
 function renderHorizontalBars(container, bins, valueKey, formatter, color) {
