@@ -7,7 +7,7 @@
     <title>Stride — Running intelligence</title>
     <link rel="stylesheet" href="/styles.css?v=theme-2">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
-    <link rel="stylesheet" href="/experience.css?v=workspace-10">
+    <link rel="stylesheet" href="/experience.css?v=workspace-14">
   </head>
   <body>
     <a class="skip-link" href="#overview">Skip to overview</a>
@@ -238,15 +238,32 @@
         <div class="section-intro">
           <div>
             <p>Pattern recognition</p>
-            <h2 id="analysisTitle">The work behind the work.</h2>
+            <h2 id="analysisTitle">Find the training shape.</h2>
           </div>
-          <span>Zoom out to see the structure. Zoom in to find the signal.</span>
+          <span>Start with the arc, then use the detail charts to explain the pattern.</span>
         </div>
         <div class="dashboard">
+          <div class="chart-panel training-arc-panel">
+            <div class="panel-heading">
+              <div>
+                <p class="panel-kicker">Block view</p>
+                <h2>Training arc</h2>
+              </div>
+              <span>See volume, pace, and long-run shape on one timeline.</span>
+            </div>
+            <div class="training-arc-key" aria-label="Training arc legend">
+              <span><i class="arc-key-volume" aria-hidden="true"></i>Weekly miles</span>
+              <span><i class="arc-key-pace" aria-hidden="true"></i>Average pace</span>
+              <span><i class="arc-key-share" aria-hidden="true"></i>Long-run share</span>
+              <span><i class="arc-key-baseline" aria-hidden="true"></i>Moving baseline</span>
+            </div>
+            <div id="trainingArcChart" class="chart training-arc-chart"></div>
+            <p id="trainingArcInsight" class="training-arc-insight" aria-live="polite"></p>
+          </div>
           <div class="chart-panel">
             <div class="panel-heading">
               <h2>Volume vs pace</h2>
-              <span>Bubble size is run count</span>
+              <span>Find weeks that got faster, heavier, or both.</span>
             </div>
             <div id="scatterChart" class="chart"></div>
           </div>
@@ -257,14 +274,14 @@
             </div>
             <div id="structureChart" class="chart"></div>
           </div>
-          <div class="chart-panel wide">
+          <div class="chart-panel wide-support">
             <div class="panel-heading">
               <h2>Training calendar</h2>
               <span id="heatmapSubtitle">Daily miles by week</span>
             </div>
             <div id="heatmapChart" class="chart compact-chart"></div>
           </div>
-          <div class="chart-panel wide">
+          <div class="chart-panel rolling-panel">
             <div class="panel-heading">
               <h2>Rolling workload</h2>
               <span>7-day volume vs 28-day baseline</span>
@@ -365,6 +382,6 @@
       </section>
     </div>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-    <script src="/script.js?v=workspace-14"></script>
+    <script src="/script.js?v=workspace-17"></script>
   </body>
 </html>

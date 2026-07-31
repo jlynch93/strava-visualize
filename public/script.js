@@ -74,6 +74,8 @@ const els = {
   mainChartTitle: document.querySelector("#mainChartTitle"),
   mainChartSubtitle: document.querySelector("#mainChartSubtitle"),
   mainChart: document.querySelector("#mainChart"),
+  trainingArcChart: document.querySelector("#trainingArcChart"),
+  trainingArcInsight: document.querySelector("#trainingArcInsight"),
   scatterChart: document.querySelector("#scatterChart"),
   structureChart: document.querySelector("#structureChart"),
   heatmapSubtitle: document.querySelector("#heatmapSubtitle"),
@@ -708,6 +710,7 @@ function render() {
   renderIntel(summary, previous, start, end);
   renderAiState();
   renderMainChart();
+  renderTrainingArc();
   renderScatter();
   renderStructure();
   renderHeatmap();
@@ -1827,6 +1830,157 @@ function movingAverage(values, windowSize) {
     const slice = values.slice(start, index + 1).filter((value) => Number.isFinite(value));
     return slice.reduce((sum, value) => sum + value, 0) / Math.max(slice.length, 1);
   });
+}
+
+function renderTrainingArc() {
+  const buckets = state.buckets.filter((bucket) => bucket.distanceMiles > 0);
+  if (!buckets.length) {
+    renderEmpty(els.trainingArcChart, "Load activities to see your training shape.");
+    els.trainingArcInsight.textContent = "Your selected window will appear here once activities are loaded.";
+    return;
+  }
+
+  const width = Math.max(900, Math.min(1320, buckets.length * 54));
+  const height = 430;
+  const pad = { top: 28, right: 28, bottom: 42, left: 76 };
+  const plotWidth = width - pad.left - pad.right;
+  const slot = plotWidth / buckets.length;
+  const xFor = (index) => pad.left + index * slot + slot / 2;
+  const volumeTop = 42;
+  const volumeBottom = 154;
+  const paceTop = 190;
+  const paceBottom = 302;
+  const shareTop = 342;
+  const shareBottom = 382;
+  const volumes = buckets.map((bucket) => bucket.distanceMiles);
+  const baselines = movingAverage(volumes, Math.min(4, Math.max(2, Math.ceil(volumes.length / 10))));
+  const maxVolume = Math.max(...volumes, ...baselines, 1);
+  const paceValues = buckets.map((bucket) => bucket.averagePace).filter((value) => value > 0);
+  const hasPace = paceValues.length > 0;
+  const minPace = hasPace ? Math.min(...paceValues) : 0;
+  const maxPace = hasPace ? Math.max(...paceValues) : 60;
+  const paceRange = Math.max(maxPace - minPace, 30);
+  const root = svg("svg", {
+    viewBox: `0 0 ${width} ${height}`,
+    role: "img",
+    "aria-label": "Training arc showing weekly mileage, average pace, and long-run share"
+  });
+
+  const volumeY = (value) => volumeBottom - (value / maxVolume) * (volumeBottom - volumeTop);
+  const paceY = (value) => hasPace && value > 0
+    ? paceTop + ((value - minPace) / paceRange) * (paceBottom - paceTop)
+    : paceTop + (paceBottom - paceTop) / 2;
+  const shareY = (value) => shareBottom - value * (shareBottom - shareTop);
+  const drawGrid = (top, bottom, labels) => {
+    labels.forEach((label, index) => {
+      const y = top + ((bottom - top) / Math.max(labels.length - 1, 1)) * index;
+      root.appendChild(svg("line", { class: "axis arc-grid", x1: pad.left, y1: y, x2: width - pad.right, y2: y }));
+      root.appendChild(svg("text", { class: "label arc-axis-label", x: 10, y: y + 4 }, [document.createTextNode(label)]));
+    });
+  };
+
+  drawGrid(volumeTop, volumeBottom, [`${Math.round(maxVolume)} mi`, `${Math.round(maxVolume / 2)} mi`, "0"]);
+  drawGrid(paceTop, paceBottom, [formatPace(minPace), formatPace(minPace + paceRange / 2), formatPace(minPace + paceRange)]);
+  root.appendChild(svg("line", { class: "axis arc-grid", x1: pad.left, y1: shareBottom, x2: width - pad.right, y2: shareBottom }));
+  root.appendChild(svg("text", { class: "label arc-axis-label", x: 10, y: shareTop + 4 }, [document.createTextNode("100%")]));
+  root.appendChild(svg("text", { class: "label arc-axis-label", x: 10, y: shareBottom + 4 }, [document.createTextNode("0%")]));
+  root.appendChild(svg("text", { class: "label arc-lane-label", x: pad.left, y: 18 }, [document.createTextNode("MILEAGE")]));
+  root.appendChild(svg("text", { class: "label arc-lane-label", x: pad.left, y: paceTop - 16 }, [document.createTextNode("PACE · FASTER IS HIGHER")]));
+  root.appendChild(svg("text", { class: "label arc-lane-label", x: pad.left, y: shareTop - 14 }, [document.createTextNode("LONG-RUN SHARE")]));
+
+  const latestX = xFor(buckets.length - 1);
+  root.appendChild(svg("line", { class: "arc-latest-marker", x1: latestX, y1: volumeTop - 16, x2: latestX, y2: shareBottom + 8 }));
+  root.appendChild(svg("text", { class: "label arc-latest-label", x: Math.min(latestX + 7, width - 88), y: volumeTop - 17 }, [document.createTextNode("latest")]));
+
+  buckets.forEach((bucket, index) => {
+    const x = xFor(index);
+    const barWidth = Math.max(6, Math.min(30, slot * 0.62));
+    const bar = svg("rect", {
+      class: "arc-volume-bar",
+      x: x - barWidth / 2,
+      y: volumeY(bucket.distanceMiles),
+      width: barWidth,
+      height: Math.max(2, volumeBottom - volumeY(bucket.distanceMiles)),
+      rx: 4
+    });
+    attachTooltip(bar, `${bucket.label} training arc`, [
+      { label: "Weekly miles", value: `${bucket.distanceMiles.toFixed(1)} mi` },
+      { label: "Average pace", value: formatPace(bucket.averagePace) },
+      { label: "Long-run share", value: `${Math.round(bucket.longRunShare * 100)}%` },
+      { label: "Longest run", value: `${bucket.longRunMiles.toFixed(1)} mi` },
+      { label: "Runs", value: bucket.runs }
+    ]);
+    bar.setAttribute("role", "button");
+    bar.addEventListener("click", () => focusTrainingArcBucket(bucket, bar, root));
+    bar.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      focusTrainingArcBucket(bucket, bar, root);
+    });
+    root.appendChild(bar);
+  });
+
+  const baselinePoints = baselines.map((value, index) => `${xFor(index)},${volumeY(value)}`).join(" ");
+  root.appendChild(svg("polyline", { class: "arc-baseline-line", points: baselinePoints }));
+
+  const pacePoints = buckets.map((bucket, index) => `${xFor(index)},${paceY(bucket.averagePace)}`).join(" ");
+  root.appendChild(svg("polyline", { class: "arc-pace-line", points: pacePoints }));
+  buckets.forEach((bucket, index) => {
+    const x = xFor(index);
+    const paceDot = svg("circle", { class: "arc-pace-dot", cx: x, cy: paceY(bucket.averagePace), r: 4.5 });
+    attachTooltip(paceDot, `${bucket.label} pace`, [
+      { label: "Average pace", value: formatPace(bucket.averagePace) },
+      { label: "Miles", value: `${bucket.distanceMiles.toFixed(1)} mi` },
+      { label: "Average HR", value: bucket.averageHr ? `${Math.round(bucket.averageHr)} bpm` : "-" }
+    ]);
+    paceDot.setAttribute("role", "button");
+    paceDot.addEventListener("click", () => focusTrainingArcBucket(bucket, paceDot, root));
+    root.appendChild(paceDot);
+
+    const shareDot = svg("circle", { class: "arc-share-dot", cx: x, cy: shareY(bucket.longRunShare), r: 5 });
+    attachTooltip(shareDot, `${bucket.label} long-run share`, [
+      { label: "Long-run share", value: `${Math.round(bucket.longRunShare * 100)}%` },
+      { label: "Longest run", value: `${bucket.longRunMiles.toFixed(1)} mi` }
+    ]);
+    shareDot.setAttribute("role", "button");
+    shareDot.addEventListener("click", () => focusTrainingArcBucket(bucket, shareDot, root));
+    root.appendChild(shareDot);
+
+    if (index % Math.max(1, Math.ceil(buckets.length / 8)) === 0 || index === buckets.length - 1) {
+      root.appendChild(svg("text", { class: "label arc-x-label", x: x - 18, y: height - 12 }, [document.createTextNode(bucket.label)]));
+    }
+  });
+
+  if (state.comparisonBuckets.length) {
+    const comparisonBuckets = state.comparisonBuckets.slice(-buckets.length);
+    const comparisonMax = Math.max(...comparisonBuckets.map((bucket) => bucket.distanceMiles), maxVolume, 1);
+    const comparisonPoints = comparisonBuckets.map((bucket, index) => {
+      const x = xFor(index + Math.max(0, buckets.length - comparisonBuckets.length));
+      return `${x},${volumeBottom - (bucket.distanceMiles / comparisonMax) * (volumeBottom - volumeTop)}`;
+    }).join(" ");
+    root.appendChild(svg("polyline", { class: "arc-comparison-line", points: comparisonPoints }));
+  }
+
+  els.trainingArcChart.replaceChildren(root);
+  updateTrainingArcInsight(buckets[buckets.length - 1]);
+}
+
+function focusTrainingArcBucket(bucket, target, root) {
+  root.querySelectorAll(".arc-selected").forEach((node) => node.classList.remove("arc-selected"));
+  target.classList.add("arc-selected");
+  updateTrainingArcInsight(bucket);
+}
+
+function updateTrainingArcInsight(bucket) {
+  if (!bucket) return;
+  const prior = state.buckets[state.buckets.indexOf(bucket) - 1];
+  const milesDelta = prior ? bucket.distanceMiles - prior.distanceMiles : 0;
+  const paceDelta = prior ? bucket.averagePace - prior.averagePace : 0;
+  const volumePhrase = prior ? `${milesDelta >= 0 ? "+" : ""}${milesDelta.toFixed(1)} mi vs ${prior.label}` : "first visible block";
+  const pacePhrase = prior && bucket.averagePace && paceDelta
+    ? `${formatPace(Math.abs(paceDelta)).replace("/mi", "")} ${paceDelta < 0 ? "quicker" : "slower"}`
+    : "pace baseline forming";
+  els.trainingArcInsight.textContent = `${bucket.label}: ${bucket.distanceMiles.toFixed(1)} mi · ${formatPace(bucket.averagePace)} average pace · ${Math.round(bucket.longRunShare * 100)}% long-run share · ${volumePhrase} · ${pacePhrase}. Click any mark to focus that block.`;
 }
 
 function renderScatter() {
