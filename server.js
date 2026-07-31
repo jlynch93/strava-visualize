@@ -113,6 +113,12 @@ function sendJson(res, status, payload) {
   res.end(JSON.stringify(payload));
 }
 
+function appError(message, status) {
+  const error = new Error(message);
+  error.status = status;
+  return error;
+}
+
 function sendRedirect(res, location, headers = {}) {
   res.writeHead(302, { Location: location, ...headers });
   res.end();
@@ -176,7 +182,9 @@ function requestJson(url, options = {}, body = null) {
           }
         }
         if (response.statusCode >= 400) {
-          reject(new Error(typeof parsed === "string" ? parsed : JSON.stringify(parsed)));
+          const error = new Error(typeof parsed === "string" ? parsed : JSON.stringify(parsed));
+          error.status = response.statusCode;
+          reject(error);
           return;
         }
         resolve(parsed);
@@ -1072,9 +1080,9 @@ async function exchangeToken(params) {
 
 async function getAccessToken() {
   const config = requireConfig();
-  if (config.error) throw new Error(config.error);
+  if (config.error) throw appError(config.error, 503);
   const token = readToken();
-  if (!token) throw new Error("Connect Strava first.");
+  if (!token) throw appError("Connect Strava first.", 401);
   const now = Math.floor(Date.now() / 1000);
   if (token.access_token && token.expires_at && token.expires_at - 60 > now) {
     return token.access_token;
@@ -1191,6 +1199,7 @@ async function handleApi(req, res) {
     const perPage = Number.isFinite(requestedPerPage) ? Math.max(1, Math.min(requestedPerPage, 200)) : 100;
     const maxPages = Number.isFinite(requestedPages) ? Math.max(1, Math.min(requestedPages, 12)) : 6;
     const activities = [];
+    let truncated = true;
     for (let page = 1; page <= maxPages; page += 1) {
       const params = new URLSearchParams({ page: String(page), per_page: String(perPage) });
       if (after) params.set("after", after);
@@ -1200,9 +1209,12 @@ async function handleApi(req, res) {
       });
       if (!Array.isArray(batch)) throw new Error("Strava returned an invalid activity list.");
       activities.push(...batch);
-      if (batch.length < perPage) break;
+      if (batch.length < perPage) {
+        truncated = false;
+        break;
+      }
     }
-    sendJson(res, 200, { activities });
+    sendJson(res, 200, { activities, truncated });
     return;
   }
 
@@ -1213,7 +1225,7 @@ async function handleApi(req, res) {
       headers: { Authorization: `Bearer ${accessToken}` }
     });
     if (!activity || typeof activity !== "object" || Array.isArray(activity)) {
-      throw new Error("Strava returned an invalid activity detail.");
+      throw appError("Strava returned an invalid activity detail.", 502);
     }
     sendJson(res, 200, { activity });
     return;

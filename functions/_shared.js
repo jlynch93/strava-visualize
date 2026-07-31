@@ -11,6 +11,12 @@ function json(payload, status = 200, headers = {}) {
   });
 }
 
+function appError(message, status) {
+  const error = new Error(message);
+  error.status = status;
+  return error;
+}
+
 function getConfig(env, request) {
   const url = new URL(request.url);
   const redirectUri = env.STRAVA_REDIRECT_URI || `${url.origin}/auth/callback`;
@@ -82,13 +88,13 @@ async function exchangeToken(params) {
 
 async function getAccessToken(env, request) {
   const config = getConfig(env, request);
-  if (config.error) throw new Error(config.error);
+  if (config.error) throw appError(config.error, 503);
   const cookies = parseCookies(request);
   const now = Math.floor(Date.now() / 1000);
   if (cookies.sv_access && Number(cookies.sv_expires || 0) - 60 > now) {
     return { accessToken: cookies.sv_access, setCookies: [] };
   }
-  if (!cookies.sv_refresh) throw new Error("Connect Strava first.");
+  if (!cookies.sv_refresh) throw appError("Connect Strava first.", 401);
   const refreshed = await exchangeToken({
     client_id: config.clientId,
     client_secret: config.clientSecret,
@@ -105,6 +111,7 @@ export {
   getAccessToken,
   getConfig,
   clearAuthCookies,
+  appError,
   json,
   oauthStateCookie,
   parseCookies,

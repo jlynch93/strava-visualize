@@ -12,6 +12,12 @@ npm start
 
 Open `http://localhost:4173`.
 
+Run the local regression checks with:
+
+```powershell
+npm test
+```
+
 ## Cloudflare Workers
 
 The app deploys as a Cloudflare Worker with static assets. Static files live in `public/`; Strava API routes are handled by `src/worker.js`.

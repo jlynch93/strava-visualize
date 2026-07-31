@@ -3,7 +3,13 @@ import { STRAVA_API, getAccessToken, json } from "../../_shared.js";
 export async function onRequestGet({ env, request, params }) {
   const activityId = String(params?.id || "");
   if (!/^\d+$/.test(activityId)) return json({ error: "A valid Strava activity ID is required." }, 400);
-  const { accessToken, setCookies } = await getAccessToken(env, request);
+  let auth;
+  try {
+    auth = await getAccessToken(env, request);
+  } catch (error) {
+    return json({ error: error.message || "Unable to authenticate with Strava." }, Number(error.status) || 500);
+  }
+  const { accessToken, setCookies } = auth;
   const response = await fetch(`${STRAVA_API}/activities/${activityId}`, {
     headers: { authorization: `Bearer ${accessToken}` },
     signal: AbortSignal.timeout(30_000)

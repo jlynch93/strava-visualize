@@ -18,6 +18,7 @@ const state = {
   runInsightAbort: null,
   runWeatherCache: new Map(),
   runWeatherAbort: null,
+  runRouteCache: new Map(),
   runRouteAbort: null,
   funWeatherAbort: null,
   funWeatherFingerprint: "",
@@ -30,6 +31,9 @@ const state = {
   activeRunId: "",
   activeRunFocus: "balanced",
   dataSource: "No data",
+  activityAbort: null,
+  activityRequestId: 0,
+  activityTruncated: false,
   activityVisible: 15
 };
 
@@ -303,6 +307,30 @@ function getRangeDates() {
     end = bounds.end;
   }
   return { start, end };
+}
+
+function getStravaFetchRange() {
+  const mode = els.rangeSelect.value;
+  if (mode === "all") return { start: null, end: null };
+  if (mode === "custom") {
+    const { start, end } = getRangeDates();
+    const comparison = comparisonWindow(start, end);
+    return {
+      start: comparison.start && comparison.start < start ? comparison.start : start,
+      end
+    };
+  }
+  const days = Number(mode) || 56;
+  const end = new Date();
+  end.setHours(23, 59, 59, 999);
+  const start = new Date(end);
+  start.setDate(start.getDate() - days);
+  start.setHours(0, 0, 0, 0);
+  const comparison = comparisonWindow(start, end);
+  return {
+    start: comparison.start && comparison.start < start ? comparison.start : start,
+    end
+  };
 }
 
 function resolvedBucketMode(start, end) {
@@ -1006,7 +1034,8 @@ function renderTrainingBrief(summary, previous, start, end) {
     ? `${start.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}–${end.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}`
     : "selected window";
   els.trainingBriefSummary.textContent = `${headline} You averaged ${summary.averageWeeklyMiles.toFixed(1)} miles and ${summary.averageRunsPerWeek.toFixed(1)} runs per week across the ${rangeText} view.`;
-  els.navWindowLabel.textContent = `${state.dataSource} · ${summary.runCount} runs · ${rangeText}`;
+  const historyNote = state.activityTruncated ? " · history capped" : "";
+  els.navWindowLabel.textContent = `${state.dataSource} · ${summary.runCount} runs · ${rangeText}${historyNote}`;
 
   const volumeDetail = weeklyDelta === null
     ? `${summary.averageWeeklyMiles.toFixed(1)} mi/wk in view`
@@ -1503,7 +1532,14 @@ function renderIntel(summary, previous, start, end) {
   const dateLabel = start && end
     ? `${start.toLocaleDateString()} - ${end.toLocaleDateString()}`
     : "Selected range";
-  els.intelSubtitle.textContent = `${dateLabel} · ${summary.runCount} runs · ${summary.activeDays} active days`;
+  const directLoadCoverage = state.filteredRuns.length
+    ? Math.round((state.filteredRuns.filter((run) => Number(run.suffer_score) > 0).length / state.filteredRuns.length) * 100)
+    : 0;
+  const heartRateCoverage = state.filteredRuns.length
+    ? Math.round((state.filteredRuns.filter((run) => Number(run.average_heartrate) > 0).length / state.filteredRuns.length) * 100)
+    : 0;
+  const historyNote = state.activityTruncated ? " · history capped at fetch limit" : "";
+  els.intelSubtitle.textContent = `${dateLabel} · ${summary.runCount} runs · ${summary.activeDays} active days · HR ${heartRateCoverage}% · direct load ${directLoadCoverage}%${historyNote}`;
   const rampClass = Math.abs(summary.rampRate) <= 12 ? "good" : summary.rampRate > 25 ? "warn" : "";
   const longShareClass = summary.longRunShare <= 0.35 ? "good" : "warn";
   const restClass = summary.longestRestGap <= 3 ? "good" : summary.longestRestGap >= 7 ? "warn" : "";
@@ -2367,10 +2403,26 @@ async function requestActivityRoute(run, signal) {
   return data.activity || null;
 }
 
+function applyActivityDetailRoute(run, detail) {
+  const detailMap = detail?.map || {};
+  if (Array.isArray(detail?.start_latlng)) run.start_latlng = detail.start_latlng;
+  if (Array.isArray(detail?.end_latlng)) run.end_latlng = detail.end_latlng;
+  run.map = { ...(run.map || {}) };
+  if (detailMap.polyline) run.map.polyline = detailMap.polyline;
+  if (detailMap.summary_polyline) run.map.summary_polyline = detailMap.summary_polyline;
+  if (Array.isArray(detail?.route_points) && detail.route_points.length) run.route_points = detail.route_points;
+}
+
 async function hydrateRunRoute(run) {
   const container = document.querySelector("#workoutMap");
   const activityId = String(run.id || "");
   if (hasDetailedRoute(run) || state.dataSource !== "Strava" || !state.stravaConnected || !/^\d+$/.test(activityId)) {
+    renderWorkoutMap(run);
+    return;
+  }
+  if (state.runRouteCache.has(activityId)) {
+    const cached = state.runRouteCache.get(activityId);
+    if (cached) applyActivityDetailRoute(run, cached);
     renderWorkoutMap(run);
     return;
   }
@@ -2381,12 +2433,8 @@ async function hydrateRunRoute(run) {
   try {
     const detail = await requestActivityRoute(run, controller.signal);
     if (state.activeRunId !== String(run.id) || els.workoutModal.hidden) return;
-    const detailMap = detail?.map || {};
-    if (Array.isArray(detail?.start_latlng)) run.start_latlng = detail.start_latlng;
-    if (Array.isArray(detail?.end_latlng)) run.end_latlng = detail.end_latlng;
-    run.map = { ...(run.map || {}) };
-    if (detailMap.polyline) run.map.polyline = detailMap.polyline;
-    if (detailMap.summary_polyline) run.map.summary_polyline = detailMap.summary_polyline;
+    state.runRouteCache.set(activityId, detail);
+    applyActivityDetailRoute(run, detail);
     renderWorkoutMap(run);
   } catch (error) {
     if (error.name === "AbortError" || state.activeRunId !== String(run.id) || els.workoutModal.hidden) return;
@@ -3322,24 +3370,43 @@ function exportCurrentView() {
 }
 
 async function fetchActivities() {
-  setStatus("Pulling activities from Strava...");
-  const { start, end } = getRangeDates();
-  const params = new URLSearchParams({ pages: "8", per_page: "100" });
-  if (start) {
-    const comparison = comparisonWindow(start, end);
-    const fetchStart = comparison.start && comparison.start < start ? comparison.start : start;
-    params.set("after", Math.floor(fetchStart.getTime() / 1000));
+  state.activityAbort?.abort();
+  const controller = new AbortController();
+  const requestId = ++state.activityRequestId;
+  state.activityAbort = controller;
+  let timedOut = false;
+  const timeoutId = window.setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, 45_000);
+  try {
+    setStatus("Pulling activities from Strava...");
+    const { start, end } = getStravaFetchRange();
+    const pages = els.rangeSelect.value === "all" ? "12" : "8";
+    const params = new URLSearchParams({ pages, per_page: "100" });
+    if (start) params.set("after", Math.floor(start.getTime() / 1000));
+    if (end) params.set("before", Math.floor(end.getTime() / 1000));
+    const response = await fetch(`/api/activities?${params}`, { signal: controller.signal });
+    const data = await readApiJson(response);
+    if (!response.ok) throw new Error(data.error || "Unable to fetch Strava activities.");
+    if (!Array.isArray(data.activities)) throw new Error("Strava returned no activity list.");
+    if (requestId !== state.activityRequestId) return;
+    state.rawActivities = data.activities;
+    state.dataSource = "Strava";
+    state.activityTruncated = Boolean(data.truncated);
+    state.runRouteCache.clear();
+    syncRangeInputs();
+    const historyNote = state.activityTruncated ? " History request reached its page limit; older runs may be missing." : "";
+    setStatus(`Loaded ${data.activities.length} activities from Strava.${historyNote}`);
+    render();
+  } catch (error) {
+    if (error.name === "AbortError" && !timedOut) return;
+    if (requestId !== state.activityRequestId) return;
+    throw new Error(timedOut ? "Strava activity request timed out. Try again." : error.message);
+  } finally {
+    window.clearTimeout(timeoutId);
+    if (state.activityAbort === controller) state.activityAbort = null;
   }
-  if (end) params.set("before", Math.floor(end.getTime() / 1000));
-  const response = await fetch(`/api/activities?${params}`, { signal: AbortSignal.timeout(45_000) });
-  const data = await readApiJson(response);
-  if (!response.ok) throw new Error(data.error || "Unable to fetch Strava activities.");
-  if (!Array.isArray(data.activities)) throw new Error("Strava returned no activity list.");
-  state.rawActivities = data.activities;
-  state.dataSource = "Strava";
-  syncRangeInputs();
-  setStatus(`Loaded ${data.activities.length} activities from Strava.`);
-  render();
 }
 
 async function readApiJson(response) {
@@ -3453,6 +3520,8 @@ async function importFile(file) {
   if (!activities.length) throw new Error("The file did not contain any activities.");
   state.rawActivities = activities;
   state.dataSource = "Import";
+  state.activityTruncated = false;
+  state.runRouteCache.clear();
   resetRunBrowser();
   syncRangeInputs();
   const runCount = state.rawActivities.filter((activity) => isRun(normalizeActivity(activity))).length;
@@ -3535,6 +3604,8 @@ els.disconnectButton.addEventListener("click", () => {
 els.demoButton.addEventListener("click", () => {
   state.rawActivities = makeDemoData();
   state.dataSource = "Demo";
+  state.activityTruncated = false;
+  state.runRouteCache.clear();
   resetRunBrowser();
   syncRangeInputs();
   setStatus("Loaded demo running history.");

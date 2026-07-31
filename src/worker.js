@@ -106,6 +106,12 @@ function parseCookies(request) {
   }, {});
 }
 
+function appError(message, status) {
+  const error = new Error(message);
+  error.status = status;
+  return error;
+}
+
 function cookie(name, value, maxAge) {
   return `${name}=${encodeURIComponent(value)}; Path=/; Max-Age=${maxAge}; HttpOnly; Secure; SameSite=Lax`;
 }
@@ -146,13 +152,13 @@ async function exchangeToken(params) {
 
 async function getAccessToken(env, request) {
   const config = getConfig(env, request);
-  if (config.error) throw new Error(config.error);
+  if (config.error) throw appError(config.error, 503);
   const cookies = parseCookies(request);
   const now = Math.floor(Date.now() / 1000);
   if (cookies.sv_access && Number(cookies.sv_expires || 0) - 60 > now) {
     return { accessToken: cookies.sv_access, setCookies: [] };
   }
-  if (!cookies.sv_refresh) throw new Error("Connect Strava first.");
+  if (!cookies.sv_refresh) throw appError("Connect Strava first.", 401);
   const refreshed = await exchangeToken({
     client_id: config.clientId,
     client_secret: config.clientSecret,
@@ -230,6 +236,7 @@ async function handleActivities(env, request) {
   const perPage = Number.isFinite(requestedPerPage) ? Math.max(1, Math.min(requestedPerPage, 200)) : 100;
   const maxPages = Number.isFinite(requestedPages) ? Math.max(1, Math.min(requestedPages, 12)) : 6;
   const activities = [];
+  let truncated = true;
   for (let page = 1; page <= maxPages; page += 1) {
     const params = new URLSearchParams({ page: String(page), per_page: String(perPage) });
     if (after) params.set("after", after);
@@ -242,11 +249,14 @@ async function handleActivities(env, request) {
     if (!response.ok) return json(batch, response.status);
     if (!Array.isArray(batch)) return json({ error: "Strava returned an invalid activity list." }, 502);
     activities.push(...batch);
-    if (batch.length < perPage) break;
+    if (batch.length < perPage) {
+      truncated = false;
+      break;
+    }
   }
   const headers = new Headers();
   setCookies.forEach((value) => headers.append("set-cookie", value));
-  return json({ activities }, 200, headers);
+  return json({ activities, truncated }, 200, headers);
 }
 
 async function handleActivityDetail(env, request, activityId) {
@@ -1119,7 +1129,7 @@ export default {
     try {
       return await handleRequest(request, env);
     } catch (error) {
-      return json({ error: error.message || "Unexpected server error." }, 500);
+      return json({ error: error.message || "Unexpected server error." }, Number(error.status) || 500);
     }
   }
 };
