@@ -11,7 +11,7 @@ const TOKEN_FILE = path.join(__dirname, ".strava-token.json");
 const STRAVA_API = "https://www.strava.com/api/v3";
 const STRAVA_OAUTH_TOKEN = "https://www.strava.com/oauth/token";
 const DEFAULT_OLLAMA_URL = "https://ollama.jeer.rest";
-const DEFAULT_OLLAMA_MODEL = "deepseek-r1:1.5b";
+const DEFAULT_OLLAMA_MODEL = "qwen3:1.7b";
 const WEATHER_HOURLY = [
   "temperature_2m",
   "apparent_temperature",

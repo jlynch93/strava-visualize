@@ -2777,7 +2777,7 @@ function renderRunInsightResult(result) {
     mixed: "Mixed workout",
     unknown: "Type not established"
   };
-  if (model) model.textContent = result.model || "deepseek-r1:1.5b";
+  if (model) model.textContent = result.model || "qwen3:1.7b";
   content.innerHTML = `
     <div class="workout-ai-result">
       <h4>${escapeHtml(insight.headline)}</h4>
@@ -2968,7 +2968,7 @@ function showWorkoutModal(runId, trigger = document.activeElement) {
             <p class="workout-ai-kicker"><span class="ai-status-dot" aria-hidden="true"></span> Ollama run read</p>
             <h3 id="workoutAiTitle">A second look at this effort.</h3>
           </div>
-          <span id="workoutAiModel">deepseek-r1:1.5b</span>
+          <span id="workoutAiModel">qwen3:1.7b</span>
         </div>
         <div class="workout-ai-focus" role="group" aria-label="Run analysis focus">
           <button type="button" data-action="run-focus" data-focus="balanced" aria-pressed="true">Overall</button>
