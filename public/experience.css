@@ -1815,6 +1815,12 @@ th {
     #e8ece7;
 }
 
+/* The app-wide SVG sizing rule must not collapse Leaflet's positioned overlay. */
+.workout-map .leaflet-overlay-pane svg {
+  width: auto;
+  height: auto;
+}
+
 .workout-map .leaflet-control-zoom {
   overflow: hidden;
   border: 0;

@@ -249,6 +249,22 @@ async function handleActivities(env, request) {
   return json({ activities }, 200, headers);
 }
 
+async function handleActivityDetail(env, request, activityId) {
+  const { accessToken, setCookies } = await getAccessToken(env, request);
+  const response = await fetch(`${STRAVA_API}/activities/${activityId}`, {
+    headers: { authorization: `Bearer ${accessToken}` },
+    signal: AbortSignal.timeout(30_000)
+  });
+  const activity = await response.json();
+  if (!response.ok) return json(activity, response.status);
+  if (!activity || typeof activity !== "object" || Array.isArray(activity)) {
+    return json({ error: "Strava returned an invalid activity detail." }, 502);
+  }
+  const headers = new Headers();
+  setCookies.forEach((value) => headers.append("set-cookie", value));
+  return json({ activity }, 200, headers);
+}
+
 function weatherRequest(url) {
   const latitude = Number(url.searchParams.get("lat"));
   const longitude = Number(url.searchParams.get("lng"));
@@ -1088,6 +1104,8 @@ async function handleRequest(request, env) {
   const url = new URL(request.url);
   if (url.pathname === "/api/status") return handleStatus(env, request);
   if (url.pathname === "/api/activities") return handleActivities(env, request);
+  const activityDetailMatch = url.pathname.match(/^\/api\/activities\/(\d+)$/);
+  if (activityDetailMatch) return handleActivityDetail(env, request, activityDetailMatch[1]);
   if (url.pathname === "/api/weather" && request.method === "GET") return handleWeather(request);
   if (url.pathname === "/api/insights" && request.method === "POST") return handleInsights(env, request);
   if (url.pathname === "/auth/login") return handleLogin(env, request);

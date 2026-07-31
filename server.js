@@ -1206,6 +1206,19 @@ async function handleApi(req, res) {
     return;
   }
 
+  const activityDetailMatch = url.pathname.match(/^\/api\/activities\/(\d+)$/);
+  if (activityDetailMatch) {
+    const accessToken = await getAccessToken();
+    const activity = await requestJson(`${STRAVA_API}/activities/${activityDetailMatch[1]}`, {
+      headers: { Authorization: `Bearer ${accessToken}` }
+    });
+    if (!activity || typeof activity !== "object" || Array.isArray(activity)) {
+      throw new Error("Strava returned an invalid activity detail.");
+    }
+    sendJson(res, 200, { activity });
+    return;
+  }
+
   if (url.pathname === "/api/weather" && req.method === "GET") {
     const weather = await getRunWeather(url);
     sendJson(res, 200, { weather });

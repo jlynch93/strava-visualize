@@ -18,6 +18,7 @@ const state = {
   runInsightAbort: null,
   runWeatherCache: new Map(),
   runWeatherAbort: null,
+  runRouteAbort: null,
   funWeatherAbort: null,
   funWeatherFingerprint: "",
   funWeatherActiveFingerprint: "",
@@ -262,6 +263,7 @@ function normalizeActivity(activity, index = 0) {
     end_latlng: point(readActivityField(activity, ["end_latlng"])),
     route_points: Array.isArray(activity.route_points) ? activity.route_points.map(point).filter((candidate) => candidate.length === 2) : [],
     map: {
+      polyline: String(activity.map?.polyline || activity.polyline || ""),
       summary_polyline: String(activity.map?.summary_polyline || activity.summary_polyline || "")
     }
   };
@@ -2123,9 +2125,14 @@ function decodePolyline(encoded, precision = 5) {
 
 function activityRoutePoints(run) {
   if (Array.isArray(run.route_points) && run.route_points.length) return run.route_points;
-  const decoded = decodePolyline(run.map?.summary_polyline || "");
+  const decoded = decodePolyline(run.map?.polyline || run.map?.summary_polyline || "");
   if (decoded.length) return decoded;
   return [run.start_latlng, run.end_latlng].filter((point) => Array.isArray(point) && point.length === 2);
+}
+
+function hasDetailedRoute(run) {
+  return (Array.isArray(run.route_points) && run.route_points.length > 2)
+    || Boolean(run.map?.polyline || run.map?.summary_polyline);
 }
 
 function weatherCodeLabel(code) {
@@ -2170,6 +2177,15 @@ function weatherFailureMarkup(message) {
     <div class="workout-weather-state">
       <span class="workout-weather-unavailable" aria-hidden="true">—</span>
       <div><strong>Conditions unavailable</strong><small>${escapeHtml(message)}</small></div>
+    </div>
+  `;
+}
+
+function routeLoadingMarkup() {
+  return `
+    <div class="workout-map-empty" aria-busy="true">
+      <strong>Loading route...</strong>
+      <span>Fetching the detailed activity path from Strava.</span>
     </div>
   `;
 }
@@ -2260,6 +2276,7 @@ function renderWorkoutMap(run) {
     openLink.hidden = false;
     openLink.href = `https://www.openstreetmap.org/?mlat=${encodeURIComponent(startLat)}&mlon=${encodeURIComponent(startLng)}#map=14/${encodeURIComponent(startLat)}/${encodeURIComponent(startLng)}`;
   }
+  container.replaceChildren();
   const map = window.L.map(container, {
     scrollWheelZoom: false,
     zoomControl: true,
@@ -2269,8 +2286,9 @@ function renderWorkoutMap(run) {
     maxZoom: 19,
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
   }).addTo(map);
+  let route = null;
   if (points.length > 1) {
-    const route = window.L.polyline(points, {
+    route = window.L.polyline(points, {
       color: "#fc4c02",
       weight: 5,
       opacity: 0.96,
@@ -2285,7 +2303,49 @@ function renderWorkoutMap(run) {
     map.setView(points[0], 14);
   }
   state.workoutMap = map;
-  requestAnimationFrame(() => map.invalidateSize());
+  const settleMap = () => {
+    if (state.workoutMap !== map || !document.body.contains(container)) return;
+    map.invalidateSize({ pan: false });
+    if (points.length > 1) map.fitBounds(route.getBounds(), { padding: [28, 28], maxZoom: 15 });
+  };
+  requestAnimationFrame(settleMap);
+  window.setTimeout(settleMap, 160);
+}
+
+async function requestActivityRoute(run, signal) {
+  const response = await fetch(`/api/activities/${encodeURIComponent(String(run.id))}`, { signal });
+  const data = await readApiJson(response);
+  if (!response.ok) throw new Error(data.error || "Unable to fetch the Strava route.");
+  return data.activity || null;
+}
+
+async function hydrateRunRoute(run) {
+  const container = document.querySelector("#workoutMap");
+  const activityId = String(run.id || "");
+  if (hasDetailedRoute(run) || state.dataSource !== "Strava" || !state.stravaConnected || !/^\d+$/.test(activityId)) {
+    renderWorkoutMap(run);
+    return;
+  }
+  state.runRouteAbort?.abort();
+  const controller = new AbortController();
+  state.runRouteAbort = controller;
+  if (container) container.innerHTML = routeLoadingMarkup();
+  try {
+    const detail = await requestActivityRoute(run, controller.signal);
+    if (state.activeRunId !== String(run.id) || els.workoutModal.hidden) return;
+    const detailMap = detail?.map || {};
+    if (Array.isArray(detail?.start_latlng)) run.start_latlng = detail.start_latlng;
+    if (Array.isArray(detail?.end_latlng)) run.end_latlng = detail.end_latlng;
+    run.map = { ...(run.map || {}) };
+    if (detailMap.polyline) run.map.polyline = detailMap.polyline;
+    if (detailMap.summary_polyline) run.map.summary_polyline = detailMap.summary_polyline;
+    renderWorkoutMap(run);
+  } catch (error) {
+    if (error.name === "AbortError" || state.activeRunId !== String(run.id) || els.workoutModal.hidden) return;
+    renderWorkoutMap(run);
+  } finally {
+    if (state.runRouteAbort === controller) state.runRouteAbort = null;
+  }
 }
 
 function percentileRank(values, value, higherIsBetter = true) {
@@ -3034,7 +3094,7 @@ function showWorkoutModal(runId, trigger = document.activeElement) {
   document.body.classList.add("modal-open");
   els.workoutModal.querySelector(".workout-modal").scrollTop = 0;
   els.workoutModalClose.focus();
-  requestAnimationFrame(() => renderWorkoutMap(run));
+  requestAnimationFrame(() => hydrateRunRoute(run));
   hydrateRunWeather(digest).finally(() => {
     if (state.activeRunId === String(run.id) && !els.workoutModal.hidden) {
       requestRunInsight(buildWorkoutDigest(run));
@@ -3047,6 +3107,8 @@ function closeWorkoutModal() {
   state.runInsightAbort = null;
   state.runWeatherAbort?.abort();
   state.runWeatherAbort = null;
+  state.runRouteAbort?.abort();
+  state.runRouteAbort = null;
   state.workoutMap?.remove();
   state.workoutMap = null;
   state.activeRunInsightKey = "";
