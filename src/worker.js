@@ -2,7 +2,7 @@ const STRAVA_API = "https://www.strava.com/api/v3";
 const STRAVA_AUTHORIZE = "https://www.strava.com/oauth/authorize";
 const STRAVA_TOKEN = "https://www.strava.com/oauth/token";
 const DEFAULT_OLLAMA_URL = "https://ollama.jeer.rest";
-const DEFAULT_OLLAMA_MODEL = "qwen3:1.7b";
+const DEFAULT_OLLAMA_MODEL = "qwen3.5:0.8b";
 const WEATHER_HOURLY = [
   "temperature_2m",
   "apparent_temperature",

@@ -1982,7 +1982,7 @@ th {
   color: #95a0a1;
 }
 
-.modal-backdrop {
+.workout-modal::backdrop {
   background: rgba(4, 8, 9, 0.72);
 }
 
@@ -3588,6 +3588,553 @@ th {
 
 @media (prefers-reduced-motion: reduce) {
   .topbar::before {
+    animation: none;
+  }
+}
+
+/* Run Review: a focused workout workspace rather than one continuous detail dump. */
+.workout-modal {
+  --run-review-toolbar-height: 64px;
+  overscroll-behavior: contain;
+  border-color: rgba(255, 255, 255, 0.18);
+  background: #f8f7f2;
+}
+
+.workout-modal-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 6;
+  display: flex;
+  height: var(--run-review-toolbar-height);
+  align-items: center;
+  justify-content: flex-end;
+  padding: 10px 14px;
+  box-sizing: border-box;
+  background: #0e1719;
+}
+
+.workout-modal-toolbar .modal-close {
+  position: static;
+  top: auto;
+  right: auto;
+  float: none;
+  margin: 0;
+}
+
+.modal-close {
+  width: 44px;
+  min-height: 44px;
+  border-color: rgba(255, 255, 255, 0.22);
+  border-radius: 12px;
+  background: rgba(7, 15, 16, 0.82);
+}
+
+.modal-close:focus-visible,
+.workout-section-nav button:focus-visible,
+.workout-ai-focus button:focus-visible,
+.workout-run-nav button:focus-visible,
+.workout-environment-heading a:focus-visible,
+.run-review-signals summary:focus-visible {
+  outline: 3px solid #f7b087;
+  outline-offset: 3px;
+}
+
+.run-review-header {
+  min-height: 206px;
+  padding: 34px 42px 28px;
+}
+
+.run-review-header .workout-header-meta {
+  margin-top: 12px;
+}
+
+.workout-section-nav {
+  position: sticky;
+  top: var(--run-review-toolbar-height);
+  z-index: 5;
+  display: flex;
+  gap: 3px;
+  overflow-x: auto;
+  padding: 10px 76px 10px 42px;
+  border-bottom: 1px solid #dce1dc;
+  background: rgba(248, 247, 242, 0.96);
+  box-shadow: 0 10px 18px rgba(16, 23, 25, 0.04);
+  scroll-padding-right: 76px;
+  scrollbar-width: none;
+}
+
+.workout-section-nav::-webkit-scrollbar {
+  display: none;
+}
+
+.workout-section-nav button {
+  min-height: 44px;
+  flex: 0 0 auto;
+  padding: 0 15px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: #647173;
+  font: inherit;
+  font-size: 0.73rem;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.workout-section-nav button[aria-selected="true"] {
+  border-color: rgba(252, 76, 2, 0.18);
+  background: #fff1ea;
+  color: #b33b0a;
+}
+
+.run-review-body {
+  padding-top: 30px;
+}
+
+.workout-panel[hidden] {
+  display: none;
+}
+
+.run-review-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(290px, 0.9fr);
+  gap: 16px;
+}
+
+.run-review-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid #dce1dc;
+  border-radius: 16px;
+  background: #dce1dc;
+}
+
+.run-review-metrics article {
+  min-width: 0;
+  min-height: 132px;
+  padding: 18px;
+  background: #ffffff;
+}
+
+.run-review-metrics span,
+.run-review-metrics strong,
+.run-review-metrics small {
+  display: block;
+}
+
+.run-review-metrics span,
+.run-review-timeline span,
+.run-review-story > span,
+.run-review-panel-heading span {
+  color: #778183;
+  font-size: 0.61rem;
+  font-weight: 850;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.run-review-metrics strong {
+  margin-top: 13px;
+  color: #111b1d;
+  font-size: clamp(1.35rem, 2.4vw, 2rem);
+  line-height: 1;
+  letter-spacing: -0.05em;
+}
+
+.run-review-metrics small {
+  margin-top: 9px;
+  color: #758183;
+  font-size: 0.7rem;
+  line-height: 1.42;
+}
+
+.run-review-story {
+  min-height: 100%;
+  padding: 22px;
+  border: 1px solid rgba(252, 76, 2, 0.24);
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at 100% 0, rgba(252, 76, 2, 0.15), transparent 17rem),
+    #fff7f2;
+}
+
+.run-review-story > span {
+  color: #bd4210;
+}
+
+.run-review-story h3 {
+  max-width: 420px;
+  margin: 12px 0 0;
+  color: #20292a;
+  font-size: clamp(1.35rem, 2vw, 1.85rem);
+  line-height: 1.1;
+  letter-spacing: -0.045em;
+}
+
+.run-review-story p {
+  max-width: 480px;
+  margin: 12px 0 0;
+  color: #66544d;
+  font-size: 0.84rem;
+  line-height: 1.56;
+}
+
+.run-review-story-score {
+  display: grid;
+  gap: 7px;
+  margin-top: 20px;
+}
+
+.run-review-story-score::before {
+  width: 100%;
+  height: 5px;
+  border-radius: 99px;
+  background: linear-gradient(90deg, var(--orange) 0 var(--score, 0%), #eadfd8 var(--score, 0%) 100%);
+  content: "";
+}
+
+.run-review-story-score span {
+  color: #8b675b;
+  font-size: 0.68rem;
+}
+
+.run-review-timeline {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px;
+  margin-top: 16px;
+  overflow: hidden;
+  border: 1px solid #dce1dc;
+  border-radius: 15px;
+  background: #dce1dc;
+}
+
+.run-review-timeline article {
+  position: relative;
+  min-height: 108px;
+  padding: 17px;
+  background: #ffffff;
+}
+
+.run-review-timeline article.is-current {
+  background: #f5fbf8;
+}
+
+.run-review-timeline article.is-current::before {
+  position: absolute;
+  top: 0;
+  right: 16px;
+  left: 16px;
+  height: 3px;
+  border-radius: 0 0 99px 99px;
+  background: var(--teal);
+  content: "";
+}
+
+.run-review-timeline strong,
+.run-review-timeline small {
+  display: block;
+}
+
+.run-review-timeline strong {
+  margin-top: 14px;
+  color: #1c2729;
+  font-size: 1.1rem;
+  line-height: 1.08;
+  letter-spacing: -0.035em;
+}
+
+.run-review-timeline small {
+  margin-top: 8px;
+  color: #758183;
+  font-size: 0.7rem;
+  line-height: 1.42;
+}
+
+.workout-ai {
+  margin-top: 18px;
+}
+
+.workout-ai-focus button {
+  min-height: 44px;
+}
+
+.run-review-panel-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 20px;
+}
+
+.run-review-panel-heading h3 {
+  margin: 8px 0 0;
+  color: #111b1d;
+  font-size: clamp(1.7rem, 3vw, 2.6rem);
+  line-height: 1.03;
+  letter-spacing: -0.055em;
+}
+
+.run-review-panel-heading > p {
+  max-width: 310px;
+  margin: 0;
+  color: #6d797a;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  text-align: right;
+}
+
+.workout-compare {
+  padding: 18px;
+  overflow: visible;
+  border-radius: 16px;
+}
+
+.workout-compare-intro {
+  margin: 0 0 14px;
+  color: #6f7b7d;
+  font-size: 0.74rem;
+  line-height: 1.45;
+}
+
+.workout-compare-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.workout-compare-card {
+  min-width: 0;
+  padding: 15px;
+  border: 1px solid #e0e5e0;
+  border-radius: 12px;
+  background: #fbfcf9;
+}
+
+.workout-compare-card.is-limited {
+  background: #f5f6f3;
+}
+
+.workout-compare-card-heading {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.workout-compare-card-heading > span {
+  color: #536062;
+  font-size: 0.75rem;
+  font-weight: 850;
+}
+
+.workout-compare-card-heading > strong {
+  max-width: 130px;
+  color: var(--teal);
+  font-size: 0.7rem;
+  line-height: 1.3;
+  text-align: right;
+}
+
+.workout-compare-card.is-limited .workout-compare-card-heading > strong {
+  color: #879092;
+}
+
+.workout-compare-card dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 16px 0 0;
+}
+
+.workout-compare-card dl div {
+  min-width: 0;
+}
+
+.workout-compare-card dt,
+.workout-compare-card dd {
+  margin: 0;
+}
+
+.workout-compare-card dt {
+  color: #859091;
+  font-size: 0.56rem;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.workout-compare-card dd {
+  margin-top: 6px;
+  color: #253133;
+  font-size: 0.82rem;
+  font-weight: 800;
+  line-height: 1.3;
+}
+
+.run-review-effort {
+  margin-top: 28px;
+}
+
+.run-review-detail-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(300px, 0.9fr);
+  gap: 26px;
+}
+
+.run-review-detail-grid .workout-section {
+  margin-top: 0;
+}
+
+.run-review-signals {
+  margin-top: 26px;
+  border-top: 1px solid #dce1dc;
+  border-bottom: 1px solid #dce1dc;
+}
+
+.run-review-signals summary {
+  display: flex;
+  min-height: 54px;
+  align-items: center;
+  color: #263234;
+  font-size: 0.82rem;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.run-review-signals[open] summary {
+  color: #bb410d;
+}
+
+.run-review-signals .workout-signals {
+  padding-bottom: 14px;
+}
+
+@media (max-width: 900px) {
+  .run-review-hero,
+  .run-review-detail-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .run-review-story {
+    min-height: 0;
+  }
+}
+
+@media (max-width: 760px) {
+  .workout-modal {
+    --run-review-toolbar-height: 58px;
+  }
+
+  .workout-modal-toolbar {
+    padding: 7px 10px;
+  }
+
+  .run-review-header {
+    min-height: 0;
+    padding: 26px 20px 24px;
+  }
+
+  .run-review-header h2 {
+    font-size: clamp(1.9rem, 9vw, 2.6rem);
+  }
+
+  .run-review-header .workout-run-nav {
+    margin-right: 0;
+  }
+
+  .workout-section-nav {
+    gap: 4px;
+    padding: 8px 72px 8px 14px;
+    scroll-padding-right: 72px;
+  }
+
+  .workout-section-nav button {
+    min-height: 44px;
+    padding: 0 13px;
+    font-size: 0.68rem;
+  }
+
+  .run-review-body {
+    padding: 20px 18px max(30px, env(safe-area-inset-bottom));
+  }
+
+  .run-review-metrics article {
+    min-height: 112px;
+    padding: 15px;
+  }
+
+  .run-review-metrics strong {
+    font-size: clamp(1.25rem, 7vw, 1.7rem);
+  }
+
+  .run-review-metrics small {
+    font-size: 0.64rem;
+  }
+
+  .run-review-story {
+    padding: 19px;
+  }
+
+  .run-review-timeline {
+    grid-template-columns: 1fr;
+  }
+
+  .run-review-timeline article {
+    min-height: 0;
+  }
+
+  .run-review-panel-heading {
+    display: grid;
+    gap: 10px;
+  }
+
+  .run-review-panel-heading > p {
+    max-width: none;
+    text-align: left;
+  }
+
+  .workout-compare {
+    padding: 14px;
+  }
+
+  .workout-compare-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .workout-compare-card {
+    padding: 14px;
+  }
+
+  .workout-compare-card-heading > strong {
+    max-width: 150px;
+  }
+
+  .workout-environment {
+    margin-top: 0;
+  }
+
+  .workout-map {
+    height: min(62vw, 270px);
+    min-height: 220px;
+  }
+}
+
+@media (max-width: 390px) {
+  .workout-section-nav {
+    padding-left: 12px;
+  }
+
+  .workout-section-nav button {
+    padding: 0 12px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workout-ai-pulse,
+  .workout-weather-pulse {
     animation: none;
   }
 }

@@ -908,25 +908,18 @@ body.modal-open {
   overflow: hidden;
 }
 
-.modal-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 60;
-  display: grid;
-  place-items: center;
-  padding: 22px;
+.workout-modal::backdrop {
   background: rgba(14, 22, 24, 0.62);
   backdrop-filter: blur(8px);
 }
 
-.modal-backdrop[hidden] {
-  display: none;
-}
-
 .workout-modal {
-  position: relative;
-  width: min(1180px, 100%);
-  max-height: min(860px, calc(100vh - 44px));
+  position: fixed;
+  inset: 22px;
+  width: min(1180px, calc(100% - 44px));
+  max-height: min(860px, calc(100dvh - 44px));
+  margin: auto;
+  padding: 0;
   overflow: auto;
   border: 1px solid rgba(255, 255, 255, 0.25);
   border-radius: 16px;
@@ -1436,14 +1429,13 @@ body.modal-open {
     text-overflow: ellipsis;
   }
 
-  .modal-backdrop {
-    align-items: end;
-    padding: 0;
-  }
-
   .workout-modal {
+    inset: auto 0 0;
     width: 100%;
+    max-width: none;
     max-height: calc(100dvh - max(8px, env(safe-area-inset-top)));
+    margin: 0;
+    box-sizing: border-box;
     border-width: 1px 0 0;
     border-radius: 20px 20px 0 0;
   }

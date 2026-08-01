@@ -1,7 +1,7 @@
 import { json } from "../_shared.js";
 
 const DEFAULT_OLLAMA_URL = "https://ollama.jeer.rest";
-const DEFAULT_OLLAMA_MODEL = "qwen3:1.7b";
+const DEFAULT_OLLAMA_MODEL = "qwen3.5:0.8b";
 const INSIGHT_SCHEMA = {
   type: "object",
   properties: {

@@ -5,9 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#0b1112">
     <title>Stride — Running intelligence</title>
-    <link rel="stylesheet" href="/styles.css?v=theme-2">
+    <link rel="stylesheet" href="/styles.css?v=theme-3">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
-    <link rel="stylesheet" href="/experience.css?v=workspace-16">
+    <link rel="stylesheet" href="/experience.css?v=workspace-17">
   </head>
   <body>
     <a class="skip-link" href="#overview">Skip to overview</a>
@@ -221,7 +221,7 @@
             <div id="aiPromptChips" class="ai-prompt-chips" aria-label="Suggested questions"></div>
             <button id="aiAnalyzeButton" class="ai-action" type="button" disabled>Ask Ollama</button>
           </div>
-          <p class="ai-model-note">Ollama · <span id="aiModelName">qwen3:1.7b</span> · compact context · runs only when you ask</p>
+          <p class="ai-model-note">Ollama · <span id="aiModelName">qwen3.5:0.8b</span> · compact context · runs only when you ask</p>
         </div>
         <div id="aiInsightContent" class="ai-insight-content" aria-live="polite">
           <div class="ai-empty">
@@ -389,13 +389,13 @@
       </footer>
     </main>
     <div id="chartTooltip" class="chart-tooltip" role="status" aria-live="polite"></div>
-    <div id="workoutModal" class="modal-backdrop" hidden>
-      <section class="workout-modal" role="dialog" aria-modal="true" aria-labelledby="workoutModalTitle" aria-describedby="workoutModalMeta">
+    <dialog id="workoutModal" class="workout-modal" aria-labelledby="workoutModalTitle" aria-describedby="workoutModalMeta">
+      <div class="workout-modal-toolbar">
         <button id="workoutModalClose" class="modal-close" type="button" aria-label="Close workout details">&times;</button>
-        <div id="workoutModalContent"></div>
-      </section>
-    </div>
+      </div>
+      <div id="workoutModalContent"></div>
+    </dialog>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-    <script src="/script.js?v=workspace-19"></script>
+    <script src="/script.js?v=workspace-20"></script>
   </body>
 </html>

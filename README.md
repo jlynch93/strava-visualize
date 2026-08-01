@@ -29,7 +29,7 @@ STRAVA_CLIENT_ID
 STRAVA_CLIENT_SECRET
 STRAVA_REDIRECT_URI=https://your-domain.example/auth/callback
 OLLAMA_BASE_URL=https://ollama.jeer.rest
-OLLAMA_MODEL=qwen3:1.7b
+OLLAMA_MODEL=qwen3.5:0.8b
 ```
 
 The dashboard metrics and SVG charts are calculated in the app. Ollama guides
@@ -53,7 +53,7 @@ view link. Use `Disconnect` to clear the local token or hosted session cookies.
 OAuth callbacks use a short-lived state cookie to prevent a login response from
 being attached to the wrong browser session.
 
-`qwen3:1.7b` is the default workout-analysis model. The request keeps
+`qwen3.5:0.8b` is the default workout-analysis model. The request keeps
 reasoning hidden and asks for concise schema-valid JSON so the UI receives only
 the final training read.
 
