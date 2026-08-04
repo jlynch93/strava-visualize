@@ -3,207 +3,142 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="theme-color" content="#0b1112">
-    <title>Stride — Running intelligence</title>
-    <link rel="stylesheet" href="/styles.css?v=theme-3">
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
-    <link rel="stylesheet" href="/experience.css?v=workspace-17">
+    <meta name="theme-color" content="#070a12">
+    <title>Stride Lab — Run Intelligence</title>
+    <link rel="stylesheet" href="/styles.css?v=night-1">
   </head>
   <body>
-    <a class="skip-link" href="#overview">Skip to overview</a>
-    <main id="mainContent" class="app">
+    <div class="ambient ambient-one" aria-hidden="true"></div>
+    <div class="ambient ambient-two" aria-hidden="true"></div>
+    <main class="app">
       <section class="topbar" aria-label="Dashboard header">
         <div class="brand-lockup">
           <span class="brand-mark" aria-hidden="true"></span>
-          <div class="hero-copy">
-            <p class="eyebrow"><span>Stride / run intelligence</span><span>Private by design</span></p>
-            <h1>Run deeper.<span>Train smarter.</span></h1>
-            <p class="topbar-copy">Turn the miles you already ran into a clearer picture of what is working, what is changing, and where to go next.</p>
-            <div class="hero-tags" aria-label="Dashboard capabilities">
-              <span>Volume</span>
-              <span>Load</span>
-              <span>Pace</span>
-              <span>Recovery</span>
-            </div>
+          <div class="brand-copy">
+            <p class="eyebrow">Stride / Lab <span>Run intelligence</span></p>
+            <h1>Training, <em>illuminated.</em></h1>
+            <p class="topbar-copy">A sharper read on the work you have done — and the momentum you are building next.</p>
           </div>
         </div>
-        <div class="actions">
-          <p class="actions-label"><span>Start your read</span><strong>Choose a data source</strong></p>
-          <button id="connectButton" class="primary" type="button">Connect Strava</button>
-          <button id="disconnectButton" type="button" hidden>Disconnect</button>
-          <label class="file-button" title="Import a Strava JSON or CSV export" aria-label="Import a Strava JSON or CSV export">
-            Import file
-            <input id="fileInput" type="file" accept=".json,.csv,text/csv,application/json">
-          </label>
-          <button id="demoButton" type="button">Demo data</button>
+        <div class="topbar-side">
+          <div class="live-indicator"><span class="live-dot" aria-hidden="true"></span><span id="heroStatus">Ready for training data</span></div>
+          <div class="actions">
+            <button id="connectButton" class="primary">Connect Strava</button>
+            <label class="file-button">
+              <span>Import JSON/CSV</span>
+              <input id="fileInput" type="file" accept=".json,.csv,text/csv,application/json">
+            </label>
+            <button id="demoButton" class="ghost-action">Demo data</button>
+          </div>
+        </div>
+        <div class="hero-orbit" aria-hidden="true">
+          <span></span><i></i><b></b>
         </div>
       </section>
 
       <section class="toolbar" aria-label="Time and metric filters">
         <div class="toolbar-title">
-          <span>Analysis window</span>
-          <strong>Shape the view</strong>
-          <small id="rangeSummary">Latest 8 weeks · compared with previous period</small>
-        </div>
-        <div class="toolbar-workspace">
-          <div class="range-presets" role="group" aria-label="Quick analysis range">
-            <button type="button" data-range="28">4W</button>
-            <button type="button" data-range="56" aria-pressed="true">8W</button>
-            <button type="button" data-range="84">12W</button>
-            <button type="button" data-range="180">6M</button>
-            <button type="button" data-range="365">1Y</button>
-            <button type="button" data-range="all">All</button>
-            <button id="customRangeToggle" class="range-custom-toggle" type="button" aria-expanded="false" aria-controls="customRangePanel">Custom</button>
-          </div>
-          <input id="rangeSelect" type="hidden" value="56">
-          <div id="customRangePanel" class="custom-range-panel" hidden>
-            <div class="control">
-              <label for="startDate">Start</label>
-              <input id="startDate" type="date">
-            </div>
-            <span aria-hidden="true">→</span>
-            <div class="control">
-              <label for="endDate">End</label>
-              <input id="endDate" type="date">
-            </div>
-          </div>
-          <div class="toolbar-secondary">
-            <div class="control comparison-control">
-              <label for="comparisonSelect">Compare with</label>
-              <select id="comparisonSelect">
-                <option value="previous" selected>Previous period</option>
-                <option value="year">Same period last year</option>
-                <option value="off">No comparison</option>
-              </select>
-            </div>
-            <div class="control">
-              <label for="bucketSelect">Group by</label>
-              <select id="bucketSelect">
-                <option value="auto" selected>Auto</option>
-                <option value="week">Week</option>
-                <option value="month">Month</option>
-              </select>
-            </div>
-            <div class="control metric-control">
-              <label for="metricSelect">Main chart</label>
-              <select id="metricSelect">
-                <option value="distance" selected>Mileage</option>
-                <option value="runs">Run count</option>
-                <option value="avgRun">Average run</option>
-                <option value="longRun">Long run</option>
-                <option value="pace">Pace</option>
-                <option value="elevation">Elevation</option>
-                <option value="elevationDensity">Elevation density</option>
-                <option value="heartrate">Heart rate</option>
-                <option value="load">Training load</option>
-                <option value="loadPerMile">Load per mile</option>
-                <option value="efficiency">Aerobic efficiency</option>
-              </select>
-            </div>
-            <button id="copyViewButton" class="copy-view-button" type="button" title="Copy a link to this view">Copy view</button>
-            <button id="exportViewButton" class="copy-view-button" type="button" title="Download the selected runs as CSV" disabled>Export CSV</button>
+          <span class="section-index" aria-hidden="true">01</span>
+          <div>
+            <span>Analysis window</span>
+            <strong>Shape the signal</strong>
           </div>
         </div>
+        <div class="toolbar-controls">
+          <div class="control">
+            <label for="rangeSelect">Range</label>
+            <select id="rangeSelect">
+              <option value="90">Last 90 days</option>
+              <option value="180">Last 6 months</option>
+              <option value="365" selected>Last year</option>
+              <option value="730">Last 2 years</option>
+              <option value="all">All time</option>
+              <option value="custom">Custom</option>
+            </select>
+          </div>
+          <div class="control">
+            <label for="startDate">Start</label>
+            <input id="startDate" type="date">
+          </div>
+          <div class="control">
+            <label for="endDate">Finish</label>
+            <input id="endDate" type="date">
+          </div>
+          <div class="control">
+            <label for="bucketSelect">Group by</label>
+            <select id="bucketSelect">
+              <option value="week" selected>Week</option>
+              <option value="month">Month</option>
+            </select>
+          </div>
+          <div class="control metric-control">
+            <label for="metricSelect">Main signal</label>
+            <select id="metricSelect">
+              <option value="distance" selected>Mileage</option>
+              <option value="runs">Run count</option>
+              <option value="avgRun">Average run</option>
+              <option value="longRun">Long run</option>
+              <option value="pace">Pace</option>
+              <option value="elevation">Elevation</option>
+              <option value="elevationDensity">Elevation density</option>
+              <option value="heartrate">Heart rate</option>
+              <option value="load">Training load</option>
+              <option value="loadPerMile">Load per mile</option>
+              <option value="efficiency">Aerobic efficiency</option>
+            </select>
+          </div>
+        </div>
+        <p class="toolbar-note">Live filters · instant read</p>
       </section>
-
-      <nav class="section-nav" aria-label="Dashboard sections">
-        <div class="section-nav-links">
-          <a href="#overview" data-section-link="overview" aria-current="true">Overview</a>
-          <a href="#coach" data-section-link="coach">Coach</a>
-          <a href="#patterns" data-section-link="patterns">Patterns</a>
-          <a href="#runs" data-section-link="runs">Runs</a>
-        </div>
-        <span id="navWindowLabel">No running data loaded</span>
-      </nav>
 
       <section id="status" class="status" role="status"></section>
 
-      <section id="overview" class="kpis" aria-label="Runner trend summary">
-        <article>
+      <section class="kpis" aria-label="Runner trend summary">
+        <article class="kpi-card kpi-featured">
           <span>Total distance</span>
           <strong id="totalDistance">-</strong>
           <small id="totalDistanceDelta"></small>
         </article>
-        <article>
+        <article class="kpi-card">
           <span>Average pace</span>
           <strong id="averagePace">-</strong>
           <small id="averagePaceDelta"></small>
         </article>
-        <article>
+        <article class="kpi-card">
           <span>Long run</span>
           <strong id="longRun">-</strong>
           <small id="longRunDelta"></small>
         </article>
-        <article>
+        <article class="kpi-card">
           <span>Consistency</span>
           <strong id="consistency">-</strong>
           <small id="consistencyDelta"></small>
         </article>
-        <article>
+        <article class="kpi-card">
           <span>Avg HR</span>
           <strong id="averageHr">-</strong>
           <small id="averageHrDelta"></small>
         </article>
       </section>
 
-      <section class="training-brief" aria-labelledby="trainingBriefTitle">
-        <div class="training-brief-copy">
-          <p class="panel-kicker">At a glance</p>
-          <h2 id="trainingBriefTitle">What is shaping this block.</h2>
-          <p id="trainingBriefSummary">Load running data to build your training brief.</p>
-          <a class="brief-link" href="#coach">Take this to Ollama <span aria-hidden="true">↘</span></a>
-        </div>
-        <div id="trainingBriefSignals" class="training-brief-signals" aria-live="polite"></div>
-      </section>
-
-      <section class="fun-stats" aria-labelledby="funStatsTitle">
-        <div class="fun-stats-intro">
+      <section class="runner-intel data-panel" aria-label="Runner intelligence">
+        <div class="panel-heading panel-heading-rich">
           <div>
-            <p>Fun math</p>
-            <h2 id="funStatsTitle">Your running, in oddly useful units.</h2>
+            <p class="panel-kicker">02 / Performance telemetry</p>
+            <h2>Training pulse</h2>
           </div>
-          <span id="funStatsSubtitle">These numbers follow the selected analysis window.</span>
+          <span id="intelSubtitle">Training signals for the selected window</span>
         </div>
-        <div id="funStatsGrid" class="fun-stats-grid" aria-live="polite"></div>
+        <div id="intelGrid" class="intel-grid"></div>
       </section>
 
-      <section class="chart-panel feature-chart" aria-labelledby="mainChartTitle">
-        <div class="panel-heading">
-          <div>
-            <p class="panel-kicker">The headline</p>
-            <h2 id="mainChartTitle">Mileage trend</h2>
-          </div>
-          <span id="mainChartSubtitle"></span>
-        </div>
-        <div class="metric-switcher" aria-label="Quick chart metric">
-          <button type="button" data-metric="distance" aria-pressed="true">Volume</button>
-          <button type="button" data-metric="pace" aria-pressed="false">Pace</button>
-          <button type="button" data-metric="load" aria-pressed="false">Load</button>
-          <button type="button" data-metric="heartrate" aria-pressed="false">Heart rate</button>
-        </div>
-        <div id="mainChart" class="chart"></div>
-      </section>
-
-      <section id="coach" class="ai-insights" aria-labelledby="aiInsightsTitle">
+      <section class="ai-insights" aria-labelledby="aiInsightsTitle">
         <div class="ai-insights-intro">
+          <div class="ai-glow" aria-hidden="true"></div>
           <div>
-            <p class="ai-kicker"><span class="ai-status-dot" aria-hidden="true"></span> Ollama training read</p>
-            <h2 id="aiInsightsTitle">Ask the work behind your training.</h2>
-            <p>Ollama interprets a compact snapshot only when you ask. It receives app-calculated training metrics and sourced run-start weather when available.</p>
-            <div class="ai-boundary" aria-label="How Ollama is used">
-              <div>
-                <span>Calculated by Stride</span>
-                <strong>Metrics &amp; charts</strong>
-              </div>
-              <div>
-                <span>Sourced by Open-Meteo</span>
-                <strong>Run conditions</strong>
-              </div>
-              <div>
-                <span>Guided by Ollama</span>
-                <strong>Analysis priorities</strong>
-              </div>
-            </div>
+            <p class="ai-kicker"><span class="ai-status-dot" aria-hidden="true"></span> Local model insight</p>
+            <h2 id="aiInsightsTitle">Find the pattern hiding in the effort.</h2>
+            <p>A compact training summary goes to your Ollama model. Route coordinates and the full Strava response stay out of the prompt.</p>
           </div>
           <div class="ai-controls">
             <label for="aiFocus">Insight focus</label>
@@ -212,16 +147,10 @@
               <option value="progression">Fitness progression</option>
               <option value="recovery">Recovery &amp; load</option>
               <option value="consistency">Consistency</option>
-              <option value="durability">Long-run durability</option>
-              <option value="efficiency">Pace &amp; efficiency</option>
-              <option value="weather">Weather context</option>
             </select>
-            <label for="aiQuestion">Your question <span>(optional)</span></label>
-            <textarea id="aiQuestion" rows="3" maxlength="280" placeholder="What changed most over the last eight weeks?"></textarea>
-            <div id="aiPromptChips" class="ai-prompt-chips" aria-label="Suggested questions"></div>
-            <button id="aiAnalyzeButton" class="ai-action" type="button" disabled>Ask Ollama</button>
+            <button id="aiAnalyzeButton" class="ai-action" type="button" disabled>Analyze selected window</button>
           </div>
-          <p class="ai-model-note">Ollama · <span id="aiModelName">qwen3.5:0.8b</span> · compact context · runs only when you ask</p>
+          <p class="ai-model-note">Ollama · qwen3:0.6b · compact context · on-demand analysis</p>
         </div>
         <div id="aiInsightContent" class="ai-insight-content" aria-live="polite">
           <div class="ai-empty">
@@ -234,135 +163,86 @@
         </div>
       </section>
 
-      <section id="patterns" class="analysis-section" aria-labelledby="analysisTitle">
-        <div class="section-intro">
-          <div>
-            <p>Pattern recognition</p>
-            <h2 id="analysisTitle">Find the training shape.</h2>
+      <section class="dashboard" aria-label="Training visuals">
+        <div class="chart-panel chart-panel-featured wide">
+          <div class="panel-heading panel-heading-rich">
+            <div>
+              <p class="panel-kicker">03 / The build</p>
+              <h2 id="mainChartTitle">Mileage trend</h2>
+            </div>
+            <span id="mainChartSubtitle"></span>
           </div>
-          <span>Start with the arc, then use the detail charts to explain the pattern.</span>
+          <div id="mainChart" class="chart"></div>
         </div>
-        <div class="dashboard">
-          <div class="chart-panel training-arc-panel">
-            <div class="panel-heading">
-              <div>
-                <p class="panel-kicker">Block view</p>
-                <h2>Training arc</h2>
-              </div>
-              <span>See volume, pace, and long-run shape on one timeline.</span>
-            </div>
-            <div class="training-arc-key" aria-label="Training arc legend">
-              <span><i class="arc-key-volume" aria-hidden="true"></i>Weekly miles</span>
-              <span><i class="arc-key-pace" aria-hidden="true"></i>Average pace</span>
-              <span><i class="arc-key-share" aria-hidden="true"></i>Long-run share</span>
-              <span><i class="arc-key-baseline" aria-hidden="true"></i>Moving baseline</span>
-            </div>
-            <div id="trainingArcChart" class="chart training-arc-chart"></div>
-            <div id="trainingArcInsight" class="training-arc-insight" aria-live="polite">
-              <span class="training-arc-insight-kicker">Block read</span>
-              <strong id="trainingArcInsightTitle">Latest block</strong>
-              <span id="trainingArcInsightText">Load activities to see what this block is doing.</span>
-            </div>
-          </div>
-          <div class="chart-panel">
-            <div class="panel-heading">
+        <div class="chart-panel">
+          <div class="panel-heading panel-heading-rich">
+            <div>
+              <p class="panel-kicker">Pace under load</p>
               <h2>Volume vs pace</h2>
-              <span>Find weeks that got faster, heavier, or both.</span>
             </div>
-            <div id="scatterChart" class="chart"></div>
+            <span>Bubble size is run count</span>
           </div>
-          <div class="chart-panel">
-            <div class="panel-heading">
+          <div id="scatterChart" class="chart"></div>
+        </div>
+        <div class="chart-panel">
+          <div class="panel-heading panel-heading-rich">
+            <div>
+              <p class="panel-kicker">The weekly shape</p>
               <h2>Week structure</h2>
-              <span>Runs, long run share, elevation</span>
             </div>
-            <div id="structureChart" class="chart"></div>
+            <span>Runs, long run share, elevation</span>
           </div>
-          <div class="chart-panel wide-support">
-            <div class="panel-heading">
+          <div id="structureChart" class="chart"></div>
+        </div>
+        <div class="chart-panel wide">
+          <div class="panel-heading panel-heading-rich">
+            <div>
+              <p class="panel-kicker">Consistency map</p>
               <h2>Training calendar</h2>
-              <span id="heatmapSubtitle">Daily miles by week</span>
             </div>
-            <div id="heatmapChart" class="chart compact-chart"></div>
-            <div class="heatmap-key" aria-label="Training calendar intensity legend">
-              <span>Less</span>
-              <i class="heat-empty" aria-hidden="true"></i>
-              <i class="heat-1" aria-hidden="true"></i>
-              <i class="heat-2" aria-hidden="true"></i>
-              <i class="heat-3" aria-hidden="true"></i>
-              <i class="heat-4" aria-hidden="true"></i>
-              <i class="heat-5" aria-hidden="true"></i>
-              <span>More miles</span>
-            </div>
+            <span id="heatmapSubtitle">Daily miles by week</span>
           </div>
-          <div class="chart-panel rolling-panel">
-            <div class="panel-heading">
+          <div id="heatmapChart" class="chart compact-chart"></div>
+        </div>
+        <div class="chart-panel wide">
+          <div class="panel-heading panel-heading-rich">
+            <div>
+              <p class="panel-kicker">Load management</p>
               <h2>Rolling workload</h2>
-              <span>7-day volume vs 28-day baseline</span>
             </div>
-            <div id="rollingChart" class="chart compact-chart"></div>
+            <span>7-day volume vs 28-day baseline</span>
           </div>
-          <div class="chart-panel">
-            <div class="panel-heading">
+          <div id="rollingChart" class="chart compact-chart"></div>
+        </div>
+        <div class="chart-panel">
+          <div class="panel-heading panel-heading-rich">
+            <div>
+              <p class="panel-kicker">Distance profile</p>
               <h2>Run distance mix</h2>
-              <span>Miles by run distance</span>
             </div>
-            <div id="distanceMixChart" class="chart"></div>
+            <span>Easy volume vs long-run load</span>
           </div>
-          <div class="chart-panel">
-            <div class="panel-heading">
-              <h2>Pace bands</h2>
-              <span>How often each pace shows up</span>
+          <div id="distanceMixChart" class="chart"></div>
+        </div>
+        <div class="chart-panel">
+          <div class="panel-heading panel-heading-rich">
+            <div>
+              <p class="panel-kicker">Speed distribution</p>
+              <h2>Pace zones</h2>
             </div>
-            <div id="paceZoneChart" class="chart"></div>
+            <span>Distribution of run paces</span>
           </div>
+          <div id="paceZoneChart" class="chart"></div>
         </div>
       </section>
 
-      <section class="runner-intel" aria-label="Runner intelligence">
-        <div class="panel-heading">
+      <section class="table-section data-panel">
+        <div class="panel-heading panel-heading-rich">
           <div>
-            <p class="panel-kicker">Signal check</p>
-            <h2>Training pulse</h2>
-          </div>
-          <span id="intelSubtitle">Training signals for the selected window</span>
-        </div>
-        <div id="intelGrid" class="intel-grid"></div>
-      </section>
-
-      <section id="runs" class="table-section">
-        <div class="panel-heading">
-          <div>
-            <p class="panel-kicker">The details</p>
+            <p class="panel-kicker">04 / Activity ledger</p>
             <h2>Recent runs</h2>
           </div>
           <span id="activityCount">No activities loaded</span>
-        </div>
-        <div class="run-browser" aria-label="Filter and sort runs">
-          <label class="run-search" for="activitySearch">
-            <span>Find a run</span>
-            <input id="activitySearch" type="search" placeholder="Search name or date" autocomplete="off">
-          </label>
-          <label for="activityType">
-            <span>Run type</span>
-            <select id="activityType">
-              <option value="all">All types</option>
-              <option value="Quality">Quality</option>
-              <option value="Long">Long</option>
-              <option value="Easy">Easy</option>
-              <option value="Steady">Steady</option>
-              <option value="Race">Race</option>
-            </select>
-          </label>
-          <label for="activitySort">
-            <span>Sort by</span>
-            <select id="activitySort">
-              <option value="newest">Newest first</option>
-              <option value="distance">Longest first</option>
-              <option value="pace">Fastest first</option>
-              <option value="load">Highest load</option>
-            </select>
-          </label>
         </div>
         <div class="table-wrap">
           <table>
@@ -381,21 +261,20 @@
             <tbody id="activityRows"></tbody>
           </table>
         </div>
-        <button id="loadMoreRuns" class="load-more-runs" type="button" hidden>Show more runs</button>
       </section>
-      <footer class="site-footer">
-        <p><span class="footer-mark" aria-hidden="true"></span> Stride intelligence</p>
-        <span>Your training stays yours.</span>
+
+      <footer class="app-footer">
+        <span>Stride / Lab</span>
+        <p>Signal over noise. One mile at a time.</p>
       </footer>
     </main>
     <div id="chartTooltip" class="chart-tooltip" role="status" aria-live="polite"></div>
-    <dialog id="workoutModal" class="workout-modal" aria-labelledby="workoutModalTitle" aria-describedby="workoutModalMeta">
-      <div class="workout-modal-toolbar">
+    <div id="workoutModal" class="modal-backdrop" hidden>
+      <section class="workout-modal" role="dialog" aria-modal="true" aria-labelledby="workoutModalTitle" aria-describedby="workoutModalMeta">
         <button id="workoutModalClose" class="modal-close" type="button" aria-label="Close workout details">&times;</button>
-      </div>
-      <div id="workoutModalContent"></div>
-    </dialog>
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-    <script src="/script.js?v=workspace-20"></script>
+        <div id="workoutModalContent"></div>
+      </section>
+    </div>
+    <script src="/script.js?v=night-1"></script>
   </body>
 </html>
