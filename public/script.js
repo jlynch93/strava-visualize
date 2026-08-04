@@ -7,6 +7,13 @@ const state = {
   stravaConnected: false,
   stravaError: "",
   modalTrigger: null,
+  modalSession: 0,
+  activeRunId: "",
+  activeRunWeather: null,
+  runWeatherCache: new Map(),
+  runWeatherPending: new Map(),
+  runDigestCache: new Map(),
+  runDigestAbort: null,
   insightFingerprint: "",
   renderedInsightFingerprint: ""
 };
@@ -125,7 +132,22 @@ function isRun(activity) {
   return sport.includes("run");
 }
 
+function normalizeLatLng(value) {
+  const pair = Array.isArray(value)
+    ? value
+    : typeof value === "string"
+      ? value.replace(/[\[\]()]/g, "").split(",")
+      : [];
+  const latitude = Number(pair[0]);
+  const longitude = Number(pair[1]);
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+  if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) return null;
+  return [latitude, longitude];
+}
+
 function normalizeActivity(activity) {
+  const startLatLng = normalizeLatLng(activity.start_latlng || activity["Start LatLng"])
+    || normalizeLatLng([activity.start_latitude ?? activity["Start Latitude"], activity.start_longitude ?? activity["Start Longitude"]]);
   return {
     id: activity.id || crypto.randomUUID(),
     name: activity.name || "Untitled run",
@@ -147,7 +169,8 @@ function normalizeActivity(activity) {
     pr_count: Number(activity.pr_count || activity.PRs || 0),
     workout_type: Number(activity.workout_type || activity["Workout Type"] || 0),
     device_name: activity.device_name || activity["Device Name"] || "",
-    description: activity.description || activity.Description || ""
+    description: activity.description || activity.Description || "",
+    start_latlng: startLatLng
   };
 }
 
@@ -1369,6 +1392,321 @@ function workoutNarrative(digest) {
   };
 }
 
+function runStartTimeDetails(run) {
+  const raw = String(run.start_date_local || run.start_date || "");
+  const matched = raw.match(/^(\d{4}-\d{2}-\d{2})T(\d{2}):/);
+  if (matched) return { date: matched[1], hour: Number(matched[2]) };
+  const date = parseActivityDate(run);
+  if (Number.isNaN(date.valueOf())) return null;
+  return { date: localDateValue(date), hour: date.getHours() };
+}
+
+function weatherRequestDetails(run) {
+  const coordinates = normalizeLatLng(run.start_latlng);
+  const time = runStartTimeDetails(run);
+  if (!coordinates || !time) return null;
+  const [latitude, longitude] = coordinates;
+  return {
+    lat: Math.round(latitude * 100) / 100,
+    lng: Math.round(longitude * 100) / 100,
+    date: time.date,
+    hour: Math.max(0, Math.min(23, Math.round(time.hour)))
+  };
+}
+
+function runWeatherKey(run) {
+  const details = weatherRequestDetails(run);
+  if (!details) return "";
+  return `${details.lat.toFixed(2)},${details.lng.toFixed(2)}:${details.date}:${details.hour}`;
+}
+
+function weatherCodeLabel(code) {
+  const value = Number(code);
+  if (value === 0) return "Clear";
+  if ([1, 2].includes(value)) return "Partly cloudy";
+  if (value === 3) return "Overcast";
+  if ([45, 48].includes(value)) return "Fog";
+  if ([51, 53, 55, 56, 57].includes(value)) return "Drizzle";
+  if ([61, 63, 65, 66, 67, 80, 81, 82].includes(value)) return "Rain";
+  if ([71, 73, 75, 77, 85, 86].includes(value)) return "Snow";
+  if ([95, 96, 99].includes(value)) return "Thunderstorm";
+  return "Mixed conditions";
+}
+
+function weatherGlyph(code, isDay) {
+  const value = Number(code);
+  if ([61, 63, 65, 66, 67, 80, 81, 82, 95, 96, 99].includes(value)) return "☂";
+  if ([71, 73, 75, 77, 85, 86].includes(value)) return "❄";
+  if ([45, 48].includes(value)) return "≈";
+  if (value === 0) return isDay === false ? "☾" : "☀";
+  return "☁";
+}
+
+function weatherNumber(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : null;
+}
+
+function formatWeatherTemperature(value) {
+  const numeric = weatherNumber(value);
+  return numeric === null ? "—" : `${Math.round(numeric)}°`;
+}
+
+function formatWeatherValue(value, unit) {
+  const numeric = weatherNumber(value);
+  if (numeric === null) return "—";
+  return unit === "%" ? `${Math.round(numeric)}%` : `${Math.round(numeric)} ${unit}`;
+}
+
+function weatherLoadingMarkup() {
+  return `
+    <div class="workout-weather-state">
+      <span class="weather-pulse" aria-hidden="true"></span>
+      <div><strong>Matching run-start conditions</strong><small>Using the activity’s rounded start location and local start hour.</small></div>
+    </div>
+  `;
+}
+
+function weatherUnavailableMarkup(message) {
+  return `
+    <div class="workout-weather-state unavailable">
+      <span class="weather-unavailable-mark" aria-hidden="true">—</span>
+      <div><strong>Conditions unavailable</strong><small>${escapeHtml(message)}</small></div>
+    </div>
+  `;
+}
+
+function weatherMarkup(weather) {
+  const condition = weather.condition || weatherCodeLabel(weather.weatherCode);
+  const source = [weather.source || "Open-Meteo", weather.sourceType].filter(Boolean).join(" · ");
+  const precipitation = weatherNumber(weather.precipitationInches);
+  return `
+    <div class="workout-weather-hero">
+      <span class="weather-glyph" aria-hidden="true">${weatherGlyph(weather.weatherCode, weather.isDay)}</span>
+      <div>
+        <span>Conditions at the start</span>
+        <strong>${formatWeatherTemperature(weather.temperatureF)}</strong>
+        <p>${escapeHtml(condition)} · feels like ${formatWeatherTemperature(weather.feelsLikeF)}</p>
+      </div>
+    </div>
+    <div class="workout-weather-grid">
+      <article><span>Humidity</span><strong>${formatWeatherValue(weather.humidityPercent, "%")}</strong></article>
+      <article><span>Wind</span><strong>${formatWeatherValue(weather.windSpeedMph, "mph")}</strong></article>
+      <article><span>Gusts</span><strong>${formatWeatherValue(weather.windGustMph, "mph")}</strong></article>
+      <article><span>Precipitation</span><strong>${precipitation === null ? "—" : `${precipitation.toFixed(2)} in`}</strong></article>
+    </div>
+    <p class="workout-weather-source">${escapeHtml(source)} modeled context. It uses a rounded run-start location; it is not a watch measurement.</p>
+  `;
+}
+
+function setWorkoutWeatherContent(markup) {
+  const container = els.workoutModalContent.querySelector("#workoutWeatherContent");
+  if (container) container.innerHTML = markup;
+}
+
+async function requestRunWeather(run) {
+  const details = weatherRequestDetails(run);
+  const key = runWeatherKey(run);
+  if (!details || !key) return null;
+  if (state.runWeatherCache.has(key)) return state.runWeatherCache.get(key);
+  if (state.runWeatherPending.has(key)) return state.runWeatherPending.get(key);
+  const query = new URLSearchParams({
+    lat: String(details.lat),
+    lng: String(details.lng),
+    date: details.date,
+    hour: String(details.hour)
+  });
+  const pending = (async () => {
+    const response = await fetch(`/api/weather?${query}`);
+    const data = await readApiJson(response);
+    if (!response.ok) throw new Error(data.error || "Weather service did not return conditions for this run.");
+    if (!data.weather) throw new Error("Weather service returned no conditions for this run.");
+    const weather = { ...data.weather, condition: weatherCodeLabel(data.weather.weatherCode) };
+    state.runWeatherCache.set(key, weather);
+    return weather;
+  })();
+  state.runWeatherPending.set(key, pending);
+  try {
+    return await pending;
+  } finally {
+    state.runWeatherPending.delete(key);
+  }
+}
+
+async function hydrateWorkoutWeather(run, session) {
+  const details = weatherRequestDetails(run);
+  if (!details) {
+    setWorkoutWeatherContent(weatherUnavailableMarkup("This activity does not include a usable start location and local start time."));
+    return null;
+  }
+  setWorkoutWeatherContent(weatherLoadingMarkup());
+  try {
+    const weather = await requestRunWeather(run);
+    if (session !== state.modalSession || state.activeRunId !== String(run.id)) return null;
+    state.activeRunWeather = weather;
+    setWorkoutWeatherContent(weatherMarkup(weather));
+    return weather;
+  } catch (error) {
+    if (session !== state.modalSession || state.activeRunId !== String(run.id)) return null;
+    setWorkoutWeatherContent(weatherUnavailableMarkup(error.message || "Weather could not be matched for this run."));
+    return null;
+  }
+}
+
+function buildRunDigestPayload(digest, weather) {
+  const run = digest.run;
+  const paceDeltaSeconds = digest.similarPace ? Math.round(digest.pace - digest.similarPace) : null;
+  const loadDeltaPercent = digest.similarLoadPerMile
+    ? Math.round(((digest.loadPerMile - digest.similarLoadPerMile) / digest.similarLoadPerMile) * 100)
+    : null;
+  return {
+    kind: "run",
+    run: {
+      runType: digest.runType,
+      distanceMiles: Number(digest.distance.toFixed(2)),
+      movingMinutes: Number((digest.moving / 60).toFixed(1)),
+      stoppedMinutes: Number((digest.stopped / 60).toFixed(1)),
+      paceSecondsPerMile: Math.round(digest.pace),
+      elevationFeet: Math.round(digest.elevation),
+      elevationFeetPerMile: Math.round(digest.elevationDensity),
+      averageHr: Number(run.average_heartrate) || null,
+      trainingLoad: Math.round(digest.load),
+      loadPerMile: Number(digest.loadPerMile.toFixed(1))
+    },
+    comparison: {
+      similarRunCount: digest.similarCount,
+      similarPaceSecondsPerMile: digest.similarPace ? Math.round(digest.similarPace) : null,
+      paceDeltaSeconds,
+      similarLoadPerMile: digest.similarLoadPerMile ? Number(digest.similarLoadPerMile.toFixed(1)) : null,
+      loadPerMileDeltaPercent: loadDeltaPercent,
+      similarAverageHr: digest.similarHr ? Math.round(digest.similarHr) : null,
+      daysSincePreviousRun: digest.previousGap,
+      daysUntilNextRun: digest.nextGap
+    },
+    context: {
+      selectedWindowRunCount: state.filteredRuns.length,
+      distancePercentile: digest.distanceRank,
+      pacePercentile: digest.paceRank,
+      loadPercentile: digest.loadRank
+    },
+    weather: weather ? {
+      temperatureF: weatherNumber(weather.temperatureF),
+      feelsLikeF: weatherNumber(weather.feelsLikeF),
+      humidityPercent: weatherNumber(weather.humidityPercent),
+      windSpeedMph: weatherNumber(weather.windSpeedMph),
+      precipitationInches: weatherNumber(weather.precipitationInches),
+      weatherCode: weatherNumber(weather.weatherCode)
+    } : null,
+    coverage: {
+      hasWeather: Boolean(weather),
+      hasHeartRate: Boolean(Number(run.average_heartrate)),
+      directLoad: Boolean(Number(run.suffer_score)),
+      similarRunCount: digest.similarCount
+    }
+  };
+}
+
+function runDigestEmptyMarkup(runId) {
+  return `
+    <div class="run-digest-empty">
+      <div><span>Ollama · on demand</span><strong>Turn the evidence into a concise coaching read.</strong><p>Only compact run metrics and modeled conditions are sent—never route points, coordinates, activity names, or descriptions.</p></div>
+      <button type="button" class="run-digest-action" data-action="generate-run-digest" data-run-id="${escapeHtml(String(runId))}">Generate run digest</button>
+    </div>
+  `;
+}
+
+function runDigestLoadingMarkup() {
+  return `
+    <div class="run-digest-state">
+      <span class="weather-pulse" aria-hidden="true"></span>
+      <div><strong>Reading this run in context</strong><p>Ollama is comparing the effort with similar runs and the surrounding training block.</p></div>
+    </div>
+  `;
+}
+
+function runDigestErrorMarkup(runId, message) {
+  return `
+    <div class="run-digest-state error">
+      <div><strong>The digest did not return</strong><p>${escapeHtml(message)}</p></div>
+      <button type="button" class="run-digest-action secondary" data-action="generate-run-digest" data-run-id="${escapeHtml(String(runId))}">Try again</button>
+    </div>
+  `;
+}
+
+function runDigestResultMarkup(insight, model) {
+  const evidence = (insight.evidence || []).slice(0, 3).map((item) => `
+    <article class="run-digest-evidence ${escapeHtml(item.tone || "neutral")}">
+      <span>${escapeHtml(item.label || "Signal")}</span>
+      <p>${escapeHtml(item.detail || "")}</p>
+    </article>
+  `).join("");
+  return `
+    <div class="run-digest-result">
+      <span class="run-digest-kicker">Coach’s read</span>
+      <h4>${escapeHtml(insight.headline || "A grounded view of this effort")}</h4>
+      <p class="run-digest-copy">${escapeHtml(insight.digest || "")}</p>
+      <div class="run-digest-evidence-grid">${evidence}</div>
+      <div class="run-digest-next"><span>Compare next</span><strong>${escapeHtml(insight.compareNext || "Look for another similar-distance effort before drawing a larger conclusion.")}</strong></div>
+      <p class="run-digest-caution">${escapeHtml(insight.caution || "Pattern-based context from your run data, not medical advice.")}</p>
+      <small>Ollama · ${escapeHtml(model || "configured model")} · generated on demand</small>
+    </div>
+  `;
+}
+
+function setRunDigestContent(markup) {
+  const container = els.workoutModalContent.querySelector("#workoutRunDigest");
+  if (container) container.innerHTML = markup;
+}
+
+async function generateRunDigest(runId) {
+  const run = state.filteredRuns.find((candidate) => String(candidate.id) === String(runId));
+  if (!run || String(run.id) !== state.activeRunId) return;
+  const session = state.modalSession;
+  const digest = buildWorkoutDigest(run);
+  setRunDigestContent(runDigestLoadingMarkup());
+  let weather = state.runWeatherCache.get(runWeatherKey(run)) || null;
+  if (!weather && weatherRequestDetails(run)) {
+    try {
+      weather = await requestRunWeather(run);
+      if (session !== state.modalSession || state.activeRunId !== String(run.id)) return;
+      state.activeRunWeather = weather;
+      setWorkoutWeatherContent(weatherMarkup(weather));
+    } catch {
+      // A missing weather match should not block the run digest.
+    }
+  }
+  if (session !== state.modalSession || state.activeRunId !== String(run.id)) return;
+  const payload = buildRunDigestPayload(digest, weather);
+  const cacheKey = JSON.stringify(payload);
+  const cached = state.runDigestCache.get(cacheKey);
+  if (cached) {
+    setRunDigestContent(runDigestResultMarkup(cached.insight, cached.model));
+    return;
+  }
+  state.runDigestAbort?.abort();
+  const controller = new AbortController();
+  state.runDigestAbort = controller;
+  try {
+    const response = await fetch("/api/insights", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload),
+      signal: controller.signal
+    });
+    const data = await readApiJson(response);
+    if (!response.ok) throw new Error(data.error || "Ollama could not analyze this run.");
+    if (session !== state.modalSession || state.activeRunId !== String(run.id)) return;
+    state.runDigestCache.set(cacheKey, data);
+    setRunDigestContent(runDigestResultMarkup(data.insight, data.model));
+  } catch (error) {
+    if (error.name === "AbortError" || session !== state.modalSession || state.activeRunId !== String(run.id)) return;
+    setRunDigestContent(runDigestErrorMarkup(run.id, error.message || "Check that the Ollama endpoint is reachable and try again."));
+  } finally {
+    if (state.runDigestAbort === controller) state.runDigestAbort = null;
+  }
+}
+
 function neighboringRunsChart(digest) {
   const runs = digest.neighboringRuns;
   if (!runs.length) return "";
@@ -1406,6 +1744,12 @@ function nearbyRunText(run, gap) {
 function showWorkoutModal(runId, trigger = document.activeElement) {
   const run = state.filteredRuns.find((candidate) => String(candidate.id) === String(runId));
   if (!run) return;
+  state.modalSession += 1;
+  const session = state.modalSession;
+  state.runDigestAbort?.abort();
+  state.runDigestAbort = null;
+  state.activeRunId = String(run.id);
+  state.activeRunWeather = state.runWeatherCache.get(runWeatherKey(run)) || null;
   const digest = buildWorkoutDigest(run);
   const narrative = workoutNarrative(digest);
   const averageHr = Number(run.average_heartrate) || 0;
@@ -1460,8 +1804,16 @@ function showWorkoutModal(runId, trigger = document.activeElement) {
             <h3>Signals</h3>
             <div class="workout-signals">${digest.signals.map(signalMarkup).join("")}</div>
           </section>
+          <section class="workout-section workout-ai-digest" aria-labelledby="workoutDigestTitle">
+            <div class="workout-section-heading"><h3 id="workoutDigestTitle">Coach’s read</h3><span>Optional · on demand</span></div>
+            <div id="workoutRunDigest" class="workout-run-digest" aria-live="polite">${runDigestEmptyMarkup(run.id)}</div>
+          </section>
         </div>
         <aside>
+          <section class="workout-section workout-weather" aria-labelledby="workoutWeatherTitle">
+            <div class="workout-section-heading"><h3 id="workoutWeatherTitle">Conditions</h3><span>At the run start</span></div>
+            <div id="workoutWeatherContent" class="workout-weather-content" aria-live="polite">${state.activeRunWeather ? weatherMarkup(state.activeRunWeather) : weatherLoadingMarkup()}</div>
+          </section>
           <section class="workout-section">
             <h3>Run details</h3>
             <div class="workout-stats">
@@ -1491,9 +1843,19 @@ function showWorkoutModal(runId, trigger = document.activeElement) {
   els.workoutModal.hidden = false;
   document.body.classList.add("modal-open");
   els.workoutModalClose.focus();
+  if (state.activeRunWeather) {
+    setWorkoutWeatherContent(weatherMarkup(state.activeRunWeather));
+  } else {
+    hydrateWorkoutWeather(run, session);
+  }
 }
 
 function closeWorkoutModal() {
+  state.modalSession += 1;
+  state.runDigestAbort?.abort();
+  state.runDigestAbort = null;
+  state.activeRunId = "";
+  state.activeRunWeather = null;
   els.workoutModal.hidden = true;
   document.body.classList.remove("modal-open");
   els.workoutModalContent.replaceChildren();
@@ -1646,6 +2008,7 @@ function makeDemoData() {
       name: longRun ? "Long run" : ["Easy run", "Workout", "Steady run"][Math.floor(Math.random() * 3)],
       sport_type: "Run",
       start_date_local: date.toISOString(),
+      start_latlng: [40.71 + (Math.random() - 0.5) * 0.06, -74 + (Math.random() - 0.5) * 0.06],
       distance: distanceMiles * 1609.344,
       moving_time: movingTime,
       elapsed_time: movingTime + Math.round(Math.random() * 180),
@@ -1713,7 +2076,12 @@ els.activityRows.addEventListener("click", (event) => {
 els.workoutModalClose.addEventListener("click", closeWorkoutModal);
 
 els.workoutModal.addEventListener("click", (event) => {
-  if (event.target === els.workoutModal) closeWorkoutModal();
+  if (event.target === els.workoutModal) {
+    closeWorkoutModal();
+    return;
+  }
+  const digestAction = event.target.closest("[data-action='generate-run-digest']");
+  if (digestAction?.dataset.runId) generateRunDigest(digestAction.dataset.runId);
 });
 
 document.addEventListener("keydown", (event) => {

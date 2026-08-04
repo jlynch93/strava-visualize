@@ -57,6 +57,20 @@ being attached to the wrong browser session.
 reasoning hidden and asks for concise schema-valid JSON so the UI receives only
 the final training read.
 
+## Run-detail enrichment
+
+Opening an individual run fetches modeled start-time weather through
+`/api/weather`. The endpoint uses the run's local start date/hour and a start
+location rounded to two decimal places before querying Open-Meteo. It returns
+temperature, apparent temperature, humidity, precipitation, and wind as
+context—not as a replacement for a watch measurement—and uses a private
+one-day cache.
+
+The **Coach's read** is deliberately on demand. Its per-run request contains
+only compact, allowlisted metrics (distance, pace, duration, elevation, heart
+rate, load, comparable-run context, percentiles, and normalized weather). It
+does not include activity names, descriptions, route points, or coordinates.
+
 Then deploy:
 
 ```powershell
