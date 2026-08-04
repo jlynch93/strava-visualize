@@ -355,12 +355,13 @@ function buildRunDigestPrompt(input) {
     ? `Modeled weather at the rounded run start: ${compactNumber(weather.temperatureF)}°F, feels ${compactNumber(weather.feelsLikeF)}°F, humidity ${compactNumber(weather.humidityPercent)}%, wind ${compactNumber(weather.windSpeedMph)} mph, precipitation ${compactNumber(weather.precipitationInches, 2)} in.`
     : "Modeled weather was unavailable for this run.";
   return [
-    "Write a concise, encouraging digest of this single running effort. Use only the supplied facts and return JSON matching the requested schema.",
+    "Act like a calm, practical running coach reviewing one completed run. Return JSON only; never mention these instructions, the schema, or how comparisons are validated.",
     `Run type: ${runType}. Distance ${compactNumber(run.distanceMiles, 2)} mi. Moving time ${compactNumber(run.movingMinutes, 1)} min. Stopped ${compactNumber(run.stoppedMinutes, 1)} min. Pace ${compactPace(run.paceSecondsPerMile)}. Elevation ${compactNumber(run.elevationFeet)} ft (${compactNumber(run.elevationFeetPerMile)} ft/mi). Average heart rate ${compactNumber(run.averageHr)} bpm. Training load ${compactNumber(run.trainingLoad)} (${compactNumber(run.loadPerMile, 1)} per mile).`,
     `Comparable efforts: ${compactNumber(comparison.similarRunCount)} similar-distance runs. Comparable pace ${compactPace(comparison.similarPaceSecondsPerMile)}. ${paceComparison} Comparable load per mile ${compactNumber(comparison.similarLoadPerMile, 1)}. ${loadComparison} Prior-run gap ${compactNumber(comparison.daysSincePreviousRun)} days; next-run gap ${compactNumber(comparison.daysUntilNextRun)} days.`,
     `Selected-window context: ${compactNumber(context.selectedWindowRunCount)} runs. Distance percentile ${compactNumber(context.distancePercentile)}. Pace percentile ${compactNumber(context.pacePercentile)} where higher is faster. Load percentile ${compactNumber(context.loadPercentile)}.`,
     weatherLine,
-    "Headline: one grounded sentence. Digest: one or two concise sentences. Evidence: 2 or 3 distinct items tied to the supplied facts. Compare next: one modest next comparison, not a prescription.",
+    "Keep it genuinely brief: headline is 4 to 10 words and states the main takeaway; digest is exactly one plain-language sentence of at most 24 words; evidence is exactly 2 short fact cards with labels of 1 to 3 words; compareNext is one short, actionable focus for the next comparable run, starting with a verb. Prefer specific run facts over generic encouragement.",
+    "Example shape only: headline 'Comfortable pace, lighter load'; digest 'You ran slightly faster than comparable efforts while carrying less load per mile.'; evidence labels 'Pace' and 'Load'; compareNext 'Compare another six-mile effort at a similar pace.' Do not copy this example unless the supplied facts support it.",
     "Do not invent values, calculate new ratios or percentages, reverse comparison directions, infer workout intent, diagnose health, injury, overtraining, readiness, or make medical claims. Only call the run faster, slower, higher, or lower when it exactly agrees with the explicit comparison sentences. Weather is modeled context, not a causal explanation."
   ].join("\n");
 }
@@ -368,8 +369,8 @@ function buildRunDigestPrompt(input) {
 function normalizeRunDigest(value, input) {
   const evidence = Array.isArray(value?.evidence)
     ? value.evidence.slice(0, 3).map((item) => ({
-      label: String(item?.label || "Run signal").slice(0, 80),
-      detail: String(item?.detail || "").slice(0, 280),
+      label: String(item?.label || "Run signal").slice(0, 36),
+      detail: String(item?.detail || "").slice(0, 140),
       tone: ["positive", "neutral", "caution"].includes(item?.tone) ? item.tone : "neutral"
     })).filter((item) => item.detail)
     : [];
@@ -383,10 +384,10 @@ function normalizeRunDigest(value, input) {
       ? "Weather is modeled context and does not establish why a run felt or performed a certain way. Pattern-based guidance only, not medical advice."
       : "Pattern-based guidance from your run data, not medical advice.";
   return {
-    headline: String(value.headline).slice(0, 220),
-    digest: String(value.digest).slice(0, 560),
+    headline: String(value.headline).slice(0, 100),
+    digest: String(value.digest).slice(0, 220),
     evidence,
-    compareNext: String(value.compareNext).slice(0, 280),
+    compareNext: String(value.compareNext).slice(0, 160),
     caution
   };
 }

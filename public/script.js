@@ -1647,7 +1647,7 @@ function runDigestResultMarkup(insight, model) {
       <h4>${escapeHtml(insight.headline || "A grounded view of this effort")}</h4>
       <p class="run-digest-copy">${escapeHtml(insight.digest || "")}</p>
       <div class="run-digest-evidence-grid">${evidence}</div>
-      <div class="run-digest-next"><span>Compare next</span><strong>${escapeHtml(insight.compareNext || "Look for another similar-distance effort before drawing a larger conclusion.")}</strong></div>
+      <div class="run-digest-next"><span>Next focus</span><strong>${escapeHtml(insight.compareNext || "Compare another similar-distance effort before drawing a larger conclusion.")}</strong></div>
       <p class="run-digest-caution">${escapeHtml(insight.caution || "Pattern-based context from your run data, not medical advice.")}</p>
       <small>Ollama · ${escapeHtml(model || "configured model")} · generated on demand</small>
     </div>
