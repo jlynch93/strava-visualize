@@ -60,6 +60,7 @@ const els = {
   goalRaceName: document.querySelector("#goalRaceName"),
   goalRaceDistance: document.querySelector("#goalRaceDistance"),
   goalRaceDate: document.querySelector("#goalRaceDate"),
+  intentRecommendation: document.querySelector("#intentRecommendation"),
   checkinForm: document.querySelector("#checkinForm"),
   checkinFeel: document.querySelector("#checkinFeel"),
   checkinLimiter: document.querySelector("#checkinLimiter"),
@@ -84,7 +85,7 @@ function saveCoachingContext() {
 }
 
 function syncCoachingInputs() {
-  els.goalMode.value = coachingContext.goal.mode || "maintain";
+  els.goalMode.value = coachingContext.goal.mode || "auto";
   els.goalMiles.value = coachingContext.goal.miles || "";
   els.goalRaceName.value = coachingContext.goal.raceName || coachingContext.goal.event || "";
   els.goalRaceDistance.value = coachingContext.goal.raceDistance || "";
@@ -899,11 +900,25 @@ function renderCoachingWorkspace(summary) {
   const race = raceContext();
   els.readinessContent.innerHTML = `<div class="readiness-metric"><strong>${sevenMiles.toFixed(1)} mi</strong><span>last 7 days · ${baseline.toFixed(1)} mi baseline</span></div><ul><li>${lastSeven.length} runs in the last 7 days</li><li>${hardRuns} higher-effort run${hardRuns === 1 ? "" : "s"} by available data</li><li>${summary.longestRestGap} days longest rest gap</li><li>${confidence} confidence · ${summary.runCount} runs in this block${race ? `</li><li>${race.label} · ${race.weeks} weeks away · ${race.phase} phase` : ""}</li></ul><p class="context-muted">This is a transparent workload view, not a medical or readiness score.</p>`;
   const goalMiles = Number(coachingContext.goal.miles) || baseline;
-  const intent = coachingContext.goal.mode || "maintain";
+  const recommendation = recommendIntent(summary, race);
+  const chosenIntent = coachingContext.goal.mode || "auto";
+  const intent = chosenIntent === "auto" ? recommendation.intent : chosenIntent;
+  els.intentRecommendation.textContent = chosenIntent === "auto"
+    ? `Recommended: ${recommendation.intent} — ${recommendation.reason}`
+    : `Manual override: ${intent}. Auto recommends ${recommendation.intent} because ${recommendation.reason}`;
   const range = intent === "build" ? `${goalMiles.toFixed(0)}–${(goalMiles * 1.08).toFixed(0)}` : intent === "recover" ? `${(goalMiles * 0.7).toFixed(0)}–${(goalMiles * 0.85).toFixed(0)}` : `${(goalMiles * 0.9).toFixed(0)}–${goalMiles.toFixed(0)}`;
   const raceLead = race ? `${race.label} is ${race.weeks} week${race.weeks === 1 ? "" : "s"} away (${race.phase} phase). ` : "";
   els.planDraftCopy.textContent = `${raceLead}${intent[0].toUpperCase() + intent.slice(1)} week draft: ${range} mi across about ${Math.max(2, Math.round(summary.averageRunsPerWeek))} runs. Keep the longest run at or below ${summary.longRun.toFixed(1)} mi. Review and adjust it to your schedule, race goal, and how you feel.`;
   els.copyPlanButton.disabled = false;
+}
+
+function recommendIntent(summary, race) {
+  const checkin = coachingContext.checkin || {};
+  if (checkin.feel && Number(checkin.feel) <= 2) return { intent: "recover", reason: "your check-in reported a hard block" };
+  if (checkin.limiter && checkin.limiter !== "none") return { intent: "maintain", reason: `${checkin.limiter} was marked as a limiting factor` };
+  if (race && race.weeks <= 2) return { intent: "recover", reason: "the race is close enough to prioritize freshness" };
+  if (race && race.weeks <= 12 && summary.rampRate <= 15) return { intent: "build", reason: "you are in the race build window with a controlled recent ramp" };
+  return { intent: "maintain", reason: "the available workload data does not support a stronger change" };
 }
 
 function raceContext() {
