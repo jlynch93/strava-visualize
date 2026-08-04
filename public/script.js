@@ -15,6 +15,9 @@ const els = {
   connectButton: document.querySelector("#connectButton"),
   demoButton: document.querySelector("#demoButton"),
   fileInput: document.querySelector("#fileInput"),
+  emptyConnectButton: document.querySelector("#emptyConnectButton"),
+  emptyDemoButton: document.querySelector("#emptyDemoButton"),
+  emptyFileInput: document.querySelector("#emptyFileInput"),
   heroStatus: document.querySelector("#heroStatus"),
   rangeSelect: document.querySelector("#rangeSelect"),
   startDate: document.querySelector("#startDate"),
@@ -208,6 +211,7 @@ function getActivityBounds() {
 function syncRangeInputs() {
   const bounds = getActivityBounds();
   const mode = els.rangeSelect.value;
+  document.body.classList.toggle("is-custom-range", mode === "custom");
   let start = new Date(bounds.start);
   const end = new Date(bounds.end);
   if (mode !== "all" && mode !== "custom") {
@@ -725,7 +729,8 @@ function renderDelta(element, current, previous, unit, higherIsBetter, neutral =
 function renderMainChart() {
   const metric = METRICS[els.metricSelect.value];
   els.mainChartTitle.textContent = `${metric.label} trend`;
-  els.mainChartSubtitle.textContent = `${state.buckets.length} ${els.bucketSelect.value === "week" ? "weeks" : "months"}`;
+  const periodLabel = `${state.buckets.length} ${els.bucketSelect.value === "week" ? "weeks" : "months"}`;
+  els.mainChartSubtitle.textContent = els.metricSelect.value === "pace" ? `${periodLabel} · faster is higher` : periodLabel;
   renderBarLineChart(els.mainChart, state.buckets, metric);
 }
 
@@ -736,7 +741,7 @@ function svg(tag, attrs = {}, children = []) {
   return node;
 }
 
-function renderEmpty(container, message = "Load activities to see trends.") {
+function renderEmpty(container, message = "No activity in this window. Widen the range or load another block.") {
   container.innerHTML = `<div class="empty-state">${message}</div>`;
 }
 
@@ -749,15 +754,20 @@ function escapeHtml(value) {
     .replace(/'/g, "&#039;");
 }
 
-function attachTooltip(element, title, rows) {
+function attachTooltip(element, title, rows, { keyboard = true } = {}) {
   const cleanRows = rows
     .filter((row) => row && row.value !== undefined && row.value !== null && row.value !== "")
     .map((row) => ({ label: String(row.label), value: String(row.value) }));
   element.classList.add("has-tooltip");
   element.setAttribute("data-tooltip-title", title);
   element.setAttribute("data-tooltip-rows", JSON.stringify(cleanRows));
-  element.setAttribute("tabindex", "0");
-  element.setAttribute("aria-label", `${title}. ${cleanRows.map((row) => `${row.label}: ${row.value}`).join(". ")}`);
+  if (keyboard) {
+    element.setAttribute("tabindex", "0");
+    element.setAttribute("aria-describedby", "chartTooltip");
+    element.setAttribute("aria-label", `${title}. ${cleanRows.map((row) => `${row.label}: ${row.value}`).join(". ")}`);
+  } else {
+    element.setAttribute("aria-hidden", "true");
+  }
 }
 
 function tooltipContent(title, rows) {
@@ -841,13 +851,16 @@ function renderBarLineChart(container, buckets, metric) {
   for (let i = 0; i <= 4; i += 1) {
     const y = pad.top + (chartHeight / 4) * i;
     root.appendChild(svg("line", { class: "axis", x1: pad.left, y1: y, x2: width - pad.right, y2: y }));
-    const tick = max - (span / 4) * i;
+    const tick = metricKey === "pace" ? min + (span / 4) * i : max - (span / 4) * i;
     root.appendChild(svg("text", { class: "label", x: 8, y: y + 4 }, [document.createTextNode(metric.format(tick).replace("/mi", ""))]));
   }
   const points = buckets.map((bucket, index) => {
     const value = metric.value(bucket);
     const x = pad.left + index * (chartWidth / buckets.length) + (chartWidth / buckets.length) / 2;
-    const y = pad.top + chartHeight - ((value - min) / span) * chartHeight;
+    const normalizedValue = (value - min) / span;
+    const y = metricKey === "pace"
+      ? pad.top + normalizedValue * chartHeight
+      : pad.top + chartHeight - normalizedValue * chartHeight;
     const barHeight = chartHeight - (y - pad.top);
     const bar = svg("rect", {
       class: "bar",
@@ -876,11 +889,14 @@ function renderBarLineChart(container, buckets, metric) {
   root.appendChild(svg("polyline", { class: "line", points: points.join(" ") }));
   const smoothPoints = movingAverage(values, Math.min(4, Math.max(2, Math.ceil(values.length / 10)))).map((value, index) => {
     const x = pad.left + index * (chartWidth / buckets.length) + (chartWidth / buckets.length) / 2;
-    const y = pad.top + chartHeight - ((value - min) / span) * chartHeight;
+    const normalizedValue = (value - min) / span;
+    const y = metricKey === "pace"
+      ? pad.top + normalizedValue * chartHeight
+      : pad.top + chartHeight - normalizedValue * chartHeight;
     return `${x},${y}`;
   });
   root.appendChild(svg("polyline", { class: "line secondary", points: smoothPoints.join(" ") }));
-  root.appendChild(svg("text", { class: "label", x: width - 180, y: 16 }, [document.createTextNode("orange: actual  blue: moving avg")]));
+  root.appendChild(svg("text", { class: "label", x: width - 180, y: 16 }, [document.createTextNode("actual · moving average")]));
   container.replaceChildren(root);
 }
 
@@ -1029,7 +1045,7 @@ function renderHeatmap() {
         { label: "Moving time", value: formatDuration(stats.seconds) },
         { label: "Avg pace", value: stats.miles ? formatPace(stats.seconds / stats.miles) : "-" },
         { label: "Load", value: Math.round(stats.load).toLocaleString() }
-      ]);
+      ], { keyboard: false });
       root.appendChild(rect);
     }
     if (week % Math.max(1, Math.ceil(weeks / 8)) === 0) {
@@ -1647,7 +1663,7 @@ function makeDemoData() {
   return activities;
 }
 
-els.connectButton.addEventListener("click", () => {
+function connectToStrava() {
   if (!state.stravaReady) {
     setStatus(state.stravaError || "Strava is not configured yet.", true);
     if (!state.stravaError) window.location.href = "/auth/login";
@@ -1656,13 +1672,26 @@ els.connectButton.addEventListener("click", () => {
   } else {
     window.location.href = "/auth/login";
   }
-});
+}
 
-els.demoButton.addEventListener("click", () => {
+function loadDemoData() {
   state.rawActivities = makeDemoData();
   syncRangeInputs();
   setStatus("Loaded demo running history.");
   render();
+}
+
+function handleFileInput(event) {
+  const [file] = event.target.files;
+  if (file) importFile(file).catch((error) => setStatus(error.message, true));
+}
+
+[els.connectButton, els.emptyConnectButton].filter(Boolean).forEach((button) => {
+  button.addEventListener("click", connectToStrava);
+});
+
+[els.demoButton, els.emptyDemoButton].filter(Boolean).forEach((button) => {
+  button.addEventListener("click", loadDemoData);
 });
 
 els.aiAnalyzeButton.addEventListener("click", analyzeWithOllama);
@@ -1672,9 +1701,8 @@ els.aiFocus.addEventListener("change", () => {
   renderAiState();
 });
 
-els.fileInput.addEventListener("change", (event) => {
-  const [file] = event.target.files;
-  if (file) importFile(file).catch((error) => setStatus(error.message, true));
+[els.fileInput, els.emptyFileInput].filter(Boolean).forEach((input) => {
+  input.addEventListener("change", handleFileInput);
 });
 
 els.activityRows.addEventListener("click", (event) => {
