@@ -62,10 +62,9 @@ const RUN_DIGEST_SCHEMA = {
         },
         required: ["label", "detail", "tone"]
       }
-    },
-    compareNext: { type: "string" }
+    }
   },
-  required: ["headline", "digest", "evidence", "compareNext"]
+  required: ["headline", "digest", "evidence"]
 };
 
 loadLocalEnv();
@@ -360,8 +359,8 @@ function buildRunDigestPrompt(input) {
     `Comparable efforts: ${compactNumber(comparison.similarRunCount)} similar-distance runs. Comparable pace ${compactPace(comparison.similarPaceSecondsPerMile)}. ${paceComparison} Comparable load per mile ${compactNumber(comparison.similarLoadPerMile, 1)}. ${loadComparison} Prior-run gap ${compactNumber(comparison.daysSincePreviousRun)} days; next-run gap ${compactNumber(comparison.daysUntilNextRun)} days.`,
     `Selected-window context: ${compactNumber(context.selectedWindowRunCount)} runs. Distance percentile ${compactNumber(context.distancePercentile)}. Pace percentile ${compactNumber(context.pacePercentile)} where higher is faster. Load percentile ${compactNumber(context.loadPercentile)}.`,
     weatherLine,
-    "Keep it genuinely brief: headline is 4 to 10 words and states the main takeaway; digest is exactly one plain-language sentence of at most 24 words; evidence is exactly 2 short fact cards with labels of 1 to 3 words; compareNext is one short, actionable focus for the next comparable run, starting with a verb. Prefer specific run facts over generic encouragement.",
-    "Example shape only: headline 'Comfortable pace, lighter load'; digest 'You ran slightly faster than comparable efforts while carrying less load per mile.'; evidence labels 'Pace' and 'Load'; compareNext 'Compare another six-mile effort at a similar pace.' Do not copy this example unless the supplied facts support it.",
+    "Keep it genuinely brief: headline is 4 to 10 words and states the main takeaway; digest is exactly one plain-language sentence of at most 24 words; evidence is exactly 2 short fact cards with labels of 1 to 3 words. Prefer specific run facts over generic encouragement.",
+    "Example shape only: headline 'Comfortable pace, lighter load'; digest 'You ran slightly faster than comparable efforts while carrying less load per mile.'; evidence labels 'Pace' and 'Load'. Do not copy this example unless the supplied facts support it.",
     "Do not invent values, calculate new ratios or percentages, reverse comparison directions, infer workout intent, diagnose health, injury, overtraining, readiness, or make medical claims. Only call the run faster, slower, higher, or lower when it exactly agrees with the explicit comparison sentences. Weather is modeled context, not a causal explanation."
   ].join("\n");
 }
@@ -374,7 +373,7 @@ function normalizeRunDigest(value, input) {
       tone: ["positive", "neutral", "caution"].includes(item?.tone) ? item.tone : "neutral"
     })).filter((item) => item.detail)
     : [];
-  if (!value?.headline || !value?.digest || !value?.compareNext || evidence.length < 2) {
+  if (!value?.headline || !value?.digest || evidence.length < 2) {
     throw new Error("Ollama returned an incomplete run digest. Try again.");
   }
   const similarCount = Math.max(0, Math.round(Number(input?.comparison?.similarRunCount) || 0));
@@ -387,7 +386,6 @@ function normalizeRunDigest(value, input) {
     headline: String(value.headline).slice(0, 100),
     digest: String(value.digest).slice(0, 220),
     evidence,
-    compareNext: String(value.compareNext).slice(0, 160),
     caution
   };
 }

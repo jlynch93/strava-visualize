@@ -1964,6 +1964,15 @@ body.modal-open {
   line-height: 1.45;
 }
 
+.run-digest-next small {
+  display: block;
+  margin-top: 7px;
+  color: var(--ink-faint);
+  font-size: 0.72rem;
+  font-weight: 650;
+  line-height: 1.45;
+}
+
 .run-digest-caution,
 .run-digest-result > small {
   display: block;

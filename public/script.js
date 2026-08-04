@@ -1678,6 +1678,23 @@ function buildRunDigestPayload(digest, weather) {
   };
 }
 
+function comparisonPlanMarkup(digest) {
+  const lowerBound = (digest.distance * 0.8).toFixed(1);
+  const upperBound = (digest.distance * 1.2).toFixed(1);
+  const metrics = ["pace", "load per mile"];
+  if (digest.similarHr) metrics.push("average heart rate");
+  const baseline = digest.similarCount
+    ? `${digest.similarCount} similar run${digest.similarCount === 1 ? "" : "s"} · ${formatPace(digest.similarPace)} pace · ${formatNumber(digest.similarLoadPerMile, 1)} load/mi${digest.similarHr ? ` · ${Math.round(digest.similarHr)} bpm` : ""}`
+    : "No similar-distance baseline yet; the next comparable run will begin one.";
+  return `
+    <div class="run-digest-next">
+      <span>What to compare next</span>
+      <strong>On your next ${lowerBound}–${upperBound} mi run, compare ${metrics.join(" and ")} against this run and its similar-distance baseline.</strong>
+      <small>Baseline: ${escapeHtml(baseline)}</small>
+    </div>
+  `;
+}
+
 function runDigestEmptyMarkup(runId) {
   return `
     <div class="run-digest-empty">
@@ -1705,7 +1722,7 @@ function runDigestErrorMarkup(runId, message) {
   `;
 }
 
-function runDigestResultMarkup(insight, model) {
+function runDigestResultMarkup(insight, model, digest) {
   const evidence = (insight.evidence || []).slice(0, 3).map((item) => `
     <article class="run-digest-evidence ${escapeHtml(item.tone || "neutral")}">
       <span>${escapeHtml(item.label || "Signal")}</span>
@@ -1718,7 +1735,7 @@ function runDigestResultMarkup(insight, model) {
       <h4>${escapeHtml(insight.headline || "A grounded view of this effort")}</h4>
       <p class="run-digest-copy">${escapeHtml(insight.digest || "")}</p>
       <div class="run-digest-evidence-grid">${evidence}</div>
-      <div class="run-digest-next"><span>Next focus</span><strong>${escapeHtml(insight.compareNext || "Compare another similar-distance effort before drawing a larger conclusion.")}</strong></div>
+      ${comparisonPlanMarkup(digest)}
       <p class="run-digest-caution">${escapeHtml(insight.caution || "Pattern-based context from your run data, not medical advice.")}</p>
       <small>Ollama · ${escapeHtml(model || "configured model")} · generated on demand</small>
     </div>
@@ -1752,7 +1769,7 @@ async function generateRunDigest(runId) {
   const cacheKey = JSON.stringify(payload);
   const cached = state.runDigestCache.get(cacheKey);
   if (cached) {
-    setRunDigestContent(runDigestResultMarkup(cached.insight, cached.model));
+    setRunDigestContent(runDigestResultMarkup(cached.insight, cached.model, digest));
     return;
   }
   state.runDigestAbort?.abort();
@@ -1769,7 +1786,7 @@ async function generateRunDigest(runId) {
     if (!response.ok) throw new Error(data.error || "Ollama could not analyze this run.");
     if (session !== state.modalSession || state.activeRunId !== String(run.id)) return;
     state.runDigestCache.set(cacheKey, data);
-    setRunDigestContent(runDigestResultMarkup(data.insight, data.model));
+    setRunDigestContent(runDigestResultMarkup(data.insight, data.model, digest));
   } catch (error) {
     if (error.name === "AbortError" || session !== state.modalSession || state.activeRunId !== String(run.id)) return;
     setRunDigestContent(runDigestErrorMarkup(run.id, error.message || "Check that the Ollama endpoint is reachable and try again."));
