@@ -57,7 +57,9 @@ const els = {
   goalForm: document.querySelector("#goalForm"),
   goalMode: document.querySelector("#goalMode"),
   goalMiles: document.querySelector("#goalMiles"),
-  goalEvent: document.querySelector("#goalEvent"),
+  goalRaceName: document.querySelector("#goalRaceName"),
+  goalRaceDistance: document.querySelector("#goalRaceDistance"),
+  goalRaceDate: document.querySelector("#goalRaceDate"),
   checkinForm: document.querySelector("#checkinForm"),
   checkinFeel: document.querySelector("#checkinFeel"),
   checkinLimiter: document.querySelector("#checkinLimiter"),
@@ -84,7 +86,9 @@ function saveCoachingContext() {
 function syncCoachingInputs() {
   els.goalMode.value = coachingContext.goal.mode || "maintain";
   els.goalMiles.value = coachingContext.goal.miles || "";
-  els.goalEvent.value = coachingContext.goal.event || "";
+  els.goalRaceName.value = coachingContext.goal.raceName || coachingContext.goal.event || "";
+  els.goalRaceDistance.value = coachingContext.goal.raceDistance || "";
+  els.goalRaceDate.value = coachingContext.goal.raceDate || "";
   els.checkinFeel.value = coachingContext.checkin.feel || "";
   els.checkinLimiter.value = coachingContext.checkin.limiter || "none";
   els.checkinIntent.value = coachingContext.checkin.intent || "mixed";
@@ -892,12 +896,27 @@ function renderCoachingWorkspace(summary) {
   const baseline = summary.averageWeeklyMiles;
   const hardRuns = lastSeven.filter((run) => Number(run.average_heartrate) >= 155 || activityLoad(run) / Math.max(miles(run.distance), 1) >= summary.averageLoadPerMile * 1.15).length;
   const confidence = state.filteredRuns.length >= 12 ? "High" : state.filteredRuns.length >= 6 ? "Moderate" : "Early";
-  els.readinessContent.innerHTML = `<div class="readiness-metric"><strong>${sevenMiles.toFixed(1)} mi</strong><span>last 7 days · ${baseline.toFixed(1)} mi baseline</span></div><ul><li>${lastSeven.length} runs in the last 7 days</li><li>${hardRuns} higher-effort run${hardRuns === 1 ? "" : "s"} by available data</li><li>${summary.longestRestGap} days longest rest gap</li><li>${confidence} confidence · ${summary.runCount} runs in this block</li></ul><p class="context-muted">This is a transparent workload view, not a medical or readiness score.</p>`;
+  const race = raceContext();
+  els.readinessContent.innerHTML = `<div class="readiness-metric"><strong>${sevenMiles.toFixed(1)} mi</strong><span>last 7 days · ${baseline.toFixed(1)} mi baseline</span></div><ul><li>${lastSeven.length} runs in the last 7 days</li><li>${hardRuns} higher-effort run${hardRuns === 1 ? "" : "s"} by available data</li><li>${summary.longestRestGap} days longest rest gap</li><li>${confidence} confidence · ${summary.runCount} runs in this block${race ? `</li><li>${race.label} · ${race.weeks} weeks away · ${race.phase} phase` : ""}</li></ul><p class="context-muted">This is a transparent workload view, not a medical or readiness score.</p>`;
   const goalMiles = Number(coachingContext.goal.miles) || baseline;
   const intent = coachingContext.goal.mode || "maintain";
   const range = intent === "build" ? `${goalMiles.toFixed(0)}–${(goalMiles * 1.08).toFixed(0)}` : intent === "recover" ? `${(goalMiles * 0.7).toFixed(0)}–${(goalMiles * 0.85).toFixed(0)}` : `${(goalMiles * 0.9).toFixed(0)}–${goalMiles.toFixed(0)}`;
-  els.planDraftCopy.textContent = `${intent[0].toUpperCase() + intent.slice(1)} week draft: ${range} mi across about ${Math.max(2, Math.round(summary.averageRunsPerWeek))} runs. Keep the longest run at or below ${summary.longRun.toFixed(1)} mi. Review and adjust it to your schedule, goal, and how you feel.`;
+  const raceLead = race ? `${race.label} is ${race.weeks} week${race.weeks === 1 ? "" : "s"} away (${race.phase} phase). ` : "";
+  els.planDraftCopy.textContent = `${raceLead}${intent[0].toUpperCase() + intent.slice(1)} week draft: ${range} mi across about ${Math.max(2, Math.round(summary.averageRunsPerWeek))} runs. Keep the longest run at or below ${summary.longRun.toFixed(1)} mi. Review and adjust it to your schedule, race goal, and how you feel.`;
   els.copyPlanButton.disabled = false;
+}
+
+function raceContext() {
+  const goal = coachingContext.goal || {};
+  if (!goal.raceDate) return null;
+  const date = new Date(`${goal.raceDate}T00:00:00`);
+  if (Number.isNaN(date.valueOf())) return null;
+  const days = Math.ceil((date - new Date()) / 86400000);
+  if (days < 0) return null;
+  const weeks = Math.max(0, Math.ceil(days / 7));
+  const phase = weeks <= 2 ? "taper / race" : weeks <= 5 ? "peak" : weeks <= 12 ? "build" : "base";
+  const name = goal.raceName || goal.raceDistance || "Race";
+  return { weeks, phase, label: `${name}${goal.raceDistance && goal.raceName ? ` · ${goal.raceDistance}` : ""}` };
 }
 
 function runsForBucket(bucket) {
@@ -2283,7 +2302,7 @@ els.workoutModal.addEventListener("click", (event) => {
 
 els.goalForm.addEventListener("submit", (event) => {
   event.preventDefault();
-  coachingContext.goal = { mode: els.goalMode.value, miles: els.goalMiles.value, event: els.goalEvent.value.trim() };
+  coachingContext.goal = { mode: els.goalMode.value, miles: els.goalMiles.value, raceName: els.goalRaceName.value.trim(), raceDistance: els.goalRaceDistance.value, raceDate: els.goalRaceDate.value };
   saveCoachingContext();
   state.renderedInsightFingerprint = "";
   render();

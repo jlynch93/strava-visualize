@@ -1053,6 +1053,7 @@ svg {
 .context-card h3 { margin: 0 0 14px; color: var(--ink-strong); font-size: 0.98rem; }
 .context-card label { display: block; margin: 10px 0 5px; color: var(--ink-faint); font-size: 0.68rem; font-weight: 760; letter-spacing: .06em; text-transform: uppercase; }
 .context-card input, .context-card select { width: 100%; min-height: 35px; }
+.goal-race-fields { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
 .context-save { min-height: 35px; margin-top: 14px; border-radius: 0; background: var(--teal); color: var(--surface); font-size: .72rem; }
 .readiness-metric strong { display: block; color: var(--ink-strong); font-size: 1.45rem; letter-spacing: -.04em; }
 .readiness-metric span, .context-muted { color: var(--ink-faint); font-size: .73rem; line-height: 1.45; }

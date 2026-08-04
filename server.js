@@ -265,7 +265,7 @@ function buildInsightPrompt(input) {
   );
   return [
     `Focus: ${input.focus || "balanced"}. Window: ${input.range?.start || "unknown"} to ${input.range?.end || "unknown"}.`,
-    `Runner context (self-reported, optional): goal ${context.goal?.mode || "not set"}, weekly target ${context.goal?.miles || "not set"}, event ${context.goal?.event || "not set"}; feel ${context.checkin?.feel || "not logged"}/5, limiter ${context.checkin?.limiter || "not logged"}, run intent ${context.checkin?.intent || "not logged"}.`,
+    `Runner context (self-reported, optional): goal ${context.goal?.mode || "not set"}, weekly target ${context.goal?.miles || "not set"}, race ${context.goal?.raceName || "not set"} ${context.goal?.raceDistance || ""} on ${context.goal?.raceDate || "not set"}; feel ${context.checkin?.feel || "not logged"}/5, limiter ${context.checkin?.limiter || "not logged"}, run intent ${context.checkin?.intent || "not logged"}.`,
     `Totals: ${summary.runCount} runs, ${summary.totalMiles} mi, average pace ${pace(summary.averagePaceSeconds)}, average ${summary.averageWeeklyMiles} mi/week and ${summary.averageRunsPerWeek} runs/week.`,
     `Signals: long run ${summary.longRunMiles} mi (${summary.longRunSharePercent}% of mileage), peak week ${summary.peakWeekMiles} mi, consistency ${summary.consistencyPercent}%, ramp ${summary.rampRatePercent}%, average HR ${summary.averageHr ?? "n/a"}, load ${summary.trainingLoad}, longest rest gap ${summary.longestRestGapDays} days.`,
     `Recent periods:\n${periods.join("\n")}`,

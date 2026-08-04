@@ -193,7 +193,8 @@
             <h3>Training goal</h3>
             <label for="goalMode">Block intent</label><select id="goalMode"><option value="maintain">Maintain</option><option value="build">Build</option><option value="recover">Recover</option></select>
             <label for="goalMiles">Weekly mileage target</label><input id="goalMiles" type="number" min="0" step="1" placeholder="Optional">
-            <label for="goalEvent">Event or focus date</label><input id="goalEvent" type="text" maxlength="48" placeholder="Optional">
+            <label for="goalRaceName">Race name</label><input id="goalRaceName" type="text" maxlength="48" placeholder="e.g. City Marathon">
+            <div class="goal-race-fields"><div><label for="goalRaceDistance">Race distance</label><select id="goalRaceDistance"><option value="">Not set</option><option value="5K">5K</option><option value="10K">10K</option><option value="Half marathon">Half marathon</option><option value="Marathon">Marathon</option><option value="Other">Other</option></select></div><div><label for="goalRaceDate">Race date</label><input id="goalRaceDate" type="date"></div></div>
             <button type="submit" class="context-save">Save goal</button>
           </form>
           <form id="checkinForm" class="context-card">
