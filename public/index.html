@@ -124,8 +124,17 @@
             <h1 id="overviewTitle">Read the work.<br>Choose the next one.</h1>
             <p>Volume, effort, and consistency — connected in one clear view of your current training block.</p>
           </div>
-          <p class="overview-note">Use the trend to spot change. Use the signals below to understand it.</p>
+          <p class="overview-note">Start with the block story. Open the evidence when you want to inspect it.</p>
         </div>
+
+        <section class="block-review" aria-labelledby="blockReviewTitle">
+          <div class="block-review-lead">
+            <span class="section-kicker">Selected block</span>
+            <h2 id="blockReviewTitle">Load training data to review your block</h2>
+            <p id="blockReviewSummary">Your volume, pace, and training rhythm will be compared with the preceding window.</p>
+          </div>
+          <div id="blockEvidence" class="block-evidence" aria-label="Evidence for selected training block"></div>
+        </section>
 
         <section class="chart-panel chart-panel-featured primary-chart" aria-labelledby="mainChartTitle">
           <div class="panel-heading">
@@ -135,33 +144,6 @@
           <div id="mainChart" class="chart"></div>
         </section>
 
-        <section class="kpis" aria-label="Runner trend summary">
-          <article class="kpi-card kpi-featured">
-            <span>Total distance</span>
-            <strong id="totalDistance">-</strong>
-            <small id="totalDistanceDelta"></small>
-          </article>
-          <article class="kpi-card">
-            <span>Average pace</span>
-            <strong id="averagePace">-</strong>
-            <small id="averagePaceDelta"></small>
-          </article>
-          <article class="kpi-card">
-            <span>Long run</span>
-            <strong id="longRun">-</strong>
-            <small id="longRunDelta"></small>
-          </article>
-          <article class="kpi-card">
-            <span>Consistency</span>
-            <strong id="consistency">-</strong>
-            <small id="consistencyDelta"></small>
-          </article>
-          <article class="kpi-card">
-            <span>Average HR</span>
-            <strong id="averageHr">-</strong>
-            <small id="averageHrDelta"></small>
-          </article>
-        </section>
       </section>
 
       <div class="analysis-row">
@@ -205,13 +187,6 @@
       </div>
 
       <section class="dashboard" aria-label="Training visuals">
-        <section class="chart-panel" aria-labelledby="volumePaceTitle">
-          <div class="panel-heading">
-            <h2 id="volumePaceTitle">Training volume & pace</h2>
-            <span>Click a period to explore its runs</span>
-          </div>
-          <div id="scatterChart" class="chart"></div>
-        </section>
         <section class="chart-panel" aria-labelledby="structureTitle">
           <div class="panel-heading">
             <h2 id="structureTitle">Weekly rhythm</h2>
@@ -226,6 +201,26 @@
           </div>
           <div id="heatmapChart" class="chart compact-chart"></div>
         </section>
+      </section>
+
+      <section class="key-runs data-panel" aria-labelledby="keyRunsTitle">
+        <div class="panel-heading">
+          <div><span class="section-kicker">Start here</span><h2 id="keyRunsTitle">Key runs in this block</h2></div>
+          <span>Open a run for full context</span>
+        </div>
+        <div id="keyRuns" class="key-runs-grid"></div>
+      </section>
+
+      <details class="advanced-exploration">
+        <summary><span>Explore supporting data</span><small>Distributions, workload, and volume–pace patterns</small></summary>
+        <section class="dashboard" aria-label="Supporting training visuals">
+          <section class="chart-panel" aria-labelledby="volumePaceTitle">
+            <div class="panel-heading">
+              <h2 id="volumePaceTitle">Training volume & pace</h2>
+              <span>Click a period to explore its runs</span>
+            </div>
+            <div id="scatterChart" class="chart"></div>
+          </section>
         <section class="chart-panel wide" aria-labelledby="workloadTitle">
           <div class="panel-heading">
             <h2 id="workloadTitle">Rolling workload</h2>
@@ -247,7 +242,8 @@
           </div>
           <div id="paceZoneChart" class="chart"></div>
         </section>
-      </section>
+        </section>
+      </details>
 
       <section id="runs" class="table-section data-panel" aria-labelledby="runsTitle">
         <div class="panel-heading">

@@ -33,16 +33,9 @@ const els = {
   metricSelect: document.querySelector("#metricSelect"),
   status: document.querySelector("#status"),
   tooltip: document.querySelector("#chartTooltip"),
-  totalDistance: document.querySelector("#totalDistance"),
-  totalDistanceDelta: document.querySelector("#totalDistanceDelta"),
-  averagePace: document.querySelector("#averagePace"),
-  averagePaceDelta: document.querySelector("#averagePaceDelta"),
-  longRun: document.querySelector("#longRun"),
-  longRunDelta: document.querySelector("#longRunDelta"),
-  consistency: document.querySelector("#consistency"),
-  consistencyDelta: document.querySelector("#consistencyDelta"),
-  averageHr: document.querySelector("#averageHr"),
-  averageHrDelta: document.querySelector("#averageHrDelta"),
+  blockReviewTitle: document.querySelector("#blockReviewTitle"),
+  blockReviewSummary: document.querySelector("#blockReviewSummary"),
+  blockEvidence: document.querySelector("#blockEvidence"),
   mainChartTitle: document.querySelector("#mainChartTitle"),
   mainChartSubtitle: document.querySelector("#mainChartSubtitle"),
   mainChart: document.querySelector("#mainChart"),
@@ -60,6 +53,7 @@ const els = {
   aiInsightContent: document.querySelector("#aiInsightContent"),
   activityRows: document.querySelector("#activityRows"),
   activityCount: document.querySelector("#activityCount"),
+  keyRuns: document.querySelector("#keyRuns"),
   workoutModal: document.querySelector("#workoutModal"),
   workoutModalClose: document.querySelector("#workoutModalClose"),
   workoutModalContent: document.querySelector("#workoutModalContent")
@@ -418,17 +412,8 @@ function render() {
   const summary = summarize(state.filteredRuns, state.buckets);
   const previous = summarizePreviousPeriod(normalized, start, end);
   renderHeroStatus(summary);
-  els.totalDistance.textContent = `${summary.totalMiles.toFixed(1)} mi`;
-  els.averagePace.textContent = formatPace(summary.averagePace);
-  els.longRun.textContent = `${summary.longRun.toFixed(1)} mi`;
-  els.consistency.textContent = `${Math.round(summary.consistency * 100)}%`;
-  els.averageHr.textContent = summary.averageHr ? `${Math.round(summary.averageHr)} bpm` : "-";
-  renderDelta(els.totalDistanceDelta, summary.totalMiles, previous.totalMiles, "mi", true);
-  renderDelta(els.averagePaceDelta, summary.averagePace, previous.averagePace, "pace", false);
-  renderDelta(els.longRunDelta, summary.longRun, previous.longRun, "mi", true);
-  renderDelta(els.consistencyDelta, summary.consistency * 100, previous.consistency * 100, "%", true);
-  renderDelta(els.averageHrDelta, summary.averageHr, previous.averageHr, "bpm", false, true);
-
+  renderBlockReview(summary, previous);
+  renderKeyRuns();
   renderIntel(summary, previous, start, end);
   renderAiState();
   renderMainChart();
@@ -791,6 +776,70 @@ function attachTooltip(element, title, rows, { keyboard = true } = {}) {
   } else {
     element.setAttribute("aria-hidden", "true");
   }
+}
+
+function periodPercent(current, previous) {
+  if (!previous) return null;
+  return ((current - previous) / previous) * 100;
+}
+
+function paceChangeText(current, previous) {
+  if (!current || !previous) return "No prior pace baseline";
+  const seconds = Math.round(current - previous);
+  if (!seconds) return "Matched prior pace";
+  return `${Math.abs(seconds)} sec/mi ${seconds < 0 ? "faster" : "slower"} than prior`;
+}
+
+function renderBlockReview(summary, previous) {
+  if (!summary.runCount) {
+    els.blockReviewTitle.textContent = "Load training data to review your block";
+    els.blockReviewSummary.textContent = "Your volume, pace, and training rhythm will be compared with the preceding window.";
+    els.blockEvidence.replaceChildren();
+    return;
+  }
+  const volumeChange = periodPercent(summary.totalMiles, previous.totalMiles);
+  const paceDelta = summary.averagePace && previous.averagePace ? Math.round(summary.averagePace - previous.averagePace) : null;
+  const volumePhrase = volumeChange === null ? "a new baseline" : `${Math.abs(Math.round(volumeChange))}% ${volumeChange >= 0 ? "more" : "less"} mileage`;
+  let title = "A steady training block";
+  if (volumeChange !== null && volumeChange >= 10 && (paceDelta === null || paceDelta <= 8)) title = "More volume without losing pace";
+  else if (volumeChange !== null && volumeChange <= -10) title = "A lighter block, with room to rebuild";
+  else if (paceDelta !== null && paceDelta <= -8) title = "Pace improved across a steady block";
+  els.blockReviewTitle.textContent = title;
+  els.blockReviewSummary.textContent = `This window contains ${summary.runCount} runs over ${summary.activeDays} active days: ${volumePhrase}${paceDelta === null ? "." : ` and ${paceChangeText(summary.averagePace, previous.averagePace)}.`}`;
+  const evidence = [
+    { label: "Volume", value: `${summary.totalMiles.toFixed(1)} mi`, detail: volumeChange === null ? "First comparable window" : `${volumeChange >= 0 ? "+" : ""}${Math.round(volumeChange)}% vs prior window` },
+    { label: "Pace", value: formatPace(summary.averagePace), detail: paceChangeText(summary.averagePace, previous.averagePace) },
+    { label: "Rhythm", value: `${summary.averageRunsPerWeek.toFixed(1)} runs/wk`, detail: `${summary.activeDays} active days · longest run ${summary.longRun.toFixed(1)} mi` }
+  ];
+  els.blockEvidence.replaceChildren(...evidence.map((item) => {
+    const card = document.createElement("article");
+    card.className = "block-evidence-card";
+    card.innerHTML = `<span>${escapeHtml(item.label)}</span><strong>${escapeHtml(item.value)}</strong><small>${escapeHtml(item.detail)}</small>`;
+    return card;
+  }));
+}
+
+function renderKeyRuns() {
+  if (!state.filteredRuns.length) {
+    els.keyRuns.innerHTML = '<div class="empty-state">Key runs will appear once a training block is loaded.</div>';
+    return;
+  }
+  const runs = state.filteredRuns;
+  const candidates = [
+    { label: "Most recent", run: runs[runs.length - 1], reason: "Current context for the block" },
+    { label: "Longest", run: [...runs].sort((a, b) => miles(b.distance) - miles(a.distance))[0], reason: "Longest distance in this window" },
+    { label: "Highest effort", run: [...runs].sort((a, b) => activityLoad(b) - activityLoad(a))[0], reason: "Highest estimated effort" },
+    { label: "Fastest comparable", run: [...runs].filter((run) => miles(run.distance) >= 4).sort((a, b) => paceSeconds(a) - paceSeconds(b))[0], reason: "Fastest run over four miles" }
+  ].filter((item) => item.run);
+  const unique = candidates.filter((item, index, list) => list.findIndex((candidate) => String(candidate.run.id) === String(item.run.id)) === index);
+  els.keyRuns.replaceChildren(...unique.map((item) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "key-run-card";
+    button.dataset.activityId = item.run.id;
+    button.innerHTML = `<span>${escapeHtml(item.label)}</span><strong>${escapeHtml(item.run.name)}</strong><em>${escapeHtml(parseActivityDate(item.run).toLocaleDateString(undefined, { month: "short", day: "numeric" }))} · ${miles(item.run.distance).toFixed(2)} mi · ${escapeHtml(formatPace(paceSeconds(item.run)))}</em><small>${escapeHtml(item.reason)}</small>`;
+    return button;
+  }));
 }
 
 function runsForBucket(bucket) {
@@ -2172,6 +2221,11 @@ els.workoutModal.addEventListener("click", (event) => {
   if (digestAction?.dataset.runId) generateRunDigest(digestAction.dataset.runId);
   const runAction = event.target.closest("[data-action='open-run']");
   if (runAction?.dataset.runId) showWorkoutModal(runAction.dataset.runId, runAction);
+});
+
+els.keyRuns.addEventListener("click", (event) => {
+  const card = event.target.closest(".key-run-card");
+  if (card?.dataset.activityId) showWorkoutModal(card.dataset.activityId, card);
 });
 
 document.addEventListener("keydown", (event) => {
