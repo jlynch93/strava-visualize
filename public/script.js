@@ -54,10 +54,41 @@ const els = {
   activityRows: document.querySelector("#activityRows"),
   activityCount: document.querySelector("#activityCount"),
   keyRuns: document.querySelector("#keyRuns"),
+  goalForm: document.querySelector("#goalForm"),
+  goalMode: document.querySelector("#goalMode"),
+  goalMiles: document.querySelector("#goalMiles"),
+  goalEvent: document.querySelector("#goalEvent"),
+  checkinForm: document.querySelector("#checkinForm"),
+  checkinFeel: document.querySelector("#checkinFeel"),
+  checkinLimiter: document.querySelector("#checkinLimiter"),
+  checkinIntent: document.querySelector("#checkinIntent"),
+  readinessContent: document.querySelector("#readinessContent"),
+  planDraftCopy: document.querySelector("#planDraftCopy"),
+  copyPlanButton: document.querySelector("#copyPlanButton"),
   workoutModal: document.querySelector("#workoutModal"),
   workoutModalClose: document.querySelector("#workoutModalClose"),
   workoutModalContent: document.querySelector("#workoutModalContent")
 };
+
+const CONTEXT_STORAGE_KEY = "run-trends-coaching-context-v1";
+let coachingContext = loadCoachingContext();
+
+function loadCoachingContext() {
+  try { return JSON.parse(localStorage.getItem(CONTEXT_STORAGE_KEY)) || { goal: {}, checkin: {} }; } catch { return { goal: {}, checkin: {} }; }
+}
+
+function saveCoachingContext() {
+  try { localStorage.setItem(CONTEXT_STORAGE_KEY, JSON.stringify(coachingContext)); } catch { /* Local context is optional. */ }
+}
+
+function syncCoachingInputs() {
+  els.goalMode.value = coachingContext.goal.mode || "maintain";
+  els.goalMiles.value = coachingContext.goal.miles || "";
+  els.goalEvent.value = coachingContext.goal.event || "";
+  els.checkinFeel.value = coachingContext.checkin.feel || "";
+  els.checkinLimiter.value = coachingContext.checkin.limiter || "none";
+  els.checkinIntent.value = coachingContext.checkin.intent || "mixed";
+}
 
 const METRICS = {
   distance: { label: "Mileage", unit: "mi", value: (b) => b.distanceMiles, format: (v) => `${v.toFixed(1)} mi` },
@@ -413,6 +444,7 @@ function render() {
   const previous = summarizePreviousPeriod(normalized, start, end);
   renderHeroStatus(summary);
   renderBlockReview(summary, previous);
+  renderCoachingWorkspace(summary);
   renderKeyRuns();
   renderIntel(summary, previous, start, end);
   renderAiState();
@@ -479,6 +511,7 @@ function buildInsightPayload() {
   }));
   return {
     focus: els.aiFocus.value,
+    coachingContext,
     range: {
       start: els.startDate.value || null,
       end: els.endDate.value || null,
@@ -581,7 +614,10 @@ function renderAiInsight(insight) {
   const caution = document.createElement("p");
   caution.className = "ai-caution";
   caution.textContent = insight.caution || "Treat this as a training pattern review, not medical advice.";
-  els.aiInsightContent.replaceChildren(header, observations, nextStep, caution);
+  const sources = document.createElement("div");
+  sources.className = "ai-sources";
+  sources.innerHTML = `<span>Evidence considered</span>${state.filteredRuns.slice(-3).reverse().map((run) => `<button type="button" data-action="open-run" data-run-id="${escapeHtml(String(run.id))}">${escapeHtml(run.name)} · ${miles(run.distance).toFixed(1)} mi</button>`).join("")}`;
+  els.aiInsightContent.replaceChildren(header, observations, nextStep, sources, caution);
 }
 
 async function analyzeWithOllama() {
@@ -840,6 +876,28 @@ function renderKeyRuns() {
     button.innerHTML = `<span>${escapeHtml(item.label)}</span><strong>${escapeHtml(item.run.name)}</strong><em>${escapeHtml(parseActivityDate(item.run).toLocaleDateString(undefined, { month: "short", day: "numeric" }))} · ${miles(item.run.distance).toFixed(2)} mi · ${escapeHtml(formatPace(paceSeconds(item.run)))}</em><small>${escapeHtml(item.reason)}</small>`;
     return button;
   }));
+}
+
+function renderCoachingWorkspace(summary) {
+  if (!summary.runCount) {
+    els.readinessContent.innerHTML = '<p class="context-muted">Add a training block to see the inputs behind this view.</p>';
+    els.planDraftCopy.textContent = "Load a block to create a transparent draft.";
+    els.copyPlanButton.disabled = true;
+    return;
+  }
+  const newest = state.filteredRuns[state.filteredRuns.length - 1];
+  const sevenStart = new Date(parseActivityDate(newest)); sevenStart.setDate(sevenStart.getDate() - 6);
+  const lastSeven = state.filteredRuns.filter((run) => parseActivityDate(run) >= sevenStart);
+  const sevenMiles = lastSeven.reduce((sum, run) => sum + miles(run.distance), 0);
+  const baseline = summary.averageWeeklyMiles;
+  const hardRuns = lastSeven.filter((run) => Number(run.average_heartrate) >= 155 || activityLoad(run) / Math.max(miles(run.distance), 1) >= summary.averageLoadPerMile * 1.15).length;
+  const confidence = state.filteredRuns.length >= 12 ? "High" : state.filteredRuns.length >= 6 ? "Moderate" : "Early";
+  els.readinessContent.innerHTML = `<div class="readiness-metric"><strong>${sevenMiles.toFixed(1)} mi</strong><span>last 7 days · ${baseline.toFixed(1)} mi baseline</span></div><ul><li>${lastSeven.length} runs in the last 7 days</li><li>${hardRuns} higher-effort run${hardRuns === 1 ? "" : "s"} by available data</li><li>${summary.longestRestGap} days longest rest gap</li><li>${confidence} confidence · ${summary.runCount} runs in this block</li></ul><p class="context-muted">This is a transparent workload view, not a medical or readiness score.</p>`;
+  const goalMiles = Number(coachingContext.goal.miles) || baseline;
+  const intent = coachingContext.goal.mode || "maintain";
+  const range = intent === "build" ? `${goalMiles.toFixed(0)}–${(goalMiles * 1.08).toFixed(0)}` : intent === "recover" ? `${(goalMiles * 0.7).toFixed(0)}–${(goalMiles * 0.85).toFixed(0)}` : `${(goalMiles * 0.9).toFixed(0)}–${goalMiles.toFixed(0)}`;
+  els.planDraftCopy.textContent = `${intent[0].toUpperCase() + intent.slice(1)} week draft: ${range} mi across about ${Math.max(2, Math.round(summary.averageRunsPerWeek))} runs. Keep the longest run at or below ${summary.longRun.toFixed(1)} mi. Review and adjust it to your schedule, goal, and how you feel.`;
+  els.copyPlanButton.disabled = false;
 }
 
 function runsForBucket(bucket) {
@@ -2223,9 +2281,36 @@ els.workoutModal.addEventListener("click", (event) => {
   if (runAction?.dataset.runId) showWorkoutModal(runAction.dataset.runId, runAction);
 });
 
+els.goalForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  coachingContext.goal = { mode: els.goalMode.value, miles: els.goalMiles.value, event: els.goalEvent.value.trim() };
+  saveCoachingContext();
+  state.renderedInsightFingerprint = "";
+  render();
+  setStatus("Training goal saved in this browser.");
+});
+
+els.checkinForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  coachingContext.checkin = { feel: els.checkinFeel.value, limiter: els.checkinLimiter.value, intent: els.checkinIntent.value };
+  saveCoachingContext();
+  state.renderedInsightFingerprint = "";
+  render();
+  setStatus("Weekly check-in saved in this browser.");
+});
+
+els.copyPlanButton.addEventListener("click", async () => {
+  try { await navigator.clipboard.writeText(els.planDraftCopy.textContent); setStatus("Next-week draft copied. Review it before using it."); } catch { setStatus("Copy is unavailable in this browser.", true); }
+});
+
 els.keyRuns.addEventListener("click", (event) => {
   const card = event.target.closest(".key-run-card");
   if (card?.dataset.activityId) showWorkoutModal(card.dataset.activityId, card);
+});
+
+els.aiInsightContent.addEventListener("click", (event) => {
+  const source = event.target.closest("[data-action='open-run']");
+  if (source?.dataset.runId) showWorkoutModal(source.dataset.runId, source);
 });
 
 document.addEventListener("keydown", (event) => {
@@ -2264,5 +2349,6 @@ els.rangeSelect.addEventListener("change", () => {
 
 checkStatus().catch((error) => setStatus(error.message, true));
 syncRangeInputs();
+syncCoachingInputs();
 bindTooltips();
 render();

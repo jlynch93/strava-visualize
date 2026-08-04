@@ -50,6 +50,7 @@ const RUN_DIGEST_SCHEMA = {
 
 function buildPrompt(input) {
   const summary = input.summary || {};
+  const context = input.coachingContext || {};
   const pace = (seconds) => {
     const value = Math.max(0, Math.round(Number(seconds) || 0));
     return value ? `${Math.floor(value / 60)}:${String(value % 60).padStart(2, "0")}/mi` : "n/a";
@@ -58,10 +59,11 @@ function buildPrompt(input) {
     `${period.period}: ${period.runs} runs, ${period.miles} mi, ${pace(period.averagePaceSeconds)}, long ${period.longRunMiles} mi, HR ${period.averageHr ?? "n/a"}, load ${period.trainingLoad}`
   );
   const runs = (input.recentRuns || []).map((run) =>
-    `${run.date}: ${run.distanceMiles} mi, ${pace(run.paceSecondsPerMile)}, ${run.elevationFeet} ft, HR ${run.averageHr ?? "n/a"}, load ${run.trainingLoad}`
+    `${run.date} ${run.name || "Run"}: ${run.distanceMiles} mi, ${pace(run.paceSecondsPerMile)}, ${run.elevationFeet} ft, HR ${run.averageHr ?? "n/a"}, load ${run.trainingLoad}`
   );
   return [
     `Focus: ${input.focus || "balanced"}. Window: ${input.range?.start || "unknown"} to ${input.range?.end || "unknown"}.`,
+    `Runner context (self-reported, optional): goal ${context.goal?.mode || "not set"}, weekly target ${context.goal?.miles || "not set"}, event ${context.goal?.event || "not set"}; feel ${context.checkin?.feel || "not logged"}/5, limiter ${context.checkin?.limiter || "not logged"}, run intent ${context.checkin?.intent || "not logged"}.`,
     `Totals: ${summary.runCount} runs, ${summary.totalMiles} mi, average pace ${pace(summary.averagePaceSeconds)}, average ${summary.averageWeeklyMiles} mi/week and ${summary.averageRunsPerWeek} runs/week.`,
     `Signals: long run ${summary.longRunMiles} mi (${summary.longRunSharePercent}% of mileage), peak week ${summary.peakWeekMiles} mi, consistency ${summary.consistencyPercent}%, ramp ${summary.rampRatePercent}%, average HR ${summary.averageHr ?? "n/a"}, load ${summary.trainingLoad}, longest rest gap ${summary.longestRestGapDays} days.`,
     `Recent periods:\n${periods.join("\n")}`,
@@ -69,7 +71,7 @@ function buildPrompt(input) {
     "Load is a rough estimate.",
     "Write athlete-facing prose, not labels, placeholders, plans, or a data dump.",
     "Summary: 1-2 sentences connecting at least two metrics.",
-    "Observations: 3 distinct trends or comparisons; do not merely list individual runs.",
+    "Observations: 3 distinct trends or comparisons; do not merely list individual runs. When citing a run, use its supplied date and name.",
     "Do not invent numbers or diagnose health, injury, overtraining, or readiness."
   ].join("\n");
 }

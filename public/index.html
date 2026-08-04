@@ -165,10 +165,10 @@
             <div class="ai-controls">
               <label for="aiFocus">Focus</label>
               <select id="aiFocus">
-                <option value="balanced" selected>Balanced review</option>
-                <option value="progression">Fitness progression</option>
-                <option value="recovery">Recovery &amp; load</option>
-                <option value="consistency">Consistency</option>
+                <option value="weekly-review" selected>What changed this week?</option>
+                <option value="harder-run">Why did a recent run feel harder?</option>
+                <option value="long-runs">Compare my recent long runs</option>
+                <option value="pace-trend">What supports my pace trend?</option>
               </select>
               <button id="aiAnalyzeButton" class="ai-action" type="button" disabled>Analyze this block</button>
             </div>
@@ -185,6 +185,28 @@
           </div>
         </section>
       </div>
+
+      <section class="coaching-workspace data-panel" aria-labelledby="coachingWorkspaceTitle">
+        <div class="panel-heading"><div><span class="section-kicker">Your context</span><h2 id="coachingWorkspaceTitle">A clearer coaching picture</h2></div><span>Saved only in this browser</span></div>
+        <div class="coaching-grid">
+          <form id="goalForm" class="context-card">
+            <h3>Training goal</h3>
+            <label for="goalMode">Block intent</label><select id="goalMode"><option value="maintain">Maintain</option><option value="build">Build</option><option value="recover">Recover</option></select>
+            <label for="goalMiles">Weekly mileage target</label><input id="goalMiles" type="number" min="0" step="1" placeholder="Optional">
+            <label for="goalEvent">Event or focus date</label><input id="goalEvent" type="text" maxlength="48" placeholder="Optional">
+            <button type="submit" class="context-save">Save goal</button>
+          </form>
+          <form id="checkinForm" class="context-card">
+            <h3>Weekly check-in</h3>
+            <label for="checkinFeel">How did this block feel?</label><select id="checkinFeel"><option value="">Not logged</option><option value="1">1 · very hard</option><option value="2">2 · hard</option><option value="3">3 · manageable</option><option value="4">4 · good</option><option value="5">5 · strong</option></select>
+            <label for="checkinLimiter">Main limiting factor</label><select id="checkinLimiter"><option value="none">None noted</option><option value="sleep">Sleep</option><option value="heat">Heat / weather</option><option value="soreness">Soreness</option><option value="stress">Life stress</option><option value="terrain">Terrain</option></select>
+            <label for="checkinIntent">Most runs were</label><select id="checkinIntent"><option value="mixed">Mixed</option><option value="easy">Easy</option><option value="workout">Workouts</option><option value="long">Long runs</option><option value="race">Race effort</option></select>
+            <button type="submit" class="context-save">Save check-in</button>
+          </form>
+          <section class="context-card readiness-card" aria-labelledby="readinessTitle"><h3 id="readinessTitle">Training readiness</h3><div id="readinessContent"></div></section>
+        </div>
+        <section class="plan-draft" aria-labelledby="planDraftTitle"><div><span class="section-kicker">Reviewable draft</span><h3 id="planDraftTitle">Next-week plan</h3><p id="planDraftCopy">Load a block to create a transparent draft.</p></div><button id="copyPlanButton" type="button" class="context-save" disabled>Copy draft</button></section>
+      </section>
 
       <section class="dashboard" aria-label="Training visuals">
         <section class="chart-panel" aria-labelledby="structureTitle">
