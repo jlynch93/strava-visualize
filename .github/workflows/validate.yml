@@ -1,0 +1,31 @@
+name: Validate dashboard
+
+on:
+  pull_request:
+  push:
+    branches: [main, codex/**]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: self-hosted
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Run regression tests
+        run: npm ci --ignore-scripts && npm test
+      - name: Check JavaScript syntax
+        shell: pwsh
+        run: |
+          node --check public/script.js
+          node --check server.js
+          Get-Content -LiteralPath 'src/worker.js' -Raw | node --input-type=module --check
+          Get-Content -LiteralPath 'functions/api/insights.js' -Raw | node --input-type=module --check
+      - name: Check patch whitespace
+        run: git diff --check HEAD^ HEAD

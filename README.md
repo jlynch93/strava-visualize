@@ -18,6 +18,24 @@ Run the local regression checks with:
 npm test
 ```
 
+## Definition of done
+
+The dashboard is ready to ship when the selected training block, race goal,
+weekly check-in, and recommended calendar can be reviewed in one place. Goals,
+check-ins, and plan states are intentionally stored only in the current
+browser; export/import and account sync remain future enhancements.
+
+The recommended calendar is a reviewable proposal. It uses the runner's saved
+availability, long-run preference, selected intent, recent workload, and race
+countdown. A planned session can be marked completed or skipped; an activity on
+the same date is automatically recognized as completed. It is not medical
+guidance or an autonomous training prescription.
+
+Pull requests run `Validate dashboard` on a self-hosted runner. The workflow
+runs the regression suite, JavaScript syntax checks for all deployment targets,
+and a Git whitespace check. Ensure the runner is labeled `self-hosted` and has
+Node 20 available.
+
 ## Cloudflare Workers
 
 The app deploys as a Cloudflare Worker with static assets. Static files live in `public/`; Strava API routes are handled by `src/worker.js`.
