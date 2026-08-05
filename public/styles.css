@@ -1064,7 +1064,7 @@ svg {
 .plan-draft .section-kicker { color: var(--accent); }
 .plan-draft .context-save { flex: 0 0 auto; margin: 0; background: var(--accent); color: var(--accent-ink); }
 .recommended-calendar { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; margin-top: 16px; }
-.recommended-day { min-height: 108px; padding: 10px; border: 1px solid oklch(34% .02 210); border-radius: 0; background: oklch(16% .025 219); text-align: left; }
+.recommended-day { display: block; width: 100%; min-height: 108px; padding: 10px; border: 1px solid oklch(34% .02 210); border-radius: 0; background: oklch(16% .025 219); text-align: left; }
 .recommended-day > span, .recommended-day time, .recommended-day small { display: block; color: oklch(70% .018 198); font-size: .64rem; line-height: 1.35; }
 .recommended-day > span { color: var(--accent); font-weight: 800; letter-spacing: .07em; text-transform: uppercase; }
 .recommended-day time { margin-top: 3px; }
