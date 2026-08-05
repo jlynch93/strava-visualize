@@ -1,0 +1,45 @@
+name: Deploy production
+
+on:
+  workflow_dispatch:
+    inputs:
+      production_url:
+        description: Public production URL, for example https://runs.example.com
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    runs-on: self-hosted
+    environment: production
+    timeout-minutes: 15
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Verify deployment prerequisites
+        run: |
+          test -n "$CLOUDFLARE_API_TOKEN"
+          command -v wrangler
+      - name: Deploy Worker and assets
+        run: wrangler deploy
+      - name: Smoke test production
+        env:
+          PRODUCTION_URL: ${{ inputs.production_url }}
+        run: |
+          base="${PRODUCTION_URL%/}"
+          curl --fail --silent --show-error "$base/api/status" | grep -q 'configured'
+          curl --fail --silent --show-error "$base/" | grep -q 'Run Trends'
+          curl --fail --silent --show-error "$base/script.js" >/dev/null

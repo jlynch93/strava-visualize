@@ -18,6 +18,18 @@ Run the local regression checks with:
 npm test
 ```
 
+## GitHub workflows
+
+`Validate dashboard` runs on pushes to `main` and `codex/**` using a trusted
+self-hosted runner. It cancels older validation runs for the same branch.
+
+`Deploy production` is manual and only deploys from `main`. Configure a GitHub
+environment named `production`, protect it with the desired reviewers, and add
+`CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` as environment secrets. The
+self-hosted runner must have the Cloudflare `wrangler` CLI installed. Dispatch
+the workflow with the public production URL; it verifies the deployed status,
+dashboard HTML, and client script before reporting success.
+
 ## Definition of done
 
 The dashboard is ready to ship when the selected training block, race goal,
