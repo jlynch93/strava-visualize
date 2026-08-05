@@ -18,6 +18,36 @@ Run the local regression checks with:
 npm test
 ```
 
+## GitHub workflows
+
+`Validate dashboard` runs on pushes to `main` and `codex/**` using a trusted
+self-hosted runner. It cancels older validation runs for the same branch.
+
+`Deploy production` is manual and only deploys from `main`. Configure a GitHub
+environment named `production`, protect it with the desired reviewers, and add
+`CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` as environment secrets. The
+self-hosted runner must have the Cloudflare `wrangler` CLI installed. Dispatch
+the workflow with the public production URL; it verifies the deployed status,
+dashboard HTML, and client script before reporting success.
+
+## Definition of done
+
+The dashboard is ready to ship when the selected training block, race goal,
+weekly check-in, and recommended calendar can be reviewed in one place. Goals,
+check-ins, and plan states are intentionally stored only in the current
+browser; export/import and account sync remain future enhancements.
+
+The recommended calendar is a reviewable proposal. It uses the runner's saved
+availability, long-run preference, selected intent, recent workload, and race
+countdown. A planned session can be marked completed or skipped; an activity on
+the same date is automatically recognized as completed. It is not medical
+guidance or an autonomous training prescription.
+
+Pull requests run `Validate dashboard` on a self-hosted runner. The workflow
+runs the regression suite, JavaScript syntax checks for all deployment targets,
+and a Git whitespace check. Ensure the runner is labeled `self-hosted` and has
+Node 20 available.
+
 ## Cloudflare Workers
 
 The app deploys as a Cloudflare Worker with static assets. Static files live in `public/`; Strava API routes are handled by `src/worker.js`.
@@ -56,6 +86,20 @@ being attached to the wrong browser session.
 `qwen3.5:0.8b` is the default workout-analysis model. The request keeps
 reasoning hidden and asks for concise schema-valid JSON so the UI receives only
 the final training read.
+
+## Run-detail enrichment
+
+Opening an individual run fetches modeled start-time weather through
+`/api/weather`. The endpoint uses the run's local start date/hour and a start
+location rounded to two decimal places before querying Open-Meteo. It returns
+temperature, apparent temperature, humidity, precipitation, and wind as
+context—not as a replacement for a watch measurement—and uses a private
+one-day cache.
+
+The **Coach's read** is deliberately on demand. Its per-run request contains
+only compact, allowlisted metrics (distance, pace, duration, elevation, heart
+rate, load, comparable-run context, percentiles, and normalized weather). It
+does not include activity names, descriptions, route points, or coordinates.
 
 Then deploy:
 

@@ -44,7 +44,7 @@ after(() => serverProcess?.kill());
 test("serves the dashboard and reports configuration status", async () => {
   const page = await request("/");
   assert.equal(page.status, 200);
-  assert.match(await page.text(), /Run deeper/);
+  assert.match(await page.text(), /Read the work/);
 
   const status = await request("/api/status");
   assert.equal(status.status, 200);
@@ -53,8 +53,8 @@ test("serves the dashboard and reports configuration status", async () => {
   assert.equal(data.connected, false);
 });
 
-test("returns an actionable status for protected activity routes", async () => {
-  const response = await request("/api/activities/123");
+test("returns an actionable status for the protected activity route", async () => {
+  const response = await request("/api/activities");
   assert.equal(response.status, 503);
   assert.deepEqual(await response.json(), {
     error: "Add STRAVA_CLIENT_ID and STRAVA_CLIENT_SECRET to .env, then restart the server."

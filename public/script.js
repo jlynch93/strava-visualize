@@ -2,85 +2,43 @@ const state = {
   rawActivities: [],
   filteredRuns: [],
   buckets: [],
-  comparisonRuns: [],
-  comparisonBuckets: [],
-  comparisonSummary: null,
-  comparisonLabel: "previous period",
-  bucketMode: "week",
   status: null,
   stravaReady: false,
   stravaConnected: false,
   stravaError: "",
   modalTrigger: null,
-  focusedBucketKey: "",
-  insightFingerprint: "",
-  renderedInsightFingerprint: "",
-  runInsightCache: new Map(),
-  runInsightAbort: null,
-  runWeatherCache: new Map(),
-  runWeatherAbort: null,
-  runRouteCache: new Map(),
-  runRouteAbort: null,
-  funWeatherAbort: null,
-  funWeatherFingerprint: "",
-  funWeatherActiveFingerprint: "",
-  funWeatherCompletedFingerprint: "",
-  funWeatherSampleKeys: [],
-  funWeatherEligibleCount: 0,
-  workoutMap: null,
-  activeRunInsightKey: "",
+  modalSession: 0,
   activeRunId: "",
-  activeRunFocus: "balanced",
-  activeWorkoutSection: "analysis",
-  workoutSession: 0,
-  dataSource: "No data",
-  activityAbort: null,
-  activityRequestId: 0,
-  activityTruncated: false,
-  activityVisible: 15
+  activeRunWeather: null,
+  runWeatherCache: new Map(),
+  runWeatherPending: new Map(),
+  runDigestCache: new Map(),
+  runDigestAbort: null,
+  insightFingerprint: "",
+  renderedInsightFingerprint: ""
 };
 
 const els = {
   connectButton: document.querySelector("#connectButton"),
-  disconnectButton: document.querySelector("#disconnectButton"),
   demoButton: document.querySelector("#demoButton"),
   fileInput: document.querySelector("#fileInput"),
+  emptyConnectButton: document.querySelector("#emptyConnectButton"),
+  emptyDemoButton: document.querySelector("#emptyDemoButton"),
+  emptyFileInput: document.querySelector("#emptyFileInput"),
+  heroStatus: document.querySelector("#heroStatus"),
   rangeSelect: document.querySelector("#rangeSelect"),
-  rangeSummary: document.querySelector("#rangeSummary"),
-  rangePresetButtons: [...document.querySelectorAll("[data-range]")],
-  customRangeToggle: document.querySelector("#customRangeToggle"),
-  customRangePanel: document.querySelector("#customRangePanel"),
   startDate: document.querySelector("#startDate"),
   endDate: document.querySelector("#endDate"),
-  comparisonSelect: document.querySelector("#comparisonSelect"),
   bucketSelect: document.querySelector("#bucketSelect"),
   metricSelect: document.querySelector("#metricSelect"),
-  copyViewButton: document.querySelector("#copyViewButton"),
-  exportViewButton: document.querySelector("#exportViewButton"),
-  navWindowLabel: document.querySelector("#navWindowLabel"),
   status: document.querySelector("#status"),
   tooltip: document.querySelector("#chartTooltip"),
-  totalDistance: document.querySelector("#totalDistance"),
-  totalDistanceDelta: document.querySelector("#totalDistanceDelta"),
-  averagePace: document.querySelector("#averagePace"),
-  averagePaceDelta: document.querySelector("#averagePaceDelta"),
-  longRun: document.querySelector("#longRun"),
-  longRunDelta: document.querySelector("#longRunDelta"),
-  consistency: document.querySelector("#consistency"),
-  consistencyDelta: document.querySelector("#consistencyDelta"),
-  averageHr: document.querySelector("#averageHr"),
-  averageHrDelta: document.querySelector("#averageHrDelta"),
-  trainingBriefSummary: document.querySelector("#trainingBriefSummary"),
-  trainingBriefSignals: document.querySelector("#trainingBriefSignals"),
-  funStatsSubtitle: document.querySelector("#funStatsSubtitle"),
-  funStatsGrid: document.querySelector("#funStatsGrid"),
+  blockReviewTitle: document.querySelector("#blockReviewTitle"),
+  blockReviewSummary: document.querySelector("#blockReviewSummary"),
+  blockEvidence: document.querySelector("#blockEvidence"),
   mainChartTitle: document.querySelector("#mainChartTitle"),
   mainChartSubtitle: document.querySelector("#mainChartSubtitle"),
   mainChart: document.querySelector("#mainChart"),
-  trainingArcChart: document.querySelector("#trainingArcChart"),
-  trainingArcInsight: document.querySelector("#trainingArcInsight"),
-  trainingArcInsightTitle: document.querySelector("#trainingArcInsightTitle"),
-  trainingArcInsightText: document.querySelector("#trainingArcInsightText"),
   scatterChart: document.querySelector("#scatterChart"),
   structureChart: document.querySelector("#structureChart"),
   heatmapSubtitle: document.querySelector("#heatmapSubtitle"),
@@ -91,21 +49,58 @@ const els = {
   intelSubtitle: document.querySelector("#intelSubtitle"),
   intelGrid: document.querySelector("#intelGrid"),
   aiFocus: document.querySelector("#aiFocus"),
-  aiQuestion: document.querySelector("#aiQuestion"),
   aiAnalyzeButton: document.querySelector("#aiAnalyzeButton"),
-  aiModelName: document.querySelector("#aiModelName"),
   aiInsightContent: document.querySelector("#aiInsightContent"),
-  aiPromptChips: document.querySelector("#aiPromptChips"),
   activityRows: document.querySelector("#activityRows"),
   activityCount: document.querySelector("#activityCount"),
-  activitySearch: document.querySelector("#activitySearch"),
-  activityType: document.querySelector("#activityType"),
-  activitySort: document.querySelector("#activitySort"),
-  loadMoreRuns: document.querySelector("#loadMoreRuns"),
+  keyRuns: document.querySelector("#keyRuns"),
+  goalForm: document.querySelector("#goalForm"),
+  goalMode: document.querySelector("#goalMode"),
+  goalMiles: document.querySelector("#goalMiles"),
+  goalRaceName: document.querySelector("#goalRaceName"),
+  goalRaceDistance: document.querySelector("#goalRaceDistance"),
+  goalRaceDate: document.querySelector("#goalRaceDate"),
+  goalRunDays: document.querySelector("#goalRunDays"),
+  goalLongRunDay: document.querySelector("#goalLongRunDay"),
+  goalAvailability: document.querySelector("#goalAvailability"),
+  intentRecommendation: document.querySelector("#intentRecommendation"),
+  checkinForm: document.querySelector("#checkinForm"),
+  checkinFeel: document.querySelector("#checkinFeel"),
+  checkinLimiter: document.querySelector("#checkinLimiter"),
+  checkinIntent: document.querySelector("#checkinIntent"),
+  readinessContent: document.querySelector("#readinessContent"),
+  planDraftCopy: document.querySelector("#planDraftCopy"),
+  recommendedCalendar: document.querySelector("#recommendedCalendar"),
+  copyPlanButton: document.querySelector("#copyPlanButton"),
   workoutModal: document.querySelector("#workoutModal"),
   workoutModalClose: document.querySelector("#workoutModalClose"),
   workoutModalContent: document.querySelector("#workoutModalContent")
 };
+
+const CONTEXT_STORAGE_KEY = "run-trends-coaching-context-v1";
+let coachingContext = loadCoachingContext();
+
+function loadCoachingContext() {
+  try { return JSON.parse(localStorage.getItem(CONTEXT_STORAGE_KEY)) || { goal: {}, checkin: {} }; } catch { return { goal: {}, checkin: {} }; }
+}
+
+function saveCoachingContext() {
+  try { localStorage.setItem(CONTEXT_STORAGE_KEY, JSON.stringify(coachingContext)); } catch { /* Local context is optional. */ }
+}
+
+function syncCoachingInputs() {
+  els.goalMode.value = coachingContext.goal.mode || "auto";
+  els.goalMiles.value = coachingContext.goal.miles || "";
+  els.goalRaceName.value = coachingContext.goal.raceName || coachingContext.goal.event || "";
+  els.goalRaceDistance.value = coachingContext.goal.raceDistance || "";
+  els.goalRaceDate.value = coachingContext.goal.raceDate || "";
+  els.goalRunDays.value = coachingContext.goal.runDays || "";
+  els.goalLongRunDay.value = coachingContext.goal.longRunDay || "Sat";
+  els.goalAvailability.value = coachingContext.goal.availability || "";
+  els.checkinFeel.value = coachingContext.checkin.feel || "";
+  els.checkinLimiter.value = coachingContext.checkin.limiter || "none";
+  els.checkinIntent.value = coachingContext.checkin.intent || "mixed";
+}
 
 const METRICS = {
   distance: { label: "Mileage", unit: "mi", value: (b) => b.distanceMiles, format: (v) => `${v.toFixed(1)} mi` },
@@ -120,20 +115,6 @@ const METRICS = {
   loadPerMile: { label: "Load per mile", unit: "score/mi", value: (b) => b.distanceMiles ? b.trainingLoad / b.distanceMiles : 0, format: (v) => `${v.toFixed(1)} /mi` },
   efficiency: { label: "Aerobic efficiency", unit: "mi/bpm", value: (b) => b.averageHr ? b.distanceMiles / b.averageHr : 0, format: (v) => v ? `${v.toFixed(3)} mi/bpm` : "-" }
 };
-
-function isWorkoutModalOpen() {
-  return Boolean(els.workoutModal?.open);
-}
-
-function abortWorkoutRequests() {
-  state.runInsightAbort?.abort();
-  state.runInsightAbort = null;
-  state.runWeatherAbort?.abort();
-  state.runWeatherAbort = null;
-  state.runRouteAbort?.abort();
-  state.runRouteAbort = null;
-  state.activeRunInsightKey = "";
-}
 
 function setStatus(message, isError = false) {
   els.status.textContent = message || "";
@@ -188,109 +169,45 @@ function isRun(activity) {
   return sport.includes("run");
 }
 
-function normalizedFieldKey(value) {
-  return String(value || "").toLowerCase().replace(/[^a-z0-9]/g, "");
-}
-
-function readActivityField(activity, aliases) {
-  const entries = Object.entries(activity || {});
-  for (const alias of aliases) {
-    const exact = entries.find(([key]) => key === alias);
-    if (exact && exact[1] !== null && exact[1] !== undefined && exact[1] !== "") return exact[1];
-  }
-  const wanted = aliases.map(normalizedFieldKey);
-  const loose = entries.find(([key, value]) => wanted.includes(normalizedFieldKey(key)) && value !== null && value !== undefined && value !== "");
-  return loose ? loose[1] : null;
-}
-
-function hasActivityField(activity, aliases) {
-  const wanted = aliases.map(normalizedFieldKey);
-  return Object.keys(activity || {}).some((key) => wanted.includes(normalizedFieldKey(key)));
-}
-
-function numericActivityValue(value) {
-  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
-  const parsed = Number(String(value ?? "").replace(/,/g, "").trim());
-  return Number.isFinite(parsed) ? parsed : 0;
-}
-
-function durationActivityValue(value) {
-  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
-  const text = String(value ?? "").trim();
-  if (!text) return 0;
-  if (!text.includes(":")) return numericActivityValue(text);
-  const parts = text.split(":").map((part) => numericActivityValue(part));
-  if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
-  if (parts.length === 2) return parts[0] * 60 + parts[1];
-  return 0;
-}
-
-function stableActivityId(activity, index) {
-  const explicit = readActivityField(activity, ["id", "Activity ID", "activity_id"]);
-  if (explicit !== null) return String(explicit);
-  const fingerprint = [
-    readActivityField(activity, ["start_date_local", "start_date", "Activity Date"]),
-    readActivityField(activity, ["name", "Activity Name"]),
-    readActivityField(activity, ["distance", "Distance"]),
-    readActivityField(activity, ["moving_time", "Moving Time"]),
-    index
-  ].join("|");
-  let hash = 2166136261;
-  for (const character of fingerprint) {
-    hash ^= character.charCodeAt(0);
-    hash = Math.imul(hash, 16777619);
-  }
-  return `activity-${index}-${(hash >>> 0).toString(36)}`;
-}
-
-function normalizeActivity(activity, index = 0) {
-  const point = (value) => {
-    if (!Array.isArray(value) || value.length < 2) return [];
-    const latitude = Number(value[0]);
-    const longitude = Number(value[1]);
-    return Number.isFinite(latitude) && latitude >= -90 && latitude <= 90
-      && Number.isFinite(longitude) && longitude >= -180 && longitude <= 180
-      ? [latitude, longitude]
+function normalizeLatLng(value) {
+  const pair = Array.isArray(value)
+    ? value
+    : typeof value === "string"
+      ? value.replace(/[\[\]()]/g, "").split(",")
       : [];
-  };
-  const isStravaExport = hasActivityField(activity, ["Activity Date", "Activity Name", "Activity Type"]);
-  const distanceValue = numericActivityValue(readActivityField(activity, ["distance", "Distance"]));
-  const elevationValue = numericActivityValue(readActivityField(activity, ["total_elevation_gain", "Elevation Gain"]));
-  const maxSpeedValue = numericActivityValue(readActivityField(activity, ["max_speed", "Max Speed"]));
-  const startLat = numericActivityValue(readActivityField(activity, ["start_latitude", "Start Latitude"]));
-  const startLng = numericActivityValue(readActivityField(activity, ["start_longitude", "Start Longitude"]));
-  const apiPoint = readActivityField(activity, ["start_latlng"]);
-  const exportPoint = startLat || startLng ? [startLat, startLng] : [];
-  const parsedApiPoint = point(apiPoint);
+  const latitude = Number(pair[0]);
+  const longitude = Number(pair[1]);
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+  if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) return null;
+  return [latitude, longitude];
+}
+
+function normalizeActivity(activity) {
+  const startLatLng = normalizeLatLng(activity.start_latlng || activity["Start LatLng"])
+    || normalizeLatLng([activity.start_latitude ?? activity["Start Latitude"], activity.start_longitude ?? activity["Start Longitude"]]);
   return {
-    id: stableActivityId(activity, index),
-    name: readActivityField(activity, ["name", "Activity Name"]) || "Untitled run",
-    sport_type: readActivityField(activity, ["sport_type", "type", "Activity Type"]) || "Run",
-    start_date: readActivityField(activity, ["start_date", "start_date_local", "Activity Date"]),
-    start_date_local: readActivityField(activity, ["start_date_local", "start_date", "Activity Date"]),
-    distance: isStravaExport ? distanceValue * 1609.344 : distanceValue,
-    moving_time: durationActivityValue(readActivityField(activity, ["moving_time", "Moving Time", "elapsed_time"])),
-    elapsed_time: durationActivityValue(readActivityField(activity, ["elapsed_time", "Elapsed Time", "moving_time"])),
-    total_elevation_gain: isStravaExport ? elevationValue / 3.28084 : elevationValue,
-    average_heartrate: numericActivityValue(readActivityField(activity, ["average_heartrate", "Average Heart Rate"])),
-    max_heartrate: numericActivityValue(readActivityField(activity, ["max_heartrate", "Max Heart Rate"])),
-    average_cadence: numericActivityValue(readActivityField(activity, ["average_cadence", "Average Cadence"])),
-    average_watts: numericActivityValue(readActivityField(activity, ["average_watts", "Average Watts"])),
-    max_speed: isStravaExport ? maxSpeedValue * 0.44704 : maxSpeedValue,
-    suffer_score: numericActivityValue(readActivityField(activity, ["suffer_score", "Relative Effort"])),
-    kudos_count: numericActivityValue(readActivityField(activity, ["kudos_count", "Kudos"])),
-    achievement_count: numericActivityValue(readActivityField(activity, ["achievement_count", "Achievements"])),
-    pr_count: numericActivityValue(readActivityField(activity, ["pr_count", "PRs"])),
-    workout_type: numericActivityValue(readActivityField(activity, ["workout_type", "Workout Type"])),
-    device_name: readActivityField(activity, ["device_name", "Device Name"]) || "",
-    description: readActivityField(activity, ["description", "Description"]) || "",
-    start_latlng: parsedApiPoint.length ? parsedApiPoint : point(exportPoint),
-    end_latlng: point(readActivityField(activity, ["end_latlng"])),
-    route_points: Array.isArray(activity.route_points) ? activity.route_points.map(point).filter((candidate) => candidate.length === 2) : [],
-    map: {
-      polyline: String(activity.map?.polyline || activity.polyline || ""),
-      summary_polyline: String(activity.map?.summary_polyline || activity.summary_polyline || "")
-    }
+    id: activity.id || crypto.randomUUID(),
+    name: activity.name || "Untitled run",
+    sport_type: activity.sport_type || activity.type || "Run",
+    start_date: activity.start_date || activity.start_date_local,
+    start_date_local: activity.start_date_local || activity.start_date,
+    distance: Number(activity.distance || activity.Distance || 0),
+    moving_time: Number(activity.moving_time || activity["Moving Time"] || activity.elapsed_time || 0),
+    elapsed_time: Number(activity.elapsed_time || activity["Elapsed Time"] || activity.moving_time || 0),
+    total_elevation_gain: Number(activity.total_elevation_gain || activity["Elevation Gain"] || 0),
+    average_heartrate: Number(activity.average_heartrate || activity["Average Heart Rate"] || 0),
+    max_heartrate: Number(activity.max_heartrate || activity["Max Heart Rate"] || 0),
+    average_cadence: Number(activity.average_cadence || activity["Average Cadence"] || 0),
+    average_watts: Number(activity.average_watts || activity["Average Watts"] || 0),
+    max_speed: Number(activity.max_speed || activity["Max Speed"] || 0),
+    suffer_score: Number(activity.suffer_score || activity["Relative Effort"] || 0),
+    kudos_count: Number(activity.kudos_count || activity.Kudos || 0),
+    achievement_count: Number(activity.achievement_count || activity.Achievements || 0),
+    pr_count: Number(activity.pr_count || activity.PRs || 0),
+    workout_type: Number(activity.workout_type || activity["Workout Type"] || 0),
+    device_name: activity.device_name || activity["Device Name"] || "",
+    description: activity.description || activity.Description || "",
+    start_latlng: startLatLng
   };
 }
 
@@ -330,150 +247,9 @@ function getRangeDates() {
   return { start, end };
 }
 
-function getStravaFetchRange() {
-  const mode = els.rangeSelect.value;
-  if (mode === "all") return { start: null, end: null };
-  if (mode === "custom") {
-    const { start, end } = getRangeDates();
-    const comparison = comparisonWindow(start, end);
-    return {
-      start: comparison.start && comparison.start < start ? comparison.start : start,
-      end
-    };
-  }
-  const days = Number(mode) || 56;
-  const end = new Date();
-  end.setHours(23, 59, 59, 999);
-  const start = new Date(end);
-  start.setDate(start.getDate() - days);
-  start.setHours(0, 0, 0, 0);
-  const comparison = comparisonWindow(start, end);
-  return {
-    start: comparison.start && comparison.start < start ? comparison.start : start,
-    end
-  };
-}
-
-function resolvedBucketMode(start, end) {
-  if (els.bucketSelect.value !== "auto") return els.bucketSelect.value;
-  const spanDays = start && end ? Math.max(1, (end - start) / 86400000) : 0;
-  return spanDays > 370 ? "month" : "week";
-}
-
-function rangeLabel(start, end) {
-  if (!start || !end) return "Selected window";
-  const sameYear = start.getFullYear() === end.getFullYear();
-  const startText = start.toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-    year: sameYear ? undefined : "numeric"
-  });
-  const endText = end.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
-  return `${startText}–${endText}`;
-}
-
-function comparisonWindow(start, end, mode = els.comparisonSelect.value) {
-  if (!start || !end || end <= start || mode === "off") {
-    return { start: null, end: null, label: "no comparison", shortLabel: "comparison off" };
-  }
-  if (mode === "year") {
-    const comparisonStart = new Date(start);
-    const comparisonEnd = new Date(end);
-    comparisonStart.setFullYear(comparisonStart.getFullYear() - 1);
-    comparisonEnd.setFullYear(comparisonEnd.getFullYear() - 1);
-    return { start: comparisonStart, end: comparisonEnd, label: "same period last year", shortLabel: "same period last year" };
-  }
-  const periodMs = end.valueOf() - start.valueOf();
-  const comparisonEnd = new Date(start.valueOf() - 1);
-  const comparisonStart = new Date(comparisonEnd.valueOf() - periodMs);
-  return { start: comparisonStart, end: comparisonEnd, label: "previous period", shortLabel: "previous period" };
-}
-
-function runsInWindow(activities, start, end) {
-  if (!start || !end) return [];
-  return activities
-    .filter(isRun)
-    .filter((activity) => {
-      const date = parseActivityDate(activity);
-      return !Number.isNaN(date.valueOf()) && date >= start && date <= end;
-    })
-    .sort((left, right) => parseActivityDate(left) - parseActivityDate(right));
-}
-
-function syncRangeControlState(start, end) {
-  const mode = els.rangeSelect.value;
-  els.rangePresetButtons.forEach((button) => {
-    button.setAttribute("aria-pressed", String(button.dataset.range === mode));
-  });
-  const custom = mode === "custom";
-  els.customRangeToggle.setAttribute("aria-expanded", String(custom && !els.customRangePanel.hidden));
-  els.customRangeToggle.setAttribute("aria-pressed", String(custom));
-  const comparisonText = els.comparisonSelect.value === "off"
-    ? "comparison off"
-    : `compared with ${comparisonWindow(start, end).label}`;
-  els.rangeSummary.textContent = `${rangeLabel(start, end)} · ${comparisonText}`;
-}
-
-function restoreViewFromUrl() {
-  const params = new URLSearchParams(window.location.search);
-  const range = params.get("range");
-  const comparison = params.get("compare");
-  const grouping = params.get("group");
-  const metric = params.get("metric");
-  const search = params.get("q");
-  const type = params.get("type");
-  const sort = params.get("sort");
-  if (["28", "56", "84", "180", "365", "all", "custom"].includes(range)) els.rangeSelect.value = range;
-  if (["previous", "year", "off"].includes(comparison)) els.comparisonSelect.value = comparison;
-  if (["auto", "week", "month"].includes(grouping)) els.bucketSelect.value = grouping;
-  if (METRICS[metric]) els.metricSelect.value = metric;
-  if (search) els.activitySearch.value = search.slice(0, 120);
-  if (["all", "Quality", "Long", "Easy", "Steady", "Race"].includes(type)) els.activityType.value = type;
-  if (["newest", "distance", "pace", "load"].includes(sort)) els.activitySort.value = sort;
-  if (range === "custom") {
-    if (/^\d{4}-\d{2}-\d{2}$/.test(params.get("start") || "")) els.startDate.value = params.get("start");
-    if (/^\d{4}-\d{2}-\d{2}$/.test(params.get("end") || "")) els.endDate.value = params.get("end");
-    els.customRangePanel.hidden = false;
-  }
-  if (params.get("source") === "demo") {
-    state.rawActivities = makeDemoData();
-    state.dataSource = "Demo";
-  }
-  if (params.has("connected") || params.has("disconnected")) {
-    const cleanUrl = new URL(window.location.href);
-    cleanUrl.searchParams.delete("connected");
-    cleanUrl.searchParams.delete("disconnected");
-    window.history.replaceState(null, "", cleanUrl);
-  }
-}
-
-function syncViewUrl() {
-  const url = new URL(window.location.href);
-  url.searchParams.set("range", els.rangeSelect.value);
-  url.searchParams.set("compare", els.comparisonSelect.value);
-  url.searchParams.set("group", els.bucketSelect.value);
-  url.searchParams.set("metric", els.metricSelect.value);
-  if (els.activitySearch.value.trim()) url.searchParams.set("q", els.activitySearch.value.trim().slice(0, 120));
-  else url.searchParams.delete("q");
-  if (els.activityType.value !== "all") url.searchParams.set("type", els.activityType.value);
-  else url.searchParams.delete("type");
-  if (els.activitySort.value !== "newest") url.searchParams.set("sort", els.activitySort.value);
-  else url.searchParams.delete("sort");
-  if (state.dataSource === "Demo") url.searchParams.set("source", "demo");
-  else url.searchParams.delete("source");
-  if (els.rangeSelect.value === "custom") {
-    url.searchParams.set("start", els.startDate.value);
-    url.searchParams.set("end", els.endDate.value);
-  } else {
-    url.searchParams.delete("start");
-    url.searchParams.delete("end");
-  }
-  window.history.replaceState(null, "", url);
-}
-
 function getActivityBounds() {
   const dates = state.rawActivities
-    .map((activity, index) => normalizeActivity(activity, index))
+    .map(normalizeActivity)
     .filter(isRun)
     .map(parseActivityDate)
     .filter((date) => !Number.isNaN(date.valueOf()));
@@ -495,6 +271,7 @@ function getActivityBounds() {
 function syncRangeInputs() {
   const bounds = getActivityBounds();
   const mode = els.rangeSelect.value;
+  document.body.classList.toggle("is-custom-range", mode === "custom");
   let start = new Date(bounds.start);
   const end = new Date(bounds.end);
   if (mode !== "all" && mode !== "custom") {
@@ -515,12 +292,11 @@ function syncRangeInputs() {
 function applyRangeInputs() {
   const bounds = getActivityBounds();
   els.startDate.min = localDateValue(bounds.start);
-  els.startDate.max = localDateValue(bounds.end);
-  els.endDate.min = localDateValue(bounds.start);
   els.endDate.max = localDateValue(bounds.end);
 }
 
-function buildBuckets(runs, mode = state.bucketMode) {
+function buildBuckets(runs) {
+  const mode = els.bucketSelect.value;
   const buckets = new Map();
   runs.forEach((run) => {
     const date = parseActivityDate(run);
@@ -590,12 +366,7 @@ function summarize(runs, buckets) {
   const averageWeeklyMiles = spanDays ? totalMiles / Math.max(spanDays / 7, 1 / 7) : 0;
   const averageRunMiles = runs.length ? totalMiles / runs.length : 0;
   const averageRunsPerWeek = spanDays ? runs.length / Math.max(spanDays / 7, 1 / 7) : 0;
-  const longRunThreshold = Math.max(8, averageRunMiles * 1.35);
-  const longRunMiles = runs.reduce((sum, run) => {
-    const distance = miles(run.distance);
-    return sum + (distance >= longRunThreshold ? distance : 0);
-  }, 0);
-  const longRunShare = totalMiles ? longRunMiles / totalMiles : 0;
+  const longRunShare = totalMiles ? longRun / totalMiles : 0;
   const averageLoadPerMile = totalMiles ? totalLoad / totalMiles : 0;
   const elevationPerMile = totalMiles ? totalElevation / totalMiles : 0;
   const aerobicEfficiency = hrSeconds && totalMiles ? totalMiles / (weightedHr / hrSeconds) : 0;
@@ -614,7 +385,6 @@ function summarize(runs, buckets) {
     averageWeeklyMiles,
     averageRunMiles,
     averageRunsPerWeek,
-    totalSeconds,
     longRunShare,
     totalElevation,
     totalLoad,
@@ -664,527 +434,53 @@ function getRampRate(buckets) {
   return earlyAvg ? ((lateAvg - earlyAvg) / earlyAvg) * 100 : 0;
 }
 
-function currentInsightFingerprint() {
-  const weather = funWeatherSummary(state.filteredRuns);
-  return JSON.stringify({
+function render() {
+  applyRangeInputs();
+  const normalized = state.rawActivities.map(normalizeActivity);
+  const { start, end } = getRangeDates();
+  state.filteredRuns = normalized
+    .filter(isRun)
+    .filter((activity) => {
+      const date = parseActivityDate(activity);
+      return !Number.isNaN(date.valueOf()) && (!start || date >= start) && (!end || date <= end);
+    })
+    .sort((a, b) => parseActivityDate(a) - parseActivityDate(b));
+  state.buckets = buildBuckets(state.filteredRuns);
+  state.insightFingerprint = JSON.stringify({
     range: [els.startDate.value, els.endDate.value],
     grouping: els.bucketSelect.value,
-    comparison: els.comparisonSelect.value,
-    focus: els.aiFocus.value,
-    question: els.aiQuestion.value.trim(),
-    runs: state.filteredRuns.map((run) => [
-      run.id,
-      run.start_date_local || run.start_date,
-      run.distance,
-      run.moving_time,
-      run.total_elevation_gain,
-      run.average_heartrate,
-      run.suffer_score
-    ]),
-    weather: [
-      weather.loaded,
-      weather.sampleSize,
-      weather.averageTemperature === null ? null : Math.round(weather.averageTemperature),
-      weather.coldest ? Math.round(weather.coldest.weather.temperatureF) : null,
-      weather.warmest ? Math.round(weather.warmest.weather.temperatureF) : null,
-      weather.commonCondition?.[0] || null
-    ]
+    runs: state.filteredRuns.map((run) => [run.id, run.start_date_local || run.start_date])
   });
-}
-
-function render() {
-  invalidateWorkoutForDataChange();
-  applyRangeInputs();
-  const normalized = state.rawActivities.map((activity, index) => normalizeActivity(activity, index));
-  const { start, end } = getRangeDates();
-  state.bucketMode = resolvedBucketMode(start, end);
-  state.filteredRuns = runsInWindow(normalized, start, end);
-  state.buckets = buildBuckets(state.filteredRuns, state.bucketMode);
-  const comparison = comparisonWindow(start, end);
-  state.comparisonRuns = runsInWindow(normalized, comparison.start, comparison.end);
-  state.comparisonBuckets = buildBuckets(state.comparisonRuns, state.bucketMode);
-  state.comparisonSummary = summarize(state.comparisonRuns, state.comparisonBuckets);
-  state.comparisonLabel = comparison.shortLabel;
-  syncRangeControlState(start, end);
-  syncViewUrl();
-  state.insightFingerprint = currentInsightFingerprint();
 
   const summary = summarize(state.filteredRuns, state.buckets);
-  const previous = state.comparisonSummary;
-  els.totalDistance.textContent = `${summary.totalMiles.toFixed(1)} mi`;
-  els.averagePace.textContent = formatPace(summary.averagePace);
-  els.longRun.textContent = `${summary.longRun.toFixed(1)} mi`;
-  els.consistency.textContent = `${Math.round(summary.consistency * 100)}%`;
-  els.averageHr.textContent = summary.averageHr ? `${Math.round(summary.averageHr)} bpm` : "-";
-  renderDelta(els.totalDistanceDelta, summary.totalMiles, previous.totalMiles, "mi", true);
-  renderDelta(els.averagePaceDelta, summary.averagePace, previous.averagePace, "pace", false);
-  renderDelta(els.longRunDelta, summary.longRun, previous.longRun, "mi", true);
-  renderDelta(els.consistencyDelta, summary.consistency * 100, previous.consistency * 100, "%", true);
-  renderDelta(els.averageHrDelta, summary.averageHr, previous.averageHr, "bpm", false, true);
-
-  renderTrainingBrief(summary, previous, start, end);
-  prepareFunWeatherSample(state.filteredRuns);
-  renderFunStats(summary, start, end);
-  hydrateFunStatsWeather(state.filteredRuns);
-  renderSuggestedQuestions(summary, previous);
+  const previous = summarizePreviousPeriod(normalized, start, end);
+  renderHeroStatus(summary);
+  renderBlockReview(summary, previous);
+  renderCoachingWorkspace(summary);
+  renderKeyRuns();
   renderIntel(summary, previous, start, end);
   renderAiState();
   renderMainChart();
-  renderTrainingArc();
   renderScatter();
   renderStructure();
   renderHeatmap();
   renderRollingWorkload();
   renderDistanceMix();
   renderPaceZones();
-  syncBucketFocus();
   renderTable();
 }
 
-function prepareFunWeatherSample(runs) {
-  const eligible = runs.filter((run) => weatherRequestDetails(run));
-  const fingerprint = eligible.map((run) => runWeatherKey(run)).join("|");
-  if (fingerprint === state.funWeatherFingerprint) return;
-  state.funWeatherAbort?.abort();
-  state.funWeatherAbort = null;
-  state.funWeatherFingerprint = fingerprint;
-  state.funWeatherActiveFingerprint = "";
-  state.funWeatherCompletedFingerprint = "";
-  state.funWeatherEligibleCount = eligible.length;
-  const limit = 80;
-  const sample = eligible.length <= limit
-    ? eligible
-    : Array.from({ length: limit }, (_, index) => eligible[Math.round((index * (eligible.length - 1)) / (limit - 1))]);
-  state.funWeatherSampleKeys = [...new Set(sample.map(runWeatherKey))];
-}
-
-function funWeatherSummary(runs) {
-  const sampleKeys = new Set(state.funWeatherSampleKeys);
-  const sampleRuns = runs.filter((run) => sampleKeys.has(runWeatherKey(run)));
-  const entries = sampleRuns.map((run) => ({
-    run,
-    weather: state.runWeatherCache.get(runWeatherKey(run))
-  })).filter((entry) => finiteWeatherNumber(entry.weather?.temperatureF) !== null);
-  const averageField = (field) => {
-    const values = entries.map((entry) => finiteWeatherNumber(entry.weather[field])).filter((value) => value !== null);
-    return values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null;
-  };
-  const averageTemperature = averageField("temperatureF");
-  const coldest = [...entries].sort((left, right) => finiteWeatherNumber(left.weather.temperatureF) - finiteWeatherNumber(right.weather.temperatureF))[0] || null;
-  const warmest = [...entries].sort((left, right) => finiteWeatherNumber(right.weather.temperatureF) - finiteWeatherNumber(left.weather.temperatureF))[0] || null;
-  const conditionCounts = entries.reduce((counts, entry) => {
-    const condition = entry.weather.condition || weatherCodeLabel(entry.weather.weatherCode);
-    counts.set(condition, (counts.get(condition) || 0) + 1);
-    return counts;
-  }, new Map());
-  const commonCondition = [...conditionCounts.entries()].sort((left, right) => right[1] - left[1])[0] || null;
-  return {
-    averageTemperature,
-    averageFeelsLike: averageField("feelsLikeF"),
-    averageHumidity: averageField("humidityPercent"),
-    averageWind: averageField("windSpeedMph"),
-    averageGust: averageField("windGustMph"),
-    rainyStarts: entries.filter((entry) => (finiteWeatherNumber(entry.weather.precipitationInches) || 0) > 0.005).length,
-    coldest,
-    warmest,
-    commonCondition,
-    loaded: entries.length,
-    sampleSize: sampleRuns.length,
-    eligible: state.funWeatherEligibleCount,
-    sampled: state.funWeatherEligibleCount > sampleRuns.length
-  };
-}
-
-function refreshFunStats() {
-  const { start, end } = getRangeDates();
-  renderFunStats(summarize(state.filteredRuns, state.buckets), start, end);
-}
-
-function refreshWeatherAiContext() {
-  const summary = summarize(state.filteredRuns, state.buckets);
-  invalidateAiInsight();
-  renderSuggestedQuestions(summary, state.comparisonSummary);
-}
-
-async function requestWeatherForRun(run, signal) {
-  const details = weatherRequestDetails(run);
-  const key = runWeatherKey(run);
-  if (!details || !key) return null;
-  const cached = state.runWeatherCache.get(key);
-  if (cached) return cached;
-  const query = new URLSearchParams({
-    lat: String(details.lat),
-    lng: String(details.lng),
-    date: details.date,
-    hour: String(details.hour)
-  });
-  const response = await fetch(`/api/weather?${query}`, { signal });
-  const data = await readApiJson(response);
-  if (!response.ok) throw new Error(data.error || "Weather service did not return this hour.");
-  const weather = data.weather;
-  if (!weather) throw new Error("Weather service returned no conditions for this hour.");
-  weather.condition = weatherCodeLabel(weather.weatherCode);
-  state.runWeatherCache.set(key, weather);
-  return weather;
-}
-
-async function hydrateFunStatsWeather(runs) {
-  const fingerprint = state.funWeatherFingerprint;
-  if (!fingerprint || state.funWeatherCompletedFingerprint === fingerprint || state.funWeatherActiveFingerprint === fingerprint) return;
-  const sampleKeys = new Set(state.funWeatherSampleKeys);
-  const missing = runs.filter((run) => sampleKeys.has(runWeatherKey(run)) && !state.runWeatherCache.has(runWeatherKey(run)));
-  if (!missing.length) {
-    state.funWeatherCompletedFingerprint = fingerprint;
-    refreshFunStats();
-    refreshWeatherAiContext();
-    return;
-  }
-  state.funWeatherAbort?.abort();
-  const controller = new AbortController();
-  state.funWeatherAbort = controller;
-  state.funWeatherActiveFingerprint = fingerprint;
-  let cursor = 0;
-  let completed = 0;
-  const worker = async () => {
-    while (cursor < missing.length) {
-      const run = missing[cursor];
-      cursor += 1;
-      try {
-        await requestWeatherForRun(run, controller.signal);
-      } catch (error) {
-        if (error.name === "AbortError") return;
-      }
-      completed += 1;
-      if (state.funWeatherFingerprint === fingerprint && (completed % 6 === 0 || completed === missing.length)) {
-        refreshFunStats();
-      }
-    }
-  };
-  await Promise.all(Array.from({ length: Math.min(4, missing.length) }, worker));
-  if (!controller.signal.aborted && state.funWeatherFingerprint === fingerprint) {
-    state.funWeatherCompletedFingerprint = fingerprint;
-    refreshFunStats();
-    refreshWeatherAiContext();
-  }
-  if (state.funWeatherAbort === controller) state.funWeatherAbort = null;
-  if (state.funWeatherActiveFingerprint === fingerprint) state.funWeatherActiveFingerprint = "";
-}
-
-function renderFunStats(summary, start, end) {
-  const marathonMiles = 26.2188;
-  const everestFeet = 29032;
-  const totalMeters = state.filteredRuns.reduce((sum, run) => sum + (Number(run.distance) || 0), 0);
-  const marathonEquivalent = summary.totalMiles / marathonMiles;
-  const everestProgress = summary.totalElevation / everestFeet;
-  const trackLaps = totalMeters / 400;
-  const movingHours = summary.totalSeconds / 3600;
-  const weekdayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-  const weekdays = state.filteredRuns.reduce((stats, run) => {
-    const day = weekdayNames[parseActivityDate(run).getDay()];
-    const entry = stats.get(day) || { day, count: 0, miles: 0 };
-    entry.count += 1;
-    entry.miles += miles(run.distance);
-    stats.set(day, entry);
-    return stats;
-  }, new Map());
-  const favoriteDay = [...weekdays.values()].sort((left, right) => right.count - left.count || right.miles - left.miles)[0] || null;
-  const weatherStats = funWeatherSummary(state.filteredRuns);
-  const weatherCoverage = weatherStats.sampleSize
-    ? `${weatherStats.loaded} of ${weatherStats.sampleSize} ${weatherStats.sampled ? "sampled " : ""}run starts matched`
-    : "No route starts available";
-  const warmestRunLabel = weatherStats.warmest
-    ? `${weatherStats.warmest.run.name} · ${parseActivityDate(weatherStats.warmest.run).toLocaleDateString(undefined, { month: "short", day: "numeric" })}`
-    : "";
-  const dateLabel = start && end
-    ? `${start.toLocaleDateString(undefined, { month: "short", day: "numeric" })}–${end.toLocaleDateString(undefined, { month: "short", day: "numeric" })}`
-    : "selected window";
-  els.funStatsSubtitle.textContent = summary.runCount
-    ? `${summary.runCount} runs translated from the ${dateLabel} view.${weatherStats.loaded ? ` Weather matched for ${weatherStats.loaded}${weatherStats.sampled ? ` of an ${weatherStats.sampleSize}-run sample` : ` of ${weatherStats.sampleSize} route starts`}.` : ""}`
-    : "Load running data and the selected window will get delightfully specific.";
-
-  const cards = summary.runCount ? [
-    {
-      id: "marathons",
-      index: "26.2",
-      label: "Marathon equivalents",
-      value: marathonEquivalent.toFixed(1),
-      unit: "marathons",
-      detail: `${summary.totalMiles.toFixed(1)} miles across the selected window.`
-    },
-    {
-      id: "everest",
-      index: "29K",
-      label: "Everest progress",
-      value: `${Math.round(everestProgress * 100)}%`,
-      unit: "of Everest",
-      detail: `${Math.round(summary.totalElevation).toLocaleString()} vertical feet climbed.`,
-      progress: Math.min(100, everestProgress * 100)
-    },
-    {
-      id: "moving",
-      index: "24H",
-      label: "Time in motion",
-      value: formatDuration(summary.totalSeconds),
-      unit: "on the move",
-      detail: `${movingHours < 8 ? movingHours.toFixed(1) : (movingHours / 8).toFixed(1)} ${movingHours < 8 ? "total hours" : "eight-hour days"} of running.`
-    },
-    {
-      id: "laps",
-      index: "400M",
-      label: "Track translation",
-      value: Math.round(trackLaps).toLocaleString(),
-      unit: "track laps",
-      detail: "The same distance measured one regulation lap at a time."
-    },
-    {
-      id: "weekday",
-      index: "7D",
-      label: "Favorite run day",
-      value: favoriteDay.day,
-      unit: "shows up most",
-      detail: `${favoriteDay.count} runs · ${Math.round((favoriteDay.count / summary.runCount) * 100)}% of the selected window.`
-    },
-    {
-      id: "temperature",
-      index: "°F",
-      label: "Average run temp",
-      value: weatherStats.averageTemperature === null ? (weatherStats.sampleSize ? "…" : "—") : `${Math.round(weatherStats.averageTemperature)}°`,
-      unit: weatherStats.loaded ? "at the starting hour" : weatherStats.sampleSize ? "matching conditions" : "route data needed",
-      detail: weatherStats.loaded
-        ? `${weatherCoverage}. Sourced modeled temperature—not an Ollama estimate.`
-        : weatherStats.sampleSize
-          ? "Matching Open-Meteo conditions to each run’s starting hour."
-          : "Run coordinates and a local start time are required."
-    },
-    {
-      id: "weather-range",
-      index: "HI/LO",
-      label: "Temperature swing",
-      value: weatherStats.coldest && weatherStats.warmest
-        ? `${Math.round(weatherStats.coldest.weather.temperatureF)}–${Math.round(weatherStats.warmest.weather.temperatureF)}°`
-        : weatherStats.sampleSize ? "…" : "—",
-      unit: weatherStats.loaded ? "coldest to warmest" : "waiting on weather",
-      detail: weatherStats.warmest ? `Warmest start: ${warmestRunLabel}.` : "Your run-start temperature range will appear here."
-    },
-    {
-      id: "conditions",
-      index: "WMO",
-      label: "Most common weather",
-      value: weatherStats.commonCondition?.[0] || (weatherStats.sampleSize ? "…" : "—"),
-      unit: weatherStats.commonCondition ? `${weatherStats.commonCondition[1]} of ${weatherStats.loaded} matched starts` : "waiting on conditions",
-      detail: weatherStats.commonCondition
-        ? "Grouped from Open-Meteo weather codes at each route start."
-        : "The most frequent condition in this window will appear here."
-    }
-  ] : [
-    { id: "marathons", index: "26.2", label: "Marathon equivalents", value: "—", unit: "waiting on miles", detail: "Your distance translation will appear here." },
-    { id: "everest", index: "29K", label: "Everest progress", value: "—", unit: "waiting on climbs", detail: "Elevation becomes a mountain-sized comparison." },
-    { id: "moving", index: "24H", label: "Time in motion", value: "—", unit: "waiting on time", detail: "Moving time becomes something easier to picture." },
-    { id: "laps", index: "400M", label: "Track translation", value: "—", unit: "waiting on laps", detail: "Every mile becomes four-and-a-bit track laps." },
-    { id: "weekday", index: "7D", label: "Favorite run day", value: "—", unit: "waiting on a pattern", detail: "Your most frequent day will surface here." },
-    { id: "temperature", index: "°F", label: "Average run temp", value: "—", unit: "waiting on conditions", detail: "Average temperature at your run starts will appear here." },
-    { id: "weather-range", index: "HI/LO", label: "Temperature swing", value: "—", unit: "waiting on conditions", detail: "Your coldest and warmest run starts will appear here." },
-    { id: "conditions", index: "WMO", label: "Most common weather", value: "—", unit: "waiting on conditions", detail: "Your most frequent run-start condition will appear here." }
-  ];
-
-  els.funStatsGrid.replaceChildren(...cards.map((card) => {
-    const article = document.createElement("article");
-    article.className = `fun-stat-card ${card.id}`;
-    const top = document.createElement("div");
-    top.className = "fun-stat-top";
-    const label = document.createElement("span");
-    label.textContent = card.label;
-    const index = document.createElement("small");
-    index.setAttribute("aria-hidden", "true");
-    index.textContent = card.index;
-    top.append(label, index);
-    const value = document.createElement("strong");
-    value.textContent = card.value;
-    const unit = document.createElement("em");
-    unit.textContent = card.unit;
-    const detail = document.createElement("p");
-    detail.textContent = card.detail;
-    article.append(top, value, unit, detail);
-    if (Number.isFinite(card.progress)) {
-      const meter = document.createElement("div");
-      meter.className = "fun-stat-meter";
-      meter.setAttribute("role", "meter");
-      meter.setAttribute("aria-label", "Progress toward Everest elevation");
-      meter.setAttribute("aria-valuemin", "0");
-      meter.setAttribute("aria-valuemax", "100");
-      meter.setAttribute("aria-valuenow", String(Math.round(card.progress)));
-      const fill = document.createElement("i");
-      fill.style.width = `${card.progress}%`;
-      meter.append(fill);
-      article.append(meter);
-    }
-    return article;
-  }));
-}
-
-function renderTrainingBrief(summary, previous, start, end) {
-  if (!summary.runCount) {
-    els.trainingBriefSummary.textContent = "Load running data to build a concise read of volume, pace, and training structure.";
-    els.trainingBriefSignals.replaceChildren(...[
-      ["Direction", "Waiting for a training window"],
-      ["Effort", "Pace and load will appear here"],
-      ["Structure", "Run spacing will appear here"],
-      ["Hardest effort", "Load, intensity, hills, and time will appear here"]
-    ].map(([label, detail]) => {
-      const article = document.createElement("article");
-      const heading = document.createElement("span");
-      const copy = document.createElement("strong");
-      heading.textContent = label;
-      copy.textContent = detail;
-      article.append(heading, copy);
-      return article;
-    }));
-    els.navWindowLabel.textContent = "No running data loaded";
-    return;
-  }
-
-  const weeklyDelta = previous.averageWeeklyMiles
-    ? ((summary.averageWeeklyMiles - previous.averageWeeklyMiles) / previous.averageWeeklyMiles) * 100
-    : null;
-  const paceDelta = previous.averagePace ? summary.averagePace - previous.averagePace : null;
-  let headline = "A balanced training window is taking shape.";
-  if (summary.rampRate > 20) headline = "Volume is building quickly inside this window.";
-  else if (summary.rampRate < -15) headline = "The recent end of this window is lighter.";
-  else if (paceDelta !== null && paceDelta < -12) headline = "Average pace has moved faster than the prior window.";
-  else if (summary.consistency >= 0.8) headline = "Consistency is the anchor of this block.";
-
-  const rangeText = start && end
-    ? `${start.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}–${end.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}`
-    : "selected window";
-  els.trainingBriefSummary.textContent = `${headline} You averaged ${summary.averageWeeklyMiles.toFixed(1)} miles and ${summary.averageRunsPerWeek.toFixed(1)} runs per week across the ${rangeText} view.`;
-  const historyNote = state.activityTruncated ? " · history capped" : "";
-  els.navWindowLabel.textContent = `${state.dataSource} · ${summary.runCount} runs · ${rangeText}${historyNote}`;
-
-  const volumeDetail = weeklyDelta === null
-    ? `${summary.averageWeeklyMiles.toFixed(1)} mi/wk in view`
-    : `${weeklyDelta >= 0 ? "+" : ""}${Math.round(weeklyDelta)}% weekly volume vs ${state.comparisonLabel}`;
-  const paceDetail = paceDelta === null
-    ? `${formatPace(summary.averagePace)} average pace`
-    : `${paceDelta < 0 ? "Faster" : paceDelta > 0 ? "Slower" : "Level"} by ${formatPace(Math.abs(paceDelta)).replace("/mi", "")} vs ${state.comparisonLabel}`;
-  const structureDetail = `${Math.round(summary.longRunShare * 100)}% of mileage from long runs · ${summary.longestRestGap}d longest gap`;
-  const hardest = hardestRun(state.filteredRuns);
-  const hardestAction = hardest
-    ? { runId: String(hardest.run.id), label: "Open run details" }
-    : null;
-  const signals = [
-    { label: "Direction", detail: volumeDetail, tone: weeklyDelta !== null && Math.abs(weeklyDelta) > 20 ? "caution" : "positive" },
-    { label: "Effort", detail: paceDetail, tone: paceDelta !== null && paceDelta < 0 ? "positive" : "neutral" },
-    { label: "Structure", detail: structureDetail, tone: summary.longRunShare > 0.5 || summary.longestRestGap >= 7 ? "caution" : "neutral" },
-    {
-      label: "Hardest effort",
-      detail: hardest ? `${hardest.score}/100 - ${hardest.run.name}` : "No effort score available",
-      tone: hardest?.score >= 75 ? "caution" : "neutral",
-      action: hardestAction
-    }
-  ];
-  els.trainingBriefSignals.replaceChildren(...signals.map((signal) => {
-    const article = document.createElement("article");
-    article.className = [signal.tone, signal.action ? "has-action" : "", signal.label === "Hardest effort" ? "hardest-signal" : ""].filter(Boolean).join(" ");
-    const label = document.createElement("span");
-    const detail = document.createElement("strong");
-    label.textContent = signal.label;
-    detail.textContent = signal.detail;
-    article.append(label, detail);
-    if (signal.action?.runId) {
-      const button = document.createElement("button");
-      button.className = "brief-signal-action";
-      button.type = "button";
-      button.dataset.action = "open-hardest-run";
-      button.dataset.runId = signal.action.runId;
-      button.textContent = signal.action.label;
-      article.append(button);
-    }
-    return article;
-  }));
-}
-
-function renderSuggestedQuestions(summary, comparison) {
-  if (!summary.runCount) {
-    els.aiPromptChips.replaceChildren();
-    return;
-  }
-  const questions = [];
-  const hasComparison = comparison?.runCount > 0;
-  const volumeChange = hasComparison && comparison.averageWeeklyMiles
-    ? Math.round(((summary.averageWeeklyMiles - comparison.averageWeeklyMiles) / comparison.averageWeeklyMiles) * 100)
-    : null;
-  const loadChange = hasComparison && comparison.totalLoad
-    ? Math.round(((summary.totalLoad - comparison.totalLoad) / comparison.totalLoad) * 100)
-    : null;
-  const paceChange = hasComparison && comparison.averagePace
-    ? Math.round(summary.averagePace - comparison.averagePace)
-    : null;
-  const weather = funWeatherSummary(state.filteredRuns);
-  const weatherCoveragePercent = weather.sampleSize ? Math.round((weather.loaded / weather.sampleSize) * 100) : 0;
-
-  if (weather.loaded >= 5 && weatherCoveragePercent >= 50) {
-    questions.push({
-      focus: "weather",
-      label: `${Math.round(weather.averageTemperature)}° avg conditions`,
-      question: "How should the sourced weather context shape the interpretation of pace and load in this window without assuming causation?"
-    });
-  }
-  if (volumeChange !== null && Math.abs(volumeChange) >= 8) {
-    questions.push({
-      focus: "progression",
-      label: `${volumeChange >= 0 ? "Volume +" : "Volume "}${volumeChange}%`,
-      question: `What best explains the ${Math.abs(volumeChange)}% ${volumeChange >= 0 ? "increase" : "decrease"} in weekly volume versus the ${state.comparisonLabel}?`
-    });
-  }
-  if (loadChange !== null && Math.abs(loadChange) >= 8) {
-    questions.push({
-      focus: "recovery",
-      label: `Load ${loadChange >= 0 ? "+" : ""}${loadChange}%`,
-      question: `How did training load shift versus the ${state.comparisonLabel}, and which supporting signal matters most?`
-    });
-  }
-  if (paceChange !== null && Math.abs(paceChange) >= 6) {
-    questions.push({
-      focus: "efficiency",
-      label: paceChange < 0 ? "Pace moved faster" : "Pace moved slower",
-      question: `How did pace change versus the ${state.comparisonLabel}, and does the load or heart-rate context support that change?`
-    });
-  }
-  if (summary.longRunShare >= 0.32) {
-    questions.push({
-      focus: "durability",
-      label: `${Math.round(summary.longRunShare * 100)}% long-run share`,
-      question: "How balanced is the long-run contribution within this selected window?"
-    });
-  }
-  if (summary.longestRestGap >= 5) {
-    questions.push({
-      focus: "consistency",
-      label: `${summary.longestRestGap}d longest gap`,
-      question: "What does the run-spacing pattern show, and where is the evidence limited?"
-    });
-  }
-  [
-    { focus: "balanced", label: "Strongest signal", question: "Which app-calculated signal is strongest in this window, and how confident is that read?" },
-    { focus: "recovery", label: "Load check", question: "How has training load shifted, and what should I compare next?" },
-    { focus: "durability", label: "Long runs", question: "What stands out about my long-run pattern?" }
-  ].forEach((fallback) => {
-    if (questions.length < 3 && !questions.some((item) => item.focus === fallback.focus)) questions.push(fallback);
-  });
-
-  els.aiPromptChips.replaceChildren(...questions.slice(0, 4).map((item) => {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.dataset.focus = item.focus;
-    button.dataset.question = item.question;
-    button.textContent = item.label;
-    return button;
-  }));
+function renderHeroStatus(summary) {
+  const hasData = summary.runCount > 0;
+  document.body.classList.toggle("has-data", hasData);
+  if (!els.heroStatus) return;
+  els.heroStatus.textContent = hasData
+    ? `${summary.runCount} runs · ${summary.activeDays} active days`
+    : "Ready for training data";
 }
 
 function renderAiState() {
   els.aiAnalyzeButton.disabled = !state.filteredRuns.length;
-  els.exportViewButton.disabled = !state.filteredRuns.length;
   if (state.renderedInsightFingerprint === state.insightFingerprint) return;
   state.renderedInsightFingerprint = "";
   els.aiInsightContent.removeAttribute("aria-busy");
@@ -1198,8 +494,8 @@ function renderAiState() {
   title.textContent = state.filteredRuns.length ? "Your selected window is ready" : "Load running data to begin";
   const detail = document.createElement("p");
   detail.textContent = state.filteredRuns.length
-    ? `${state.filteredRuns.length} runs are ready. Ask a question or choose a focus; Ollama will prioritize app-calculated signals and sourced weather context when coverage is sufficient.`
-    : "Connect Strava, import a file, or try the demo. The app will calculate your dashboard first, then you can ask Ollama for a separate training read.";
+    ? `${state.filteredRuns.length} runs will be summarized for Ollama. No route coordinates or raw activity payloads are included.`
+    : "Connect Strava, import a file, or try the demo. Then choose a window and ask for an analysis.";
   copy.append(title, detail);
   wrapper.append(index, copy);
   els.aiInsightContent.replaceChildren(wrapper);
@@ -1207,147 +503,31 @@ function renderAiState() {
 
 function buildInsightPayload() {
   const summary = summarize(state.filteredRuns, state.buckets);
-  const comparison = state.comparisonSummary || summarize([], []);
-  const weather = funWeatherSummary(state.filteredRuns);
-  const weatherCoveragePercent = weather.sampleSize ? Math.round((weather.loaded / weather.sampleSize) * 100) : 0;
-  const hasComparison = comparison.runCount > 0 && els.comparisonSelect.value !== "off";
-  const percentChange = (current, earlier) => earlier ? Math.round(((current - earlier) / earlier) * 100) : null;
-  const relationshipStrength = (first, firstThreshold, second, secondThreshold) => {
-    if (first === null || second === null) return 0;
-    const firstWeight = Math.min(2, Math.abs(first) / firstThreshold);
-    const secondWeight = Math.min(2, Math.abs(second) / secondThreshold);
-    return Math.round(((firstWeight + secondWeight) / 4) * 100);
-  };
-  const pairedPattern = (first, firstStable, second, secondStable, alignedWhenSameDirection = true) => {
-    if (first === null || second === null) return "insufficient";
-    const firstIsStable = Math.abs(first) <= firstStable;
-    const secondIsStable = Math.abs(second) <= secondStable;
-    if (firstIsStable && secondIsStable) return "stability";
-    if (firstIsStable || secondIsStable) return "divergence";
-    const sameDirection = Math.sign(first) === Math.sign(second);
-    return sameDirection === alignedWhenSameDirection ? "alignment" : "tradeoff";
-  };
-  const direction = (change, inverse = false) => {
-    if (change === null || Math.abs(change) < 1) return "stable";
-    const higher = change > 0;
-    return inverse ? (higher ? "slower" : "faster") : (higher ? "higher" : "lower");
-  };
-  const volumeChange = hasComparison ? percentChange(summary.averageWeeklyMiles, comparison.averageWeeklyMiles) : null;
-  const loadChange = hasComparison ? percentChange(summary.totalLoad, comparison.totalLoad) : null;
-  const paceChange = hasComparison && comparison.averagePace ? Math.round(summary.averagePace - comparison.averagePace) : null;
-  const consistencyChange = hasComparison ? Math.round((summary.consistency - comparison.consistency) * 100) : null;
-  const longRunShareChange = hasComparison ? Math.round((summary.longRunShare - comparison.longRunShare) * 100) : null;
-  const heartRateChange = hasComparison && summary.averageHr && comparison.averageHr ? Math.round(summary.averageHr - comparison.averageHr) : null;
-  const spacingChange = hasComparison ? summary.longestRestGap - comparison.longestRestGap : null;
-  const terrainChange = hasComparison ? Math.round(summary.elevationPerMile - comparison.elevationPerMile) : null;
-  const hrCoverage = summary.runCount
-    ? Math.round((state.filteredRuns.filter((run) => Number(run.average_heartrate) > 0).length / summary.runCount) * 100)
-    : 0;
-  const directLoadCoverage = summary.runCount
-    ? Math.round((state.filteredRuns.filter((run) => Number(run.suffer_score) > 0).length / summary.runCount) * 100)
-    : 0;
-  const candidates = [
-    { id: "volume", direction: direction(volumeChange), change: volumeChange, coverage: 100 },
-    { id: "pace", direction: direction(paceChange, true), change: paceChange, coverage: 100 },
-    { id: "load", direction: direction(loadChange), change: loadChange, coverage: directLoadCoverage },
-    { id: "consistency", direction: direction(consistencyChange), change: consistencyChange, coverage: 100 },
-    { id: "long_run", direction: direction(longRunShareChange), change: longRunShareChange, coverage: 100 },
-    { id: "heart_rate", direction: direction(heartRateChange), change: heartRateChange, coverage: hrCoverage },
-    { id: "spacing", direction: direction(spacingChange), change: spacingChange, coverage: 100 },
-    weather.loaded ? {
-      id: "weather",
-      direction: "context",
-      change: weather.averageTemperature === null ? null : Math.round(weather.averageTemperature),
-      coverage: weatherCoveragePercent
-    } : null
-  ].filter(Boolean);
-  const relationships = [
-    hasComparison ? {
-      id: "volume_pace",
-      pattern: pairedPattern(volumeChange, 5, paceChange, 3, false),
-      strength: relationshipStrength(volumeChange, 5, paceChange, 5),
-      coverage: 100
-    } : null,
-    hasComparison ? {
-      id: "volume_load",
-      pattern: pairedPattern(volumeChange, 5, loadChange, 8, true),
-      strength: relationshipStrength(volumeChange, 5, loadChange, 8),
-      coverage: directLoadCoverage
-    } : null,
-    hasComparison && heartRateChange !== null && hrCoverage >= 50 ? {
-      id: "pace_heart_rate",
-      pattern: pairedPattern(paceChange, 3, heartRateChange, 3, true),
-      strength: relationshipStrength(paceChange, 5, heartRateChange, 3),
-      coverage: hrCoverage
-    } : null,
-    hasComparison ? {
-      id: "load_spacing",
-      pattern: pairedPattern(loadChange, 8, spacingChange, 1, false),
-      strength: relationshipStrength(loadChange, 8, spacingChange, 1),
-      coverage: directLoadCoverage
-    } : null,
-    hasComparison ? {
-      id: "consistency_load",
-      pattern: pairedPattern(consistencyChange, 5, loadChange, 8, true),
-      strength: relationshipStrength(consistencyChange, 5, loadChange, 8),
-      coverage: directLoadCoverage
-    } : null,
-    {
-      id: "long_run_balance",
-      pattern: summary.longRunShare >= 0.25 && summary.longRunShare <= 0.4 ? "stability" : "tradeoff",
-      strength: Math.min(100, Math.round(45 + Math.abs((summary.longRunShare * 100) - 32.5) * 3)),
-      coverage: 100
-    },
-    hasComparison ? {
-      id: "terrain_pace",
-      pattern: pairedPattern(terrainChange, 15, paceChange, 3, true),
-      strength: relationshipStrength(terrainChange, 15, paceChange, 5),
-      coverage: 100
-    } : null
-  ].filter(Boolean).sort((a, b) => b.strength - a.strength);
-  const trend = hasComparison ? {
-    comparisonMode: els.comparisonSelect.value,
-    comparisonLabel: state.comparisonLabel,
-    earlierPeriodCount: state.comparisonBuckets.length,
-    recentPeriodCount: state.buckets.length,
-    earlierAverageMiles: Number(comparison.averageWeeklyMiles.toFixed(1)),
-    recentAverageMiles: Number(summary.averageWeeklyMiles.toFixed(1)),
-    volumeChangePercent: volumeChange,
-    earlierAveragePaceSeconds: comparison.averagePace ? Math.round(comparison.averagePace) : null,
-    recentAveragePaceSeconds: summary.averagePace ? Math.round(summary.averagePace) : null,
-    paceChangeSeconds: paceChange,
-    earlierAverageHr: comparison.averageHr ? Math.round(comparison.averageHr) : null,
-    recentAverageHr: summary.averageHr ? Math.round(summary.averageHr) : null,
-    earlierAverageLoad: Math.round(comparison.totalLoad),
-    recentAverageLoad: Math.round(summary.totalLoad),
-    loadChangePercent: loadChange,
-    consistencyChangePoints: consistencyChange,
-    longRunShareChangePoints: longRunShareChange,
-    heartRateChangeBpm: heartRateChange,
-    longestGapChangeDays: spacingChange,
-    terrainChangeFeetPerMile: terrainChange
-  } : null;
-  const verifiedFacts = [
-    `Selected window: ${summary.runCount} runs, ${summary.totalMiles.toFixed(1)} miles, ${summary.averageWeeklyMiles.toFixed(1)} miles per week, and ${summary.averageRunsPerWeek.toFixed(1)} runs per week at ${formatPace(summary.averagePace)}.`,
-    `Window structure: ${Math.round(summary.consistency * 100)}% grouped-period consistency, ${Math.round(summary.longRunShare * 100)}% of mileage from long runs, and a ${summary.longestRestGap}-day longest gap.`,
-    `The app-calculated load-per-mile score is ${summary.averageLoadPerMile.toFixed(1)}; training load is not weight, calories, or a measured intensity unit.`,
-    hasComparison && volumeChange !== null && paceChange !== null && loadChange !== null
-      ? `Compared with ${state.comparisonLabel}, weekly volume was ${Math.abs(volumeChange)}% ${volumeChange >= 0 ? "higher" : "lower"}, average pace was ${Math.abs(paceChange)} sec/mi ${paceChange <= 0 ? "faster" : "slower"}, and training load was ${Math.abs(loadChange)}% ${loadChange >= 0 ? "higher" : "lower"}.`
-      : null,
-    weather.loaded
-      ? `Open-Meteo modeled context matched ${weather.loaded} of ${weather.sampleSize} sampled run starts: ${Math.round(weather.averageTemperature)}°F average temperature, ${Math.round(weather.coldest.weather.temperatureF)}–${Math.round(weather.warmest.weather.temperatureF)}°F range, and ${weather.commonCondition?.[0] || "recorded conditions"} most often.`
-      : null
-  ].filter(Boolean);
+  const recentRuns = state.filteredRuns.slice(-12).reverse().map((run) => ({
+    date: localDateValue(parseActivityDate(run)),
+    name: String(run.name || "Run").slice(0, 80),
+    distanceMiles: Number(miles(run.distance).toFixed(2)),
+    paceSecondsPerMile: Math.round(paceSeconds(run)),
+    elevationFeet: Math.round(feet(run.total_elevation_gain)),
+    averageHr: run.average_heartrate ? Math.round(run.average_heartrate) : null,
+    trainingLoad: Math.round(activityLoad(run))
+  }));
+  const buckets = state.buckets.slice(-8).map((bucket) => ({
+    period: bucket.label,
+    runs: bucket.runs,
+    miles: Number(bucket.distanceMiles.toFixed(1)),
+    averagePaceSeconds: Math.round(bucket.averagePace || 0),
+    longRunMiles: Number(bucket.longRunMiles.toFixed(1)),
+    averageHr: bucket.averageHr ? Math.round(bucket.averageHr) : null,
+    trainingLoad: Math.round(bucket.trainingLoad)
+  }));
   return {
     focus: els.aiFocus.value,
-    question: els.aiQuestion.value.trim().slice(0, 280),
-    verifiedFacts,
+    coachingContext,
     range: {
       start: els.startDate.value || null,
       end: els.endDate.value || null,
-      grouping: state.bucketMode,
-      comparisonMode: els.comparisonSelect.value,
-      comparisonLabel: state.comparisonLabel
+      grouping: els.bucketSelect.value
     },
     summary: {
       runCount: summary.runCount,
@@ -1368,47 +548,8 @@ function buildInsightPayload() {
       loadPerMile: Number(summary.averageLoadPerMile.toFixed(1)),
       longestRestGapDays: summary.longestRestGap
     },
-    comparison: hasComparison ? {
-      runCount: comparison.runCount,
-      averageWeeklyMiles: Number(comparison.averageWeeklyMiles.toFixed(1)),
-      averagePaceSeconds: Math.round(comparison.averagePace || 0),
-      consistencyPercent: Math.round(comparison.consistency * 100),
-      longRunSharePercent: Math.round(comparison.longRunShare * 100),
-      averageHr: comparison.averageHr ? Math.round(comparison.averageHr) : null,
-      trainingLoad: Math.round(comparison.totalLoad),
-      longestRestGapDays: comparison.longestRestGap
-    } : null,
-    weather: weather.loaded ? {
-      source: "Open-Meteo",
-      modeledContext: true,
-      matchedRunStarts: weather.loaded,
-      sampleSize: weather.sampleSize,
-      eligibleRuns: weather.eligible,
-      coveragePercent: weatherCoveragePercent,
-      sampled: weather.sampled,
-      averageTemperatureF: Math.round(weather.averageTemperature),
-      averageFeelsLikeF: weather.averageFeelsLike === null ? null : Math.round(weather.averageFeelsLike),
-      minimumTemperatureF: Math.round(weather.coldest.weather.temperatureF),
-      maximumTemperatureF: Math.round(weather.warmest.weather.temperatureF),
-      averageHumidityPercent: weather.averageHumidity === null ? null : Math.round(weather.averageHumidity),
-      averageWindMph: weather.averageWind === null ? null : Math.round(weather.averageWind),
-      averageGustMph: weather.averageGust === null ? null : Math.round(weather.averageGust),
-      rainyRunStarts: weather.rainyStarts,
-      commonCondition: weather.commonCondition?.[0] || null,
-      commonConditionCount: weather.commonCondition?.[1] || 0
-    } : null,
-    coverage: {
-      heartRatePercent: hrCoverage,
-      directLoadPercent: directLoadCoverage,
-      currentRuns: summary.runCount,
-      comparisonRuns: comparison.runCount,
-      completePeriods: Math.max(0, state.buckets.length - 2),
-      weatherPercent: weatherCoveragePercent,
-      weatherRuns: weather.loaded
-    },
-    candidates,
-    relationships,
-    trend,
+    buckets,
+    recentRuns
   };
 }
 
@@ -1423,7 +564,7 @@ function renderAiLoading() {
   const title = document.createElement("strong");
   title.textContent = "Reading the shape of your training";
   const detail = document.createElement("p");
-  detail.textContent = "Ollama is selecting the most relevant angles from the compact metrics supplied for this request. The app keeps every statement tied to its calculations.";
+  detail.textContent = "The local model is comparing volume, pace, load, recovery gaps, and recent run patterns. This can take a minute if the model is waking up.";
   copy.append(title, detail);
   wrapper.append(index, copy);
   els.aiInsightContent.replaceChildren(wrapper);
@@ -1446,37 +587,17 @@ function renderAiError(message) {
   els.aiInsightContent.replaceChildren(wrapper);
 }
 
-function renderAiInsight(insight, model) {
+function renderAiInsight(insight) {
   els.aiInsightContent.removeAttribute("aria-busy");
   const header = document.createElement("div");
   header.className = "ai-result-header";
   const label = document.createElement("span");
-  label.textContent = `Ollama-guided read · ${model || els.aiModelName.textContent}`;
+  label.textContent = "Selected-window read";
   const headline = document.createElement("h3");
   headline.textContent = insight.headline;
   const summary = document.createElement("p");
   summary.textContent = insight.summary;
   header.append(label, headline, summary);
-
-  const evidence = document.createElement("div");
-  evidence.className = "ai-evidence";
-  [
-    insight.answerability ? `Evidence: ${insight.answerability}` : "",
-    insight.confidence ? `Confidence: ${insight.confidence}` : "",
-    insight.limitation ? insight.limitation : ""
-  ].filter(Boolean).forEach((text) => {
-    const badge = document.createElement("span");
-    badge.textContent = text;
-    evidence.append(badge);
-  });
-
-  const analyticalFrame = document.createElement("div");
-  analyticalFrame.className = "ai-analysis-frame";
-  const analyticalLabel = document.createElement("span");
-  analyticalLabel.textContent = insight.analysisLabel || "Analytical frame";
-  const analyticalCopy = document.createElement("p");
-  analyticalCopy.textContent = insight.analysis || "The strongest supported relationship needs a broader comparison window.";
-  analyticalFrame.append(analyticalLabel, analyticalCopy);
 
   const observations = document.createElement("div");
   observations.className = "ai-observations";
@@ -1505,32 +626,23 @@ function renderAiInsight(insight, model) {
   const caution = document.createElement("p");
   caution.className = "ai-caution";
   caution.textContent = insight.caution || "Treat this as a training pattern review, not medical advice.";
-  els.aiInsightContent.replaceChildren(header, evidence, analyticalFrame, observations, nextStep, caution);
-  requestAnimationFrame(() => {
-    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    els.aiInsightContent.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "start" });
-  });
+  const sources = document.createElement("div");
+  sources.className = "ai-sources";
+  sources.innerHTML = `<span>Evidence considered</span>${state.filteredRuns.slice(-3).reverse().map((run) => `<button type="button" data-action="open-run" data-run-id="${escapeHtml(String(run.id))}">${escapeHtml(run.name)} · ${miles(run.distance).toFixed(1)} mi</button>`).join("")}`;
+  els.aiInsightContent.replaceChildren(header, observations, nextStep, sources, caution);
 }
 
 async function analyzeWithOllama() {
   if (!state.filteredRuns.length) return;
-  state.insightFingerprint = currentInsightFingerprint();
   const requestedFingerprint = state.insightFingerprint;
-  const controller = new AbortController();
-  let timedOut = false;
-  const timeoutId = window.setTimeout(() => {
-    timedOut = true;
-    controller.abort();
-  }, 130_000);
   els.aiAnalyzeButton.disabled = true;
-  els.aiAnalyzeButton.textContent = "Asking Ollama…";
+  els.aiAnalyzeButton.textContent = "Analyzing…";
   renderAiLoading();
   try {
     const response = await fetch("/api/insights", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify(buildInsightPayload()),
-      signal: controller.signal
+      body: JSON.stringify(buildInsightPayload())
     });
     const data = await readApiJson(response);
     if (!response.ok) throw new Error(data.error || "Ollama could not analyze this training window.");
@@ -1539,15 +651,13 @@ async function analyzeWithOllama() {
       return;
     }
     state.renderedInsightFingerprint = requestedFingerprint;
-    if (data.model) els.aiModelName.textContent = data.model;
-    renderAiInsight(data.insight, data.model);
+    renderAiInsight(data.insight);
   } catch (error) {
     state.renderedInsightFingerprint = "";
-    renderAiError(timedOut ? "The model took too long to answer. Try again once the Ollama service is warm." : error.message || "Check that the Ollama URL is reachable and try again.");
+    renderAiError(error.message || "Check that the Ollama URL is reachable and try again.");
   } finally {
-    window.clearTimeout(timeoutId);
     els.aiAnalyzeButton.disabled = !state.filteredRuns.length;
-    els.aiAnalyzeButton.textContent = "Ask Ollama";
+    els.aiAnalyzeButton.textContent = "Analyze selected window";
   }
 }
 
@@ -1555,14 +665,7 @@ function renderIntel(summary, previous, start, end) {
   const dateLabel = start && end
     ? `${start.toLocaleDateString()} - ${end.toLocaleDateString()}`
     : "Selected range";
-  const directLoadCoverage = state.filteredRuns.length
-    ? Math.round((state.filteredRuns.filter((run) => Number(run.suffer_score) > 0).length / state.filteredRuns.length) * 100)
-    : 0;
-  const heartRateCoverage = state.filteredRuns.length
-    ? Math.round((state.filteredRuns.filter((run) => Number(run.average_heartrate) > 0).length / state.filteredRuns.length) * 100)
-    : 0;
-  const historyNote = state.activityTruncated ? " · history capped at fetch limit" : "";
-  els.intelSubtitle.textContent = `${dateLabel} · ${summary.runCount} runs · ${summary.activeDays} active days · HR ${heartRateCoverage}% · direct load ${directLoadCoverage}%${historyNote}`;
+  els.intelSubtitle.textContent = `${dateLabel} · ${summary.runCount} runs · ${summary.activeDays} active days`;
   const rampClass = Math.abs(summary.rampRate) <= 12 ? "good" : summary.rampRate > 25 ? "warn" : "";
   const longShareClass = summary.longRunShare <= 0.35 ? "good" : "warn";
   const restClass = summary.longestRestGap <= 3 ? "good" : summary.longestRestGap >= 7 ? "warn" : "";
@@ -1638,17 +741,31 @@ function renderIntelCard(card) {
 }
 
 function deltaText(current, previous, unit, higherIsBetter) {
-  if (!previous || !Number.isFinite(previous) || !Number.isFinite(current)) return "No comparison";
+  if (!previous || !Number.isFinite(previous) || !Number.isFinite(current)) return "No prior period";
   const diff = current - previous;
   const improved = higherIsBetter ? diff >= 0 : diff <= 0;
   const direction = improved ? "Up" : "Down";
-  return `${direction} ${Math.abs(diff).toFixed(1)} ${unit} vs ${state.comparisonLabel}`;
+  return `${direction} ${Math.abs(diff).toFixed(1)} ${unit} vs prior`;
+}
+
+function summarizePreviousPeriod(normalized, start, end) {
+  if (!start || !end || end <= start) return summarize([], []);
+  const periodMs = end.valueOf() - start.valueOf();
+  const previousEnd = new Date(start.valueOf() - 1);
+  const previousStart = new Date(previousEnd.valueOf() - periodMs);
+  const previousRuns = normalized
+    .filter(isRun)
+    .filter((activity) => {
+      const date = parseActivityDate(activity);
+      return !Number.isNaN(date.valueOf()) && date >= previousStart && date <= previousEnd;
+    });
+  return summarize(previousRuns, buildBuckets(previousRuns));
 }
 
 function renderDelta(element, current, previous, unit, higherIsBetter, neutral = false) {
   element.className = "";
   if (!previous || !Number.isFinite(previous) || !Number.isFinite(current)) {
-    element.textContent = "No comparison";
+    element.textContent = "No prior period";
     return;
   }
   const diff = current - previous;
@@ -1662,18 +779,15 @@ function renderDelta(element, current, previous, unit, higherIsBetter, neutral =
   const sign = diff >= 0 ? "+" : "-";
   const value = Math.abs(diff);
   const formatted = unit === "%" ? `${Math.round(value)}%` : unit === "bpm" ? `${Math.round(value)} bpm` : `${value.toFixed(1)} ${unit}`;
-  element.textContent = `${sign}${formatted} vs ${state.comparisonLabel}`;
+  element.textContent = `${sign}${formatted} vs prior`;
 }
 
 function renderMainChart() {
   const metric = METRICS[els.metricSelect.value];
-  document.querySelectorAll("[data-metric]").forEach((button) => {
-    button.setAttribute("aria-pressed", String(button.dataset.metric === els.metricSelect.value));
-  });
   els.mainChartTitle.textContent = `${metric.label} trend`;
-  const comparisonText = state.comparisonRuns.length ? ` · ${state.comparisonLabel} overlay` : "";
-  els.mainChartSubtitle.textContent = `${state.buckets.length} ${state.bucketMode === "week" ? "weeks" : "months"}${comparisonText}`;
-  renderBarLineChart(els.mainChart, state.buckets, metric, state.comparisonBuckets);
+  const periodLabel = `${state.buckets.length} ${els.bucketSelect.value === "week" ? "weeks" : "months"}`;
+  els.mainChartSubtitle.textContent = els.metricSelect.value === "pace" ? `${periodLabel} · faster is higher` : periodLabel;
+  renderBarLineChart(els.mainChart, state.buckets, metric);
 }
 
 function svg(tag, attrs = {}, children = []) {
@@ -1683,7 +797,7 @@ function svg(tag, attrs = {}, children = []) {
   return node;
 }
 
-function renderEmpty(container, message = "Load activities to see trends.") {
+function renderEmpty(container, message = "No activity in this window. Widen the range or load another block.") {
   container.innerHTML = `<div class="empty-state">${message}</div>`;
 }
 
@@ -1696,15 +810,229 @@ function escapeHtml(value) {
     .replace(/'/g, "&#039;");
 }
 
-function attachTooltip(element, title, rows) {
+function attachTooltip(element, title, rows, { keyboard = true } = {}) {
   const cleanRows = rows
     .filter((row) => row && row.value !== undefined && row.value !== null && row.value !== "")
     .map((row) => ({ label: String(row.label), value: String(row.value) }));
   element.classList.add("has-tooltip");
   element.setAttribute("data-tooltip-title", title);
   element.setAttribute("data-tooltip-rows", JSON.stringify(cleanRows));
-  element.setAttribute("tabindex", "0");
-  element.setAttribute("aria-label", `${title}. ${cleanRows.map((row) => `${row.label}: ${row.value}`).join(". ")}`);
+  if (keyboard) {
+    element.setAttribute("tabindex", "0");
+    element.setAttribute("aria-describedby", "chartTooltip");
+    element.setAttribute("aria-label", `${title}. ${cleanRows.map((row) => `${row.label}: ${row.value}`).join(". ")}`);
+  } else {
+    element.setAttribute("aria-hidden", "true");
+  }
+}
+
+function periodPercent(current, previous) {
+  if (!previous) return null;
+  return ((current - previous) / previous) * 100;
+}
+
+function paceChangeText(current, previous) {
+  if (!current || !previous) return "No prior pace baseline";
+  const seconds = Math.round(current - previous);
+  if (!seconds) return "Matched prior pace";
+  return `${Math.abs(seconds)} sec/mi ${seconds < 0 ? "faster" : "slower"} than prior`;
+}
+
+function renderBlockReview(summary, previous) {
+  if (!summary.runCount) {
+    els.blockReviewTitle.textContent = "Load training data to review your block";
+    els.blockReviewSummary.textContent = "Your volume, pace, and training rhythm will be compared with the preceding window.";
+    els.blockEvidence.replaceChildren();
+    return;
+  }
+  const volumeChange = periodPercent(summary.totalMiles, previous.totalMiles);
+  const paceDelta = summary.averagePace && previous.averagePace ? Math.round(summary.averagePace - previous.averagePace) : null;
+  const volumePhrase = volumeChange === null ? "a new baseline" : `${Math.abs(Math.round(volumeChange))}% ${volumeChange >= 0 ? "more" : "less"} mileage`;
+  let title = "A steady training block";
+  if (volumeChange !== null && volumeChange >= 10 && (paceDelta === null || paceDelta <= 8)) title = "More volume without losing pace";
+  else if (volumeChange !== null && volumeChange <= -10) title = "A lighter block, with room to rebuild";
+  else if (paceDelta !== null && paceDelta <= -8) title = "Pace improved across a steady block";
+  els.blockReviewTitle.textContent = title;
+  els.blockReviewSummary.textContent = `This window contains ${summary.runCount} runs over ${summary.activeDays} active days: ${volumePhrase}${paceDelta === null ? "." : ` and ${paceChangeText(summary.averagePace, previous.averagePace)}.`}`;
+  const evidence = [
+    { label: "Volume", value: `${summary.totalMiles.toFixed(1)} mi`, detail: volumeChange === null ? "First comparable window" : `${volumeChange >= 0 ? "+" : ""}${Math.round(volumeChange)}% vs prior window` },
+    { label: "Pace", value: formatPace(summary.averagePace), detail: paceChangeText(summary.averagePace, previous.averagePace) },
+    { label: "Rhythm", value: `${summary.averageRunsPerWeek.toFixed(1)} runs/wk`, detail: `${summary.activeDays} active days · longest run ${summary.longRun.toFixed(1)} mi` }
+  ];
+  els.blockEvidence.replaceChildren(...evidence.map((item) => {
+    const card = document.createElement("article");
+    card.className = "block-evidence-card";
+    card.innerHTML = `<span>${escapeHtml(item.label)}</span><strong>${escapeHtml(item.value)}</strong><small>${escapeHtml(item.detail)}</small>`;
+    return card;
+  }));
+}
+
+function renderKeyRuns() {
+  if (!state.filteredRuns.length) {
+    els.keyRuns.innerHTML = '<div class="empty-state">Key runs will appear once a training block is loaded.</div>';
+    return;
+  }
+  const runs = state.filteredRuns;
+  const candidates = [
+    { label: "Most recent", run: runs[runs.length - 1], reason: "Current context for the block" },
+    { label: "Longest", run: [...runs].sort((a, b) => miles(b.distance) - miles(a.distance))[0], reason: "Longest distance in this window" },
+    { label: "Highest effort", run: [...runs].sort((a, b) => activityLoad(b) - activityLoad(a))[0], reason: "Highest estimated effort" },
+    { label: "Fastest comparable", run: [...runs].filter((run) => miles(run.distance) >= 4).sort((a, b) => paceSeconds(a) - paceSeconds(b))[0], reason: "Fastest run over four miles" }
+  ].filter((item) => item.run);
+  const unique = candidates.filter((item, index, list) => list.findIndex((candidate) => String(candidate.run.id) === String(item.run.id)) === index);
+  els.keyRuns.replaceChildren(...unique.map((item) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "key-run-card";
+    button.dataset.activityId = item.run.id;
+    button.innerHTML = `<span>${escapeHtml(item.label)}</span><strong>${escapeHtml(item.run.name)}</strong><em>${escapeHtml(parseActivityDate(item.run).toLocaleDateString(undefined, { month: "short", day: "numeric" }))} · ${miles(item.run.distance).toFixed(2)} mi · ${escapeHtml(formatPace(paceSeconds(item.run)))}</em><small>${escapeHtml(item.reason)}</small>`;
+    return button;
+  }));
+}
+
+function renderCoachingWorkspace(summary) {
+  if (!summary.runCount) {
+    els.readinessContent.innerHTML = '<p class="context-muted">Add a training block to see the inputs behind this view.</p>';
+    els.planDraftCopy.textContent = "Load a block to create a transparent draft.";
+    els.recommendedCalendar.replaceChildren();
+    els.copyPlanButton.disabled = true;
+    return;
+  }
+  const newest = state.filteredRuns[state.filteredRuns.length - 1];
+  const sevenStart = new Date(parseActivityDate(newest)); sevenStart.setDate(sevenStart.getDate() - 6);
+  const lastSeven = state.filteredRuns.filter((run) => parseActivityDate(run) >= sevenStart);
+  const sevenMiles = lastSeven.reduce((sum, run) => sum + miles(run.distance), 0);
+  const baseline = summary.averageWeeklyMiles;
+  const hardRuns = lastSeven.filter((run) => Number(run.average_heartrate) >= 155 || activityLoad(run) / Math.max(miles(run.distance), 1) >= summary.averageLoadPerMile * 1.15).length;
+  const confidence = state.filteredRuns.length >= 12 ? "High" : state.filteredRuns.length >= 6 ? "Moderate" : "Early";
+  const race = raceContext();
+  els.readinessContent.innerHTML = `<div class="readiness-metric"><strong>${sevenMiles.toFixed(1)} mi</strong><span>last 7 days · ${baseline.toFixed(1)} mi baseline</span></div><ul><li>${lastSeven.length} runs in the last 7 days</li><li>${hardRuns} higher-effort run${hardRuns === 1 ? "" : "s"} by available data</li><li>${summary.longestRestGap} days longest rest gap</li><li>${confidence} confidence · ${summary.runCount} runs in this block${race ? `</li><li>${race.label} · ${race.weeks} weeks away · ${race.phase} phase` : ""}</li></ul><p class="context-muted">This is a transparent workload view, not a medical or readiness score.</p>`;
+  const goalMiles = Number(coachingContext.goal.miles) || baseline;
+  const recommendation = recommendIntent(summary, race);
+  const chosenIntent = coachingContext.goal.mode || "auto";
+  const intent = chosenIntent === "auto" ? recommendation.intent : chosenIntent;
+  els.intentRecommendation.textContent = chosenIntent === "auto"
+    ? `Recommended: ${recommendation.intent} — ${recommendation.reason}`
+    : `Manual override: ${intent}. Auto recommends ${recommendation.intent} because ${recommendation.reason}`;
+  const range = intent === "build" ? `${goalMiles.toFixed(0)}–${(goalMiles * 1.08).toFixed(0)}` : intent === "recover" ? `${(goalMiles * 0.7).toFixed(0)}–${(goalMiles * 0.85).toFixed(0)}` : `${(goalMiles * 0.9).toFixed(0)}–${goalMiles.toFixed(0)}`;
+  const raceLead = race ? `${race.label} is ${race.weeks} week${race.weeks === 1 ? "" : "s"} away (${race.phase} phase). ` : "";
+  els.planDraftCopy.textContent = `${raceLead}${intent[0].toUpperCase() + intent.slice(1)} week draft: ${range} mi across about ${Math.max(2, Math.round(summary.averageRunsPerWeek))} runs. Keep the longest run at or below ${summary.longRun.toFixed(1)} mi. Review and adjust it to your schedule, race goal, and how you feel.`;
+  renderRecommendedCalendar(intent, summary, goalMiles, race);
+  els.copyPlanButton.disabled = false;
+}
+
+function renderRecommendedCalendar(intent, summary, targetMiles, race) {
+  const start = new Date();
+  const day = start.getDay();
+  start.setDate(start.getDate() + ((8 - day) % 7 || 7));
+  start.setHours(0, 0, 0, 0);
+  const runCount = Number(coachingContext.goal.runDays) || Math.max(3, Math.round(summary.averageRunsPerWeek));
+  const longRun = Math.min(summary.longRun, targetMiles * 0.35);
+  let schedule = intent === "recover"
+    ? [["Rest / mobility", "Leave room to recover"], ["Easy run", "Conversational effort"], ["Rest", "Optional walk"], ["Easy run", "Keep it short and easy"], ["Rest", "Review how you feel"], ["Easy long run", `At or below ${longRun.toFixed(1)} mi`], ["Rest / optional easy", "Only if you feel ready"]]
+    : [["Easy run", "Conversational effort"], ["Quality option", "Choose only if your check-in supports it"], ["Easy or rest", "Create space between demanding days"], ["Steady run", "Keep the weekly range in view"], ["Easy or rest", "Adjust to life and recovery"], ["Long run", `At or below ${longRun.toFixed(1)} mi`], ["Easy / optional", `${runCount} runs is a reference, not a requirement`]];
+  const dayNames = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  const longIndex = dayNames.indexOf(coachingContext.goal.longRunDay || "Sat");
+  if (longIndex >= 0 && longIndex !== 5) [schedule[5], schedule[longIndex]] = [schedule[longIndex], schedule[5]];
+  const available = String(coachingContext.goal.availability || "").toLowerCase().match(/mon|tue|wed|thu|fri|sat|sun/g);
+  if (available?.length) schedule = schedule.map((session, index) => available.includes(dayNames[index].toLowerCase()) ? session : ["Rest / unavailable", "Outside your saved availability"]);
+  let remainingRuns = runCount;
+  schedule = schedule.map((session) => {
+    const isRun = /run|quality|long|steady|optional/i.test(session[0]);
+    if (!isRun || remainingRuns-- > 0) return session;
+    return ["Rest / optional", "Above your selected weekly run limit"];
+  });
+  const planState = coachingContext.plan || {};
+  els.recommendedCalendar.innerHTML = schedule.map(([title, detail], index) => {
+    const date = new Date(start); date.setDate(start.getDate() + index);
+    const isRace = race && localDateValue(date) === coachingContext.goal.raceDate;
+    const dateKey = localDateValue(date);
+    const completed = state.filteredRuns.some((run) => localDateValue(parseActivityDate(run)) === dateKey);
+    const status = completed ? "completed" : planState[dateKey] || "planned";
+    return `<button type="button" class="recommended-day ${status}${isRace ? " race-day" : ""}" data-action="cycle-plan-status" data-plan-date="${dateKey}"><span>${date.toLocaleDateString(undefined, { weekday: "short" })}</span><time>${date.toLocaleDateString(undefined, { month: "short", day: "numeric" })}</time><strong>${isRace ? "Race day" : title}</strong><small>${isRace ? race.label : detail}</small><em>${status === "completed" ? "Completed from Strava" : status === "skipped" ? "Skipped" : "Planned · click to update"}</em></button>`;
+  }).join("");
+}
+
+function cyclePlanStatus(date) {
+  const current = coachingContext.plan?.[date] || "planned";
+  const next = current === "planned" ? "completed" : current === "completed" ? "skipped" : "planned";
+  coachingContext.plan = { ...(coachingContext.plan || {}), [date]: next };
+  saveCoachingContext();
+  render();
+  setStatus(`Plan session marked ${next}.`);
+}
+
+function recommendIntent(summary, race) {
+  const checkin = coachingContext.checkin || {};
+  if (checkin.feel && Number(checkin.feel) <= 2) return { intent: "recover", reason: "your check-in reported a hard block" };
+  if (checkin.limiter && checkin.limiter !== "none") return { intent: "maintain", reason: `${checkin.limiter} was marked as a limiting factor` };
+  if (race && race.weeks <= 2) return { intent: "recover", reason: "the race is close enough to prioritize freshness" };
+  if (race && race.weeks <= 12 && summary.rampRate <= 15) return { intent: "build", reason: "you are in the race build window with a controlled recent ramp" };
+  return { intent: "maintain", reason: "the available workload data does not support a stronger change" };
+}
+
+function raceContext() {
+  const goal = coachingContext.goal || {};
+  if (!goal.raceDate) return null;
+  const date = new Date(`${goal.raceDate}T00:00:00`);
+  if (Number.isNaN(date.valueOf())) return null;
+  const days = Math.ceil((date - new Date()) / 86400000);
+  if (days < 0) return null;
+  const weeks = Math.max(0, Math.ceil(days / 7));
+  const phase = weeks <= 2 ? "taper / race" : weeks <= 5 ? "peak" : weeks <= 12 ? "build" : "base";
+  const name = goal.raceName || goal.raceDistance || "Race";
+  return { weeks, phase, label: `${name}${goal.raceDistance && goal.raceName ? ` · ${goal.raceDistance}` : ""}` };
+}
+
+function runsForBucket(bucket) {
+  const mode = els.bucketSelect.value;
+  return state.filteredRuns
+    .filter((run) => bucketKey(parseActivityDate(run), mode) === bucket.key)
+    .sort((a, b) => parseActivityDate(b) - parseActivityDate(a));
+}
+
+function attachChartAction(element, title, runs) {
+  if (!runs.length) return;
+  element.classList.add("chart-action");
+  element.setAttribute("role", "button");
+  element.setAttribute("aria-label", `${title}. Open ${runs.length} run${runs.length === 1 ? "" : "s"}.`);
+  const open = () => showRunCollectionModal(title, runs, element);
+  element.addEventListener("click", open);
+  element.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    open();
+  });
+}
+
+function showRunCollectionModal(title, runs, trigger = document.activeElement) {
+  if (!runs.length) return;
+  const totalMiles = runs.reduce((sum, run) => sum + miles(run.distance), 0);
+  const totalSeconds = runs.reduce((sum, run) => sum + (Number(run.moving_time) || 0), 0);
+  state.modalSession += 1;
+  state.runDigestAbort?.abort();
+  state.runDigestAbort = null;
+  state.activeRunId = "";
+  state.modalTrigger = trigger instanceof HTMLElement ? trigger : null;
+  els.workoutModalContent.innerHTML = `
+    <header class="workout-header collection-header">
+      <p class="workout-kicker">Chart selection</p>
+      <h2 id="workoutModalTitle">${escapeHtml(title)}</h2>
+      <div class="workout-header-meta"><span>${runs.length} run${runs.length === 1 ? "" : "s"}</span><span>${totalMiles.toFixed(1)} mi</span><span>${formatPace(totalSeconds / totalMiles)} average pace</span></div>
+    </header>
+    <div class="workout-body collection-body">
+      <p>Select a run to open its full detail, conditions, and coach’s read.</p>
+      <div class="chart-run-list">${runs.map((run) => `
+        <button type="button" class="chart-run-option" data-action="open-run" data-run-id="${escapeHtml(String(run.id))}">
+          <span>${escapeHtml(parseActivityDate(run).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" }))}</span>
+          <strong>${escapeHtml(run.name)}</strong>
+          <em>${miles(run.distance).toFixed(2)} mi · ${escapeHtml(formatPace(paceSeconds(run)))}</em>
+        </button>`).join("")}</div>
+    </div>
+  `;
+  els.workoutModal.hidden = false;
+  document.body.classList.add("modal-open");
+  els.workoutModalClose.focus();
 }
 
 function tooltipContent(title, rows) {
@@ -1767,7 +1095,7 @@ function bindTooltips() {
   });
 }
 
-function renderBarLineChart(container, buckets, metric, comparisonBuckets = []) {
+function renderBarLineChart(container, buckets, metric) {
   if (!buckets.length) {
     renderEmpty(container);
     return;
@@ -1776,12 +1104,10 @@ function renderBarLineChart(container, buckets, metric, comparisonBuckets = []) 
   const height = 520;
   const pad = { top: 22, right: 28, bottom: 48, left: 58 };
   const values = buckets.map(metric.value);
-  const comparisonValues = comparisonBuckets.map(metric.value);
   const metricKey = els.metricSelect.value;
-  const allValues = [...values, ...comparisonValues];
-  const paceValues = allValues.filter((value) => Number.isFinite(value) && value > 0);
+  const paceValues = values.filter((value) => Number.isFinite(value) && value > 0);
   const min = metricKey === "pace" && paceValues.length ? Math.min(...paceValues) : 0;
-  const max = Math.max(...allValues, 1);
+  const max = Math.max(...values, 1);
   const span = Math.max(max - min, 1);
   const chartWidth = width - pad.left - pad.right;
   const chartHeight = height - pad.top - pad.bottom;
@@ -1790,21 +1116,16 @@ function renderBarLineChart(container, buckets, metric, comparisonBuckets = []) 
   for (let i = 0; i <= 4; i += 1) {
     const y = pad.top + (chartHeight / 4) * i;
     root.appendChild(svg("line", { class: "axis", x1: pad.left, y1: y, x2: width - pad.right, y2: y }));
-    const tick = max - (span / 4) * i;
+    const tick = metricKey === "pace" ? min + (span / 4) * i : max - (span / 4) * i;
     root.appendChild(svg("text", { class: "label", x: 8, y: y + 4 }, [document.createTextNode(metric.format(tick).replace("/mi", ""))]));
-  }
-  if (comparisonValues.length) {
-    const comparisonPoints = comparisonValues.map((value, index) => {
-      const x = pad.left + index * (chartWidth / comparisonValues.length) + (chartWidth / comparisonValues.length) / 2;
-      const y = pad.top + chartHeight - ((value - min) / span) * chartHeight;
-      return `${x},${y}`;
-    });
-    root.appendChild(svg("polyline", { class: "line comparison", points: comparisonPoints.join(" ") }));
   }
   const points = buckets.map((bucket, index) => {
     const value = metric.value(bucket);
     const x = pad.left + index * (chartWidth / buckets.length) + (chartWidth / buckets.length) / 2;
-    const y = pad.top + chartHeight - ((value - min) / span) * chartHeight;
+    const normalizedValue = (value - min) / span;
+    const y = metricKey === "pace"
+      ? pad.top + normalizedValue * chartHeight
+      : pad.top + chartHeight - normalizedValue * chartHeight;
     const barHeight = chartHeight - (y - pad.top);
     const bar = svg("rect", {
       class: "bar",
@@ -1833,14 +1154,14 @@ function renderBarLineChart(container, buckets, metric, comparisonBuckets = []) 
   root.appendChild(svg("polyline", { class: "line", points: points.join(" ") }));
   const smoothPoints = movingAverage(values, Math.min(4, Math.max(2, Math.ceil(values.length / 10)))).map((value, index) => {
     const x = pad.left + index * (chartWidth / buckets.length) + (chartWidth / buckets.length) / 2;
-    const y = pad.top + chartHeight - ((value - min) / span) * chartHeight;
+    const normalizedValue = (value - min) / span;
+    const y = metricKey === "pace"
+      ? pad.top + normalizedValue * chartHeight
+      : pad.top + chartHeight - normalizedValue * chartHeight;
     return `${x},${y}`;
   });
   root.appendChild(svg("polyline", { class: "line secondary", points: smoothPoints.join(" ") }));
-  const legend = comparisonValues.length
-    ? `orange: current  teal: moving avg  dashed: ${state.comparisonLabel}`
-    : "orange: current  teal: moving avg";
-  root.appendChild(svg("text", { class: "label chart-legend", x: width - 310, y: 16 }, [document.createTextNode(legend)]));
+  root.appendChild(svg("text", { class: "label", x: width - 180, y: 16 }, [document.createTextNode("actual · moving average")]));
   container.replaceChildren(root);
 }
 
@@ -1852,250 +1173,35 @@ function movingAverage(values, windowSize) {
   });
 }
 
-function renderTrainingArc() {
-  const buckets = state.buckets.filter((bucket) => bucket.distanceMiles > 0);
-  if (!buckets.length) {
-    renderEmpty(els.trainingArcChart, "Load activities to see your training shape.");
-    els.trainingArcInsightTitle.textContent = "No block selected";
-    els.trainingArcInsightText.textContent = "Your selected window will appear here once activities are loaded.";
-    return;
-  }
-
-  const width = Math.max(900, Math.min(1320, buckets.length * 54));
-  const height = 430;
-  const pad = { top: 28, right: 28, bottom: 42, left: 76 };
-  const plotWidth = width - pad.left - pad.right;
-  const slot = plotWidth / buckets.length;
-  const xFor = (index) => pad.left + index * slot + slot / 2;
-  const volumeTop = 42;
-  const volumeBottom = 154;
-  const paceTop = 190;
-  const paceBottom = 302;
-  const shareTop = 342;
-  const shareBottom = 382;
-  const volumes = buckets.map((bucket) => bucket.distanceMiles);
-  const baselines = movingAverage(volumes, Math.min(4, Math.max(2, Math.ceil(volumes.length / 10))));
-  const maxVolume = Math.max(...volumes, ...baselines, 1);
-  const paceValues = buckets.map((bucket) => bucket.averagePace).filter((value) => value > 0);
-  const hasPace = paceValues.length > 0;
-  const minPace = hasPace ? Math.min(...paceValues) : 0;
-  const maxPace = hasPace ? Math.max(...paceValues) : 60;
-  const paceRange = Math.max(maxPace - minPace, 30);
-  const root = svg("svg", {
-    viewBox: `0 0 ${width} ${height}`,
-    role: "img",
-    "aria-label": "Training arc showing weekly mileage, average pace, and long-run share"
-  });
-
-  const volumeY = (value) => volumeBottom - (value / maxVolume) * (volumeBottom - volumeTop);
-  const paceY = (value) => hasPace && value > 0
-    ? paceTop + ((value - minPace) / paceRange) * (paceBottom - paceTop)
-    : paceTop + (paceBottom - paceTop) / 2;
-  const shareY = (value) => shareBottom - value * (shareBottom - shareTop);
-  const drawGrid = (top, bottom, labels) => {
-    labels.forEach((label, index) => {
-      const y = top + ((bottom - top) / Math.max(labels.length - 1, 1)) * index;
-      root.appendChild(svg("line", { class: "axis arc-grid", x1: pad.left, y1: y, x2: width - pad.right, y2: y }));
-      root.appendChild(svg("text", { class: "label arc-axis-label", x: 10, y: y + 4 }, [document.createTextNode(label)]));
-    });
-  };
-
-  drawGrid(volumeTop, volumeBottom, [`${Math.round(maxVolume)} mi`, `${Math.round(maxVolume / 2)} mi`, "0"]);
-  drawGrid(paceTop, paceBottom, [formatPace(minPace), formatPace(minPace + paceRange / 2), formatPace(minPace + paceRange)]);
-  root.appendChild(svg("line", { class: "axis arc-grid", x1: pad.left, y1: shareBottom, x2: width - pad.right, y2: shareBottom }));
-  root.appendChild(svg("text", { class: "label arc-axis-label", x: 10, y: shareTop + 4 }, [document.createTextNode("100%")]));
-  root.appendChild(svg("text", { class: "label arc-axis-label", x: 10, y: shareBottom + 4 }, [document.createTextNode("0%")]));
-  root.appendChild(svg("text", { class: "label arc-lane-label", x: pad.left, y: 18 }, [document.createTextNode("MILEAGE")]));
-  root.appendChild(svg("text", { class: "label arc-lane-label", x: pad.left, y: paceTop - 16 }, [document.createTextNode("PACE · FASTER IS HIGHER")]));
-  root.appendChild(svg("text", { class: "label arc-lane-label", x: pad.left, y: shareTop - 14 }, [document.createTextNode("LONG-RUN SHARE")]));
-
-  const latestX = xFor(buckets.length - 1);
-  root.appendChild(svg("line", { class: "arc-latest-marker", x1: latestX, y1: volumeTop - 16, x2: latestX, y2: shareBottom + 8 }));
-  root.appendChild(svg("text", { class: "label arc-latest-label", x: Math.min(latestX + 7, width - 88), y: volumeTop - 17 }, [document.createTextNode("latest")]));
-
-  buckets.forEach((bucket, index) => {
-    const x = xFor(index);
-    const barWidth = Math.max(6, Math.min(30, slot * 0.62));
-    const bar = svg("rect", {
-      class: "arc-volume-bar",
-      x: x - barWidth / 2,
-      y: volumeY(bucket.distanceMiles),
-      width: barWidth,
-      height: Math.max(2, volumeBottom - volumeY(bucket.distanceMiles)),
-      rx: 4
-    });
-    attachTooltip(bar, `${bucket.label} training arc`, [
-      { label: "Weekly miles", value: `${bucket.distanceMiles.toFixed(1)} mi` },
-      { label: "Average pace", value: formatPace(bucket.averagePace) },
-      { label: "Long-run share", value: `${Math.round(bucket.longRunShare * 100)}%` },
-      { label: "Longest run", value: `${bucket.longRunMiles.toFixed(1)} mi` },
-      { label: "Runs", value: bucket.runs }
-    ]);
-    bindBucketFocus(bar, bucket);
-    root.appendChild(bar);
-  });
-
-  const baselinePoints = baselines.map((value, index) => `${xFor(index)},${volumeY(value)}`).join(" ");
-  root.appendChild(svg("polyline", { class: "arc-baseline-line", points: baselinePoints }));
-
-  const pacePoints = buckets.map((bucket, index) => `${xFor(index)},${paceY(bucket.averagePace)}`).join(" ");
-  root.appendChild(svg("polyline", { class: "arc-pace-line", points: pacePoints }));
-  buckets.forEach((bucket, index) => {
-    const x = xFor(index);
-    const paceDot = svg("circle", { class: "arc-pace-dot", cx: x, cy: paceY(bucket.averagePace), r: 4.5 });
-    attachTooltip(paceDot, `${bucket.label} pace`, [
-      { label: "Average pace", value: formatPace(bucket.averagePace) },
-      { label: "Miles", value: `${bucket.distanceMiles.toFixed(1)} mi` },
-      { label: "Average HR", value: bucket.averageHr ? `${Math.round(bucket.averageHr)} bpm` : "-" }
-    ]);
-    bindBucketFocus(paceDot, bucket);
-    root.appendChild(paceDot);
-
-    const shareDot = svg("circle", { class: "arc-share-dot", cx: x, cy: shareY(bucket.longRunShare), r: 5 });
-    attachTooltip(shareDot, `${bucket.label} long-run share`, [
-      { label: "Long-run share", value: `${Math.round(bucket.longRunShare * 100)}%` },
-      { label: "Longest run", value: `${bucket.longRunMiles.toFixed(1)} mi` }
-    ]);
-    bindBucketFocus(shareDot, bucket);
-    root.appendChild(shareDot);
-
-    if (index % Math.max(1, Math.ceil(buckets.length / 8)) === 0 || index === buckets.length - 1) {
-      root.appendChild(svg("text", { class: "label arc-x-label", x: x - 18, y: height - 12 }, [document.createTextNode(bucket.label)]));
-    }
-  });
-
-  if (state.comparisonBuckets.length) {
-    const comparisonBuckets = state.comparisonBuckets.slice(-buckets.length);
-    const comparisonMax = Math.max(...comparisonBuckets.map((bucket) => bucket.distanceMiles), maxVolume, 1);
-    const comparisonPoints = comparisonBuckets.map((bucket, index) => {
-      const x = xFor(index + Math.max(0, buckets.length - comparisonBuckets.length));
-      return `${x},${volumeBottom - (bucket.distanceMiles / comparisonMax) * (volumeBottom - volumeTop)}`;
-    }).join(" ");
-    root.appendChild(svg("polyline", { class: "arc-comparison-line", points: comparisonPoints }));
-  }
-
-  els.trainingArcChart.replaceChildren(root);
-  updateTrainingArcInsight(buckets[buckets.length - 1]);
-  syncBucketFocus();
-}
-
-function bindBucketFocus(element, bucket) {
-  element.dataset.bucketKey = bucket.key;
-  element.setAttribute("role", "button");
-  element.addEventListener("click", () => focusTrainingBucket(bucket));
-  element.addEventListener("keydown", (event) => {
-    if (event.key !== "Enter" && event.key !== " ") return;
-    event.preventDefault();
-    focusTrainingBucket(bucket);
-  });
-}
-
-function focusTrainingBucket(bucket) {
-  state.focusedBucketKey = state.focusedBucketKey === bucket.key ? "" : bucket.key;
-  syncBucketFocus();
-  updateTrainingArcInsight(state.focusedBucketKey ? bucket : state.buckets[state.buckets.length - 1]);
-}
-
-function syncBucketFocus() {
-  const focused = state.buckets.find((bucket) => bucket.key === state.focusedBucketKey);
-  if (!focused) state.focusedBucketKey = "";
-  document.querySelectorAll("[data-bucket-key]").forEach((node) => {
-    const isFocused = Boolean(state.focusedBucketKey) && node.dataset.bucketKey === state.focusedBucketKey;
-    node.classList.toggle("chart-focus", isFocused);
-    node.classList.toggle("arc-selected", isFocused);
-  });
-  if (focused) updateTrainingArcInsight(focused);
-}
-
-function updateTrainingArcInsightLegacy(bucket) {
-  if (!bucket) {
-    els.trainingArcInsightTitle.textContent = "No block selected";
-    els.trainingArcInsightText.textContent = "Load activities to see what this block is doing.";
-    return;
-  }
-  const prior = state.buckets[state.buckets.indexOf(bucket) - 1];
-  const milesDelta = prior ? bucket.distanceMiles - prior.distanceMiles : 0;
-  const paceDelta = prior ? bucket.averagePace - prior.averagePace : 0;
-  const volumePhrase = prior ? `${milesDelta >= 0 ? "+" : ""}${milesDelta.toFixed(1)} mi vs ${prior.label}` : "first visible block";
-  const pacePhrase = prior && bucket.averagePace && paceDelta
-    ? `${formatPace(Math.abs(paceDelta)).replace("/mi", "")} ${paceDelta < 0 ? "quicker" : "slower"}`
-    : "pace baseline forming";
-  const volumeChange = prior?.distanceMiles ? (milesDelta / prior.distanceMiles) * 100 : 0;
-  let signal = "Steady: the week is close to the recent shape. Repeat it before adding more.";
-  if (!prior) signal = "Baseline: this is the first visible block in the selected window.";
-  else if (volumeChange > 8 && paceDelta <= 0) signal = "Build: volume rose while pace held or improved. Keep the next step modest.";
-  else if (volumeChange > 8) signal = "Build: load rose quickly. Give the next hard effort plenty of room.";
-  else if (volumeChange < -10 && paceDelta < 0) signal = "Absorb: volume eased while pace improved. This looks like a useful consolidation week.";
-  else if (bucket.longRunShare > 0.55) signal = "Durability: the long run carries a large share of the week. Keep the support runs easy.";
-  els.trainingArcInsight.textContent = `${bucket.label}: ${bucket.distanceMiles.toFixed(1)} mi · ${formatPace(bucket.averagePace)} average pace · ${Math.round(bucket.longRunShare * 100)}% long-run share · ${volumePhrase} · ${pacePhrase}. Click any mark to focus that block.`;
-}
-
-function updateTrainingArcInsight(bucket) {
-  if (!bucket) {
-    els.trainingArcInsightTitle.textContent = "No block selected";
-    els.trainingArcInsightText.textContent = "Load activities to see what this block is doing.";
-    return;
-  }
-  const prior = state.buckets[state.buckets.indexOf(bucket) - 1];
-  const milesDelta = prior ? bucket.distanceMiles - prior.distanceMiles : 0;
-  const paceDelta = prior ? bucket.averagePace - prior.averagePace : 0;
-  const volumePhrase = prior ? `${milesDelta >= 0 ? "+" : ""}${milesDelta.toFixed(1)} mi vs ${prior.label}` : "first visible block";
-  const pacePhrase = prior && bucket.averagePace && paceDelta
-    ? `${formatPace(Math.abs(paceDelta)).replace("/mi", "")} ${paceDelta < 0 ? "quicker" : "slower"}`
-    : "pace baseline forming";
-  const volumeChange = prior?.distanceMiles ? (milesDelta / prior.distanceMiles) * 100 : 0;
-  let signal = "Steady: the week is close to the recent shape. Repeat it before adding more.";
-  if (!prior) signal = "Baseline: this is the first visible block in the selected window.";
-  else if (volumeChange > 8 && paceDelta <= 0) signal = "Build: volume rose while pace held or improved. Keep the next step modest.";
-  else if (volumeChange > 8) signal = "Build: load rose quickly. Give the next hard effort plenty of room.";
-  else if (volumeChange < -10 && paceDelta < 0) signal = "Absorb: volume eased while pace improved. This looks like a useful consolidation week.";
-  else if (bucket.longRunShare > 0.55) signal = "Durability: the long run carries a large share of the week. Keep the support runs easy.";
-  els.trainingArcInsightTitle.textContent = `${bucket.label} / ${bucket.distanceMiles.toFixed(1)} mi / ${formatPace(bucket.averagePace)}`;
-  els.trainingArcInsightText.textContent = `${volumePhrase} / ${pacePhrase}. ${signal}`;
-}
-
 function renderScatter() {
   const buckets = state.buckets.filter((bucket) => bucket.distanceMiles && bucket.averagePace);
   if (!buckets.length) {
     renderEmpty(els.scatterChart);
     return;
   }
-  const width = 800;
-  const height = 310;
-  const pad = { top: 28, right: 28, bottom: 56, left: 70 };
-  const plotWidth = width - pad.left - pad.right;
-  const plotHeight = height - pad.top - pad.bottom;
+  const width = 560;
+  const height = 270;
+  const pad = { top: 16, right: 18, bottom: 40, left: 48 };
   const maxMiles = Math.max(...buckets.map((b) => b.distanceMiles), 1);
   const paces = buckets.map((b) => b.averagePace);
-  const pacePadding = Math.max((Math.max(...paces) - Math.min(...paces)) * 0.14, 12);
-  const minPace = Math.max(1, Math.min(...paces) - pacePadding);
-  const maxPace = Math.max(...paces) + pacePadding;
-  const paceRange = Math.max(maxPace - minPace, 30);
-  const xFor = (miles) => pad.left + (miles / maxMiles) * plotWidth;
-  const yFor = (pace) => pad.top + ((pace - minPace) / paceRange) * plotHeight;
-  const root = svg("svg", { viewBox: `0 0 ${width} ${height}`, role: "img", "aria-label": "Volume versus pace effort map" });
-  for (let index = 0; index <= 4; index += 1) {
-    const x = pad.left + (plotWidth / 4) * index;
-    const y = pad.top + (plotHeight / 4) * index;
-    root.appendChild(svg("line", { class: "axis scatter-grid", x1: x, y1: pad.top, x2: x, y2: height - pad.bottom }));
-    root.appendChild(svg("line", { class: "axis scatter-grid", x1: pad.left, y1: y, x2: width - pad.right, y2: y }));
-    root.appendChild(svg("text", { class: "label scatter-tick", x: x - 12, y: height - pad.bottom + 18 }, [document.createTextNode(`${Math.round((maxMiles / 4) * index)} mi`)]));
-    root.appendChild(svg("text", { class: "label scatter-tick", x: 8, y: y + 4 }, [document.createTextNode(formatPace(minPace + (paceRange / 4) * index))]));
+  const minPace = Math.min(...paces);
+  const maxPace = Math.max(...paces);
+  const root = svg("svg", { viewBox: `0 0 ${width} ${height}`, role: "img", "aria-label": "Volume versus pace" });
+  root.appendChild(svg("line", { class: "axis", x1: pad.left, y1: height - pad.bottom, x2: width - pad.right, y2: height - pad.bottom }));
+  root.appendChild(svg("line", { class: "axis", x1: pad.left, y1: pad.top, x2: pad.left, y2: height - pad.bottom }));
+  const paceRange = Math.max(maxPace - minPace, 1);
+  for (let tick = 0; tick <= 3; tick += 1) {
+    const y = pad.top + (tick / 3) * (height - pad.top - pad.bottom);
+    const pace = minPace + (tick / 3) * paceRange;
+    root.appendChild(svg("line", { class: "axis chart-grid", x1: pad.left, y1: y, x2: width - pad.right, y2: y }));
+    root.appendChild(svg("text", { class: "label", x: 4, y: y + 4 }, [document.createTextNode(formatPace(pace).replace("/mi", ""))]));
   }
-  const medianMiles = [...buckets.map((bucket) => bucket.distanceMiles)].sort((a, b) => a - b)[Math.floor(buckets.length / 2)];
-  const medianPace = [...paces].sort((a, b) => a - b)[Math.floor(paces.length / 2)];
-  root.appendChild(svg("line", { class: "scatter-guide", x1: xFor(medianMiles), y1: pad.top, x2: xFor(medianMiles), y2: height - pad.bottom }));
-  root.appendChild(svg("line", { class: "scatter-guide", x1: pad.left, y1: yFor(medianPace), x2: width - pad.right, y2: yFor(medianPace) }));
-  root.appendChild(svg("text", { class: "label scatter-guide-label", x: xFor(medianMiles) + 5, y: pad.top + 12 }, [document.createTextNode("median volume")]));
-  root.appendChild(svg("text", { class: "label scatter-guide-label", x: pad.left + 6, y: yFor(medianPace) - 6 }, [document.createTextNode("median pace")]));
-  root.appendChild(svg("text", { class: "label scatter-axis-title", x: pad.left + plotWidth / 2 - 44, y: height - 10 }, [document.createTextNode("WEEKLY MILES")]));
-  root.appendChild(svg("text", { class: "label scatter-axis-title", x: 16, y: pad.top + plotHeight / 2 + 28, transform: `rotate(-90 16 ${pad.top + plotHeight / 2 + 28})` }, [document.createTextNode("AVERAGE PACE")]));
-  buckets.forEach((bucket, index) => {
-    const x = xFor(bucket.distanceMiles);
-    const y = yFor(bucket.averagePace);
+  buckets.forEach((bucket) => {
+    const x = pad.left + (bucket.distanceMiles / maxMiles) * (width - pad.left - pad.right);
+    const y = pad.top + ((bucket.averagePace - minPace) / paceRange) * (height - pad.top - pad.bottom);
     const r = 4 + Math.min(bucket.runs, 8);
     const color = bucket.averageHr >= 155 ? "#fc4c02" : bucket.averageHr >= 140 ? "#b77b15" : "#2867b2";
-    const dot = svg("circle", { class: `dot scatter-dot${index === buckets.length - 1 ? " scatter-latest" : ""}`, cx: x, cy: y, r, style: `fill: ${color}` });
+    const dot = svg("circle", { class: "dot", cx: x, cy: y, r, style: `fill: ${color}` });
     attachTooltip(dot, `${bucket.label} volume vs pace`, [
       { label: "Miles", value: `${bucket.distanceMiles.toFixed(1)} mi` },
       { label: "Avg pace", value: formatPace(bucket.averagePace) },
@@ -2103,15 +1209,14 @@ function renderScatter() {
       { label: "Avg run", value: `${(bucket.distanceMiles / bucket.runs).toFixed(1)} mi` },
       { label: "Avg HR", value: bucket.averageHr ? `${Math.round(bucket.averageHr)} bpm` : "-" },
       { label: "Bubble size", value: `${bucket.runs} runs` },
-      { label: "Position", value: index === buckets.length - 1 ? "Latest block" : "Training block" }
+      { label: "Open", value: "View runs in this period" }
     ]);
-    bindBucketFocus(dot, bucket);
+    attachChartAction(dot, `${bucket.label} runs`, runsForBucket(bucket));
     root.appendChild(dot);
-    if (index === buckets.length - 1) {
-      root.appendChild(svg("text", { class: "label scatter-latest-label", x: x + r + 6, y: y - r - 4 }, [document.createTextNode("latest")]));
-    }
   });
-  root.appendChild(svg("text", { class: "label chart-legend", x: width - 330, y: 18 }, [document.createTextNode("blue: lower HR  gold: mid HR  orange: higher HR  size: runs")]));
+  root.appendChild(svg("text", { class: "label", x: width - 136, y: height - 10 }, [document.createTextNode("more miles →")]));
+  root.appendChild(svg("text", { class: "label", x: pad.left + 8, y: pad.top + 13 }, [document.createTextNode("faster ↑")]));
+  root.appendChild(svg("text", { class: "label chart-legend", x: width - 258, y: 14 }, [document.createTextNode("Color: HR · blue <140 · gold 140–154 · orange 155+")]));
   els.scatterChart.replaceChildren(root);
 }
 
@@ -2120,94 +1225,57 @@ function renderStructure() {
     renderEmpty(els.structureChart);
     return;
   }
-  const width = 800;
-  const height = 310;
-  const pad = { top: 18, right: 28, bottom: 34, left: 72 };
-  const plotWidth = width - pad.left - pad.right;
-  const step = plotWidth / state.buckets.length;
-  const xFor = (index) => pad.left + index * step + step / 2;
-  const runTop = 34;
-  const runBottom = 102;
-  const shareTop = 134;
-  const shareBottom = 196;
-  const elevationTop = 226;
-  const elevationBottom = 274;
-  const root = svg("svg", { viewBox: `0 0 ${width} ${height}`, role: "img", "aria-label": "Week structure showing run count, long-run share, and elevation" });
+  const width = 560;
+  const height = 270;
+  const pad = { top: 18, right: 20, bottom: 34, left: 42 };
+  const root = svg("svg", { viewBox: `0 0 ${width} ${height}`, role: "img", "aria-label": "Week structure" });
   const maxRuns = Math.max(...state.buckets.map((b) => b.runs), 1);
-  const maxElevation = Math.max(...state.buckets.map((b) => b.elevationFeet), 1);
-  const runY = (value) => runBottom - (value / maxRuns) * (runBottom - runTop);
-  const shareY = (value) => shareBottom - value * (shareBottom - shareTop);
-  const elevationY = (value) => elevationBottom - (value / maxElevation) * (elevationBottom - elevationTop);
-  const drawLane = (top, bottom, labels) => {
-    root.appendChild(svg("line", { class: "axis structure-grid", x1: pad.left, y1: top, x2: width - pad.right, y2: top }));
-    root.appendChild(svg("line", { class: "axis structure-grid", x1: pad.left, y1: bottom, x2: width - pad.right, y2: bottom }));
-    root.appendChild(svg("text", { class: "label structure-axis-label", x: 10, y: top + 4 }, [document.createTextNode(labels[0])]));
-    root.appendChild(svg("text", { class: "label structure-axis-label", x: 10, y: bottom + 4 }, [document.createTextNode(labels[1])]));
-  };
-  drawLane(runTop, runBottom, [`${maxRuns} runs`, "0"]);
-  drawLane(shareTop, shareBottom, ["100%", "0%"]);
-  drawLane(elevationTop, elevationBottom, [`${Math.round(maxElevation).toLocaleString()} ft`, "0"]);
-  root.appendChild(svg("text", { class: "label structure-lane-label", x: pad.left, y: 22 }, [document.createTextNode("RUN COUNT")]));
-  root.appendChild(svg("text", { class: "label structure-lane-label", x: pad.left, y: 122 }, [document.createTextNode("LONG-RUN SHARE")]));
-  root.appendChild(svg("text", { class: "label structure-lane-label", x: pad.left, y: 214 }, [document.createTextNode("ELEVATION")]));
-  const sharePoints = [];
-  const elevationPoints = [];
+  const step = (width - pad.left - pad.right) / state.buckets.length;
+  const chartHeight = height - pad.top - pad.bottom;
+  for (let tick = 0; tick <= maxRuns; tick += 1) {
+    const y = height - pad.bottom - (tick / maxRuns) * chartHeight;
+    root.appendChild(svg("line", { class: "axis chart-grid", x1: pad.left, y1: y, x2: width - pad.right, y2: y }));
+    root.appendChild(svg("text", { class: "label", x: 18, y: y + 4 }, [document.createTextNode(String(tick))]));
+  }
+  const longRunPoints = [];
   state.buckets.forEach((bucket, index) => {
-    const x = xFor(index);
-    const barWidth = Math.max(6, Math.min(28, step * 0.55));
-    const runHeight = runBottom - runY(bucket.runs);
+    const x = pad.left + index * step + step * 0.25;
+    const runHeight = (bucket.runs / maxRuns) * chartHeight;
     const runBar = svg("rect", {
-      class: "structure-run-bar",
-      x: x - barWidth / 2,
-      y: runY(bucket.runs),
-      width: barWidth,
+      class: "bar",
+      x,
+      y: height - pad.bottom - runHeight,
+      width: Math.max(3, step * 0.25),
       height: Math.max(1, runHeight),
-      rx: 4
+      rx: 2
     });
     attachTooltip(runBar, `${bucket.label} run count`, [
       { label: "Runs", value: bucket.runs },
       { label: "Miles", value: `${bucket.distanceMiles.toFixed(1)} mi` },
       { label: "Avg run", value: `${(bucket.distanceMiles / bucket.runs).toFixed(1)} mi` },
-      { label: "Avg pace", value: formatPace(bucket.averagePace) }
+      { label: "Avg pace", value: formatPace(bucket.averagePace) },
+      { label: "Open", value: "View runs this week" }
     ]);
-    bindBucketFocus(runBar, bucket);
+    attachChartAction(runBar, `${bucket.label} runs`, runsForBucket(bucket));
     root.appendChild(runBar);
-    const shareDot = svg("circle", {
-      class: "structure-share-dot",
-      cx: x,
-      cy: shareY(bucket.longRunShare),
-      r: 5
-    });
-    attachTooltip(shareDot, `${bucket.label} long-run share`, [
+    const pointX = x + Math.max(3, step * 0.13);
+    const pointY = height - pad.bottom - bucket.longRunShare * chartHeight;
+    const longRunPoint = svg("circle", { class: "structure-point", cx: pointX, cy: pointY, r: 4 });
+    attachTooltip(longRunPoint, `${bucket.label} long-run share`, [
       { label: "Long run", value: `${bucket.longRunMiles.toFixed(1)} mi` },
       { label: "Share", value: `${Math.round(bucket.longRunShare * 100)}%` },
       { label: "Week miles", value: `${bucket.distanceMiles.toFixed(1)} mi` },
-      { label: "Elevation", value: `${Math.round(bucket.elevationFeet).toLocaleString()} ft` }
-    ]);
-    bindBucketFocus(shareDot, bucket);
-    root.appendChild(shareDot);
-    sharePoints.push(`${x},${shareY(bucket.longRunShare)}`);
-    const elevationDot = svg("circle", {
-      class: "structure-elevation-dot",
-      cx: x,
-      cy: elevationY(bucket.elevationFeet),
-      r: 4
-    });
-    attachTooltip(elevationDot, `${bucket.label} elevation`, [
       { label: "Elevation", value: `${Math.round(bucket.elevationFeet).toLocaleString()} ft` },
-      { label: "Miles", value: `${bucket.distanceMiles.toFixed(1)} mi` },
-      { label: "Elevation density", value: `${Math.round(bucket.distanceMiles ? bucket.elevationFeet / bucket.distanceMiles : 0)} ft/mi` }
+      { label: "Open", value: "View runs this week" }
     ]);
-    bindBucketFocus(elevationDot, bucket);
-    root.appendChild(elevationDot);
-    elevationPoints.push(`${x},${elevationY(bucket.elevationFeet)}`);
-    if (index % Math.max(1, Math.ceil(state.buckets.length / 8)) === 0 || index === state.buckets.length - 1) {
-      root.appendChild(svg("text", { class: "label structure-x-label", x: x - 18, y: height - 8 }, [document.createTextNode(bucket.label)]));
-    }
+    attachChartAction(longRunPoint, `${bucket.label} runs`, runsForBucket(bucket));
+    root.appendChild(longRunPoint);
+    longRunPoints.push(`${pointX},${pointY}`);
   });
-  root.appendChild(svg("polyline", { class: "structure-share-line", points: sharePoints.join(" ") }));
-  root.appendChild(svg("polyline", { class: "structure-elevation-line", points: elevationPoints.join(" ") }));
-  root.appendChild(svg("text", { class: "label chart-legend", x: width - 288, y: 18 }, [document.createTextNode("teal: runs  gold: long-run share  orange: elevation")]));
+  root.insertBefore(svg("polyline", { class: "structure-line", points: longRunPoints.join(" ") }), root.querySelector(".structure-point"));
+  root.appendChild(svg("line", { class: "axis", x1: pad.left, y1: height - pad.bottom, x2: width - pad.right, y2: height - pad.bottom }));
+  root.appendChild(svg("text", { class: "label", x: pad.left, y: height - 8 }, [document.createTextNode("teal bars: runs · gold line: long-run share")]));
+  root.appendChild(svg("text", { class: "label", x: width - 86, y: pad.top + 2 }, [document.createTextNode("100% share")]));
   els.structureChart.replaceChildren(root);
 }
 
@@ -2231,11 +1299,10 @@ function renderHeatmap() {
     dayMap.set(key, day);
   });
   const weeks = Math.max(1, Math.ceil((last - first) / (7 * 86400000)) + 1);
-  const cell = weeks <= 12 ? 25 : weeks <= 26 ? 18 : 12;
-  const gap = cell >= 24 ? 6 : 4;
-  const left = 64;
-  const width = Math.max(360, left + weeks * (cell + gap) + 24);
-  const height = 7 * (cell + gap) + 46;
+  const width = Math.max(720, weeks * 16 + 70);
+  const height = 170;
+  const cell = 12;
+  const gap = 4;
   const root = svg("svg", { viewBox: `0 0 ${width} ${height}`, role: "img", "aria-label": "Training calendar heatmap" });
   const maxMiles = Math.max(...[...dayMap.values()].map((day) => day.miles), 1);
   for (let week = 0; week < weeks; week += 1) {
@@ -2248,7 +1315,7 @@ function renderHeatmap() {
       const level = value === 0 ? 0 : Math.min(5, Math.ceil((value / maxMiles) * 5));
       const rect = svg("rect", {
         class: level ? `heat-${level}` : "heat-empty",
-        x: left + week * (cell + gap),
+        x: 52 + week * (cell + gap),
         y: 24 + day * (cell + gap),
         width: cell,
         height: cell,
@@ -2259,21 +1326,23 @@ function renderHeatmap() {
         { label: "Runs", value: stats.runs },
         { label: "Moving time", value: formatDuration(stats.seconds) },
         { label: "Avg pace", value: stats.miles ? formatPace(stats.seconds / stats.miles) : "-" },
-        { label: "Load", value: Math.round(stats.load).toLocaleString() }
-      ]);
+        { label: "Load", value: Math.round(stats.load).toLocaleString() },
+        ...(stats.runs ? [{ label: "Open", value: "View runs on this day" }] : [])
+      ], { keyboard: stats.runs > 0 });
+      const dayRuns = state.filteredRuns.filter((run) => localDateValue(parseActivityDate(run)) === key).sort((a, b) => parseActivityDate(b) - parseActivityDate(a));
+      attachChartAction(rect, new Date(`${key}T00:00:00`).toLocaleDateString(undefined, { month: "short", day: "numeric" }), dayRuns);
       root.appendChild(rect);
     }
     if (week % Math.max(1, Math.ceil(weeks / 8)) === 0) {
       const labelDate = new Date(first);
       labelDate.setDate(first.getDate() + week * 7);
-      root.appendChild(svg("text", { class: "label", x: left + week * (cell + gap), y: 15 }, [document.createTextNode(labelDate.toLocaleDateString(undefined, { month: "short" }))]));
+      root.appendChild(svg("text", { class: "label", x: 52 + week * (cell + gap), y: 15 }, [document.createTextNode(labelDate.toLocaleDateString(undefined, { month: "short" }))]));
     }
   }
   ["Mon", "Wed", "Fri", "Sun"].forEach((label, index) => {
-    root.appendChild(svg("text", { class: "label", x: 10, y: 34 + index * 2 * (cell + gap) }, [document.createTextNode(label)]));
+    root.appendChild(svg("text", { class: "label", x: 14, y: 34 + index * 2 * (cell + gap) }, [document.createTextNode(label)]));
   });
-  const totalMiles = state.filteredRuns.reduce((sum, run) => sum + miles(run.distance), 0);
-  els.heatmapSubtitle.textContent = `${state.filteredRuns.length} runs / ${totalMiles.toFixed(0)} mi / ${weeks} weeks`;
+  els.heatmapSubtitle.textContent = `${state.filteredRuns.length} runs across ${weeks} weeks · click a day to drill in`;
   els.heatmapChart.replaceChildren(root);
 }
 
@@ -2293,8 +1362,7 @@ function renderDistanceMix() {
     bin.count += 1;
     bin.miles += distance;
   });
-  const totalMiles = bins.reduce((sum, bin) => sum + bin.miles, 0);
-  renderHorizontalBars(els.distanceMixChart, bins, "miles", (bin) => `${bin.miles.toFixed(1)} mi / ${totalMiles ? Math.round((bin.miles / totalMiles) * 100) : 0}%`, "#157f74");
+  renderHorizontalBars(els.distanceMixChart, bins, "miles", (bin) => `${bin.miles.toFixed(1)} mi`, "#157f74");
 }
 
 function renderRollingWorkload() {
@@ -2383,8 +1451,7 @@ function renderPaceZones() {
     bin.count += 1;
     bin.miles += miles(run.distance);
   });
-  const totalRuns = state.filteredRuns.length;
-  renderHorizontalBars(els.paceZoneChart, bins, "count", (bin) => `${bin.count} runs / ${totalRuns ? Math.round((bin.count / totalRuns) * 100) : 0}%`, "#2867b2");
+  renderHorizontalBars(els.paceZoneChart, bins, "count", (bin) => `${bin.count} runs`, "#2867b2");
 }
 
 function renderHorizontalBars(container, bins, valueKey, formatter, color) {
@@ -2439,34 +1506,6 @@ function activityLoad(run) {
   return Number(run.suffer_score) || runMinutes(run) * effortMultiplier(run);
 }
 
-function hardestRun(runs) {
-  if (!runs.length) return null;
-  const loadValues = runs.map(activityLoad);
-  const loadPerMileValues = runs.map((run) => {
-    const distance = miles(run.distance);
-    return distance ? activityLoad(run) / distance : 0;
-  });
-  const elevationDensityValues = runs.map((run) => {
-    const distance = miles(run.distance);
-    return distance ? feet(run.total_elevation_gain) / distance : 0;
-  });
-  const durationValues = runs.map(runMinutes);
-  const ranked = runs.map((run) => {
-    const distance = miles(run.distance);
-    const load = activityLoad(run);
-    const loadPerMile = distance ? load / distance : 0;
-    const elevationDensity = distance ? feet(run.total_elevation_gain) / distance : 0;
-    const score = Math.round(
-      percentileRank(loadValues, load, true) * 0.4
-      + percentileRank(loadPerMileValues, loadPerMile, true) * 0.3
-      + percentileRank(elevationDensityValues, elevationDensity, true) * 0.2
-      + percentileRank(durationValues, runMinutes(run), true) * 0.1
-    );
-    return { run, score, load, distance };
-  });
-  return ranked.sort((left, right) => right.score - left.score || right.load - left.load || right.distance - left.distance)[0];
-}
-
 function daysBetween(left, right) {
   if (!left || !right) return null;
   return Math.round((parseActivityDate(right) - parseActivityDate(left)) / 86400000);
@@ -2477,324 +1516,6 @@ function average(values) {
   return clean.length ? clean.reduce((sum, value) => sum + value, 0) / clean.length : 0;
 }
 
-function decodePolyline(encoded, precision = 5) {
-  if (!encoded) return [];
-  const coordinates = [];
-  const factor = 10 ** precision;
-  let index = 0;
-  let latitude = 0;
-  let longitude = 0;
-  while (index < encoded.length) {
-    const decodeValue = () => {
-      let result = 0;
-      let shift = 0;
-      let byte;
-      do {
-        byte = encoded.charCodeAt(index) - 63;
-        index += 1;
-        result |= (byte & 0x1f) << shift;
-        shift += 5;
-      } while (byte >= 0x20 && index <= encoded.length);
-      return result & 1 ? ~(result >> 1) : result >> 1;
-    };
-    latitude += decodeValue();
-    longitude += decodeValue();
-    coordinates.push([latitude / factor, longitude / factor]);
-  }
-  return coordinates.filter(([lat, lng]) => Number.isFinite(lat) && Number.isFinite(lng));
-}
-
-function activityRoutePoints(run) {
-  if (Array.isArray(run.route_points) && run.route_points.length) return run.route_points;
-  const decoded = decodePolyline(run.map?.polyline || run.map?.summary_polyline || "");
-  if (decoded.length) return decoded;
-  return [run.start_latlng, run.end_latlng].filter((point) => Array.isArray(point) && point.length === 2);
-}
-
-function hasDetailedRoute(run) {
-  return (Array.isArray(run.route_points) && run.route_points.length > 2)
-    || Boolean(run.map?.polyline || run.map?.summary_polyline);
-}
-
-function weatherCodeLabel(code) {
-  const value = Number(code);
-  if (value === 0) return "Clear";
-  if ([1, 2].includes(value)) return "Partly cloudy";
-  if (value === 3) return "Overcast";
-  if ([45, 48].includes(value)) return "Fog";
-  if ([51, 53, 55, 56, 57].includes(value)) return "Drizzle";
-  if ([61, 63, 65, 66, 67, 80, 81, 82].includes(value)) return "Rain";
-  if ([71, 73, 75, 77, 85, 86].includes(value)) return "Snow";
-  if ([95, 96, 99].includes(value)) return "Thunderstorms";
-  return "Conditions recorded";
-}
-
-function finiteWeatherNumber(value) {
-  if (value === null || value === undefined || value === "") return null;
-  const numeric = Number(value);
-  return Number.isFinite(numeric) ? numeric : null;
-}
-
-function weatherMetrics(weather) {
-  return {
-    temperatureF: finiteWeatherNumber(weather?.temperatureF),
-    feelsLikeF: finiteWeatherNumber(weather?.feelsLikeF),
-    humidityPercent: finiteWeatherNumber(weather?.humidityPercent),
-    windSpeedMph: finiteWeatherNumber(weather?.windSpeedMph),
-    windGustMph: finiteWeatherNumber(weather?.windGustMph),
-    precipitationInches: finiteWeatherNumber(weather?.precipitationInches)
-  };
-}
-
-function weatherMetricText(value, unit, decimals = 0) {
-  if (value === null) return "&mdash;";
-  const display = decimals ? value.toFixed(decimals) : Math.round(value).toLocaleString();
-  return `${display}${unit}`;
-}
-
-function weatherConditionLabel(weather) {
-  const condition = String(weather?.condition || "").trim();
-  return condition || weatherCodeLabel(weather?.weatherCode);
-}
-
-function runWeatherKey(run) {
-  const start = String(run.start_date_local || run.start_date || "");
-  const point = activityRoutePoints(run)[0];
-  return point ? `${run.id}:${start.slice(0, 13)}:${point[0].toFixed(3)}:${point[1].toFixed(3)}` : "";
-}
-
-function runInsightWeatherFingerprint(run) {
-  const weather = state.runWeatherCache.get(runWeatherKey(run));
-  if (!weather) return "weather:none";
-  return JSON.stringify({
-    condition: weatherConditionLabel(weather),
-    ...weatherMetrics(weather),
-    source: String(weather.source || ""),
-    sourceType: String(weather.sourceType || ""),
-    observedAt: String(weather.observedAt || "")
-  });
-}
-
-function weatherRequestDetails(run) {
-  const point = activityRoutePoints(run)[0];
-  const start = String(run.start_date_local || run.start_date || "");
-  const date = start.match(/^(\d{4}-\d{2}-\d{2})/)?.[1];
-  const hour = start.match(/T(\d{2})/)?.[1];
-  if (!point || !date || hour === undefined) return null;
-  return { lat: point[0], lng: point[1], date, hour: Number(hour) };
-}
-
-function weatherLoadingMarkup() {
-  return `
-    <div class="workout-weather-state" aria-busy="true">
-      <span class="workout-weather-pulse" aria-hidden="true"></span>
-      <div><strong>Retrieving run-time conditions…</strong><small>Matched to the route start and local hour.</small></div>
-    </div>
-  `;
-}
-
-function weatherFailureMarkup(message) {
-  return `
-    <div class="workout-weather-state">
-      <span class="workout-weather-unavailable" aria-hidden="true">—</span>
-      <div><strong>Conditions unavailable</strong><small>${escapeHtml(message)}</small></div>
-    </div>
-  `;
-}
-
-function routeLoadingMarkup() {
-  return `
-    <div class="workout-map-empty" aria-busy="true">
-      <strong>Loading route...</strong>
-      <span>Fetching the detailed activity path from Strava.</span>
-    </div>
-  `;
-}
-
-function renderWorkoutWeather(weather) {
-  const container = document.querySelector("#workoutWeatherContent");
-  if (!container) return;
-  if (!weather) {
-    container.innerHTML = weatherFailureMarkup("This activity needs a route start and local timestamp.");
-    return;
-  }
-  const metrics = weatherMetrics(weather);
-  const fieldCount = Object.values(metrics).filter((value) => value !== null).length;
-  const feelsDifference = metrics.feelsLikeF !== null && metrics.temperatureF !== null
-    ? Math.round(metrics.feelsLikeF - metrics.temperatureF)
-    : null;
-  const displayedTemperature = metrics.temperatureF ?? metrics.feelsLikeF;
-  const condition = weatherConditionLabel(weather);
-  const feelsText = metrics.feelsLikeF === null
-    ? metrics.temperatureF === null ? "Temperature data unavailable" : "Feels-like data unavailable"
-    : `Felt like ${weatherMetricText(metrics.feelsLikeF, "&deg;")}${feelsDifference ? ` &middot; ${weatherMetricText(Math.abs(feelsDifference), "&deg;")} ${feelsDifference < 0 ? "cooler" : "warmer"}` : ""}`;
-  const sourceType = String(weather.sourceType || "");
-  const sourceLabel = sourceType === "forecast"
-    ? "Open-Meteo forecast"
-    : sourceType === "historical forecast"
-      ? "Open-Meteo historical forecast"
-      : "Open-Meteo historical weather";
-  const partialNote = fieldCount < Object.keys(metrics).length
-    ? " Some hourly fields were unavailable."
-    : "";
-  container.innerHTML = `
-    <div class="workout-weather-hero">
-      <div>
-        <span>${escapeHtml(condition)}</span>
-        <strong>${weatherMetricText(displayedTemperature, "&deg;")}</strong>
-      </div>
-      <p>${feelsText}</p>
-    </div>
-    <div class="workout-weather-grid">
-      <article><span>Humidity</span><strong>${weatherMetricText(metrics.humidityPercent, "%")}</strong></article>
-      <article><span>Wind</span><strong>${weatherMetricText(metrics.windSpeedMph, " mph")}</strong></article>
-      <article><span>Gusts</span><strong>${weatherMetricText(metrics.windGustMph, " mph")}</strong></article>
-      <article><span>Precip.</span><strong>${weatherMetricText(metrics.precipitationInches, " in", 2)}</strong></article>
-    </div>
-    <small class="workout-weather-source">${escapeHtml(sourceLabel)} &middot; modeled conditions at the route start, not a watch measurement or Ollama estimate.${partialNote}</small>
-  `;
-}
-
-async function hydrateRunWeather(digest, session = state.workoutSession) {
-  if (session !== state.workoutSession || state.activeRunId !== String(digest.run.id) || !isWorkoutModalOpen()) return null;
-  const details = weatherRequestDetails(digest.run);
-  const key = runWeatherKey(digest.run);
-  const container = document.querySelector("#workoutWeatherContent");
-  if (!details || !key) {
-    digest.weather = null;
-    renderWorkoutWeather(null);
-    return null;
-  }
-  const cached = state.runWeatherCache.get(key);
-  if (cached) {
-    digest.weather = cached;
-    renderWorkoutWeather(cached);
-    return cached;
-  }
-  state.runWeatherAbort?.abort();
-  const controller = new AbortController();
-  state.runWeatherAbort = controller;
-  if (container) container.innerHTML = weatherLoadingMarkup();
-  try {
-    const weather = await requestWeatherForRun(digest.run, controller.signal);
-    if (state.runWeatherAbort !== controller || session !== state.workoutSession || state.activeRunId !== String(digest.run.id) || !isWorkoutModalOpen()) return null;
-    digest.weather = weather;
-    renderWorkoutWeather(weather);
-    refreshFunStats();
-    return weather;
-  } catch (error) {
-    if (error.name === "AbortError" || state.runWeatherAbort !== controller || session !== state.workoutSession || state.activeRunId !== String(digest.run.id) || !isWorkoutModalOpen()) return null;
-    digest.weather = null;
-    if (container) container.innerHTML = weatherFailureMarkup(error.message);
-    return null;
-  } finally {
-    if (state.runWeatherAbort === controller) state.runWeatherAbort = null;
-  }
-}
-
-function renderWorkoutMap(run, session = state.workoutSession) {
-  if (session !== state.workoutSession || state.activeRunId !== String(run.id) || !isWorkoutModalOpen() || state.activeWorkoutSection !== "route") return;
-  const container = document.querySelector("#workoutMap");
-  const openLink = document.querySelector("#workoutMapLink");
-  state.workoutMap?.remove();
-  state.workoutMap = null;
-  if (!container) return;
-  const points = activityRoutePoints(run);
-  if (!window.L || !points.length) {
-    container.innerHTML = `<div class="workout-map-empty"><strong>Route unavailable</strong><span>Strava did not include map coordinates for this activity.</span></div>`;
-    if (openLink) openLink.hidden = true;
-    return;
-  }
-  const [startLat, startLng] = points[0];
-  if (openLink) {
-    openLink.hidden = false;
-    openLink.href = `https://www.openstreetmap.org/?mlat=${encodeURIComponent(startLat)}&mlon=${encodeURIComponent(startLng)}#map=14/${encodeURIComponent(startLat)}/${encodeURIComponent(startLng)}`;
-  }
-  container.replaceChildren();
-  const map = window.L.map(container, {
-    scrollWheelZoom: false,
-    zoomControl: true,
-    attributionControl: true
-  });
-  window.L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    maxZoom: 19,
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-  }).addTo(map);
-  let route = null;
-  if (points.length > 1) {
-    route = window.L.polyline(points, {
-      color: "#fc4c02",
-      weight: 5,
-      opacity: 0.96,
-      lineCap: "round",
-      lineJoin: "round"
-    }).addTo(map);
-    window.L.circleMarker(points[0], { radius: 6, color: "#ffffff", weight: 3, fillColor: "#35bba8", fillOpacity: 1 }).addTo(map);
-    window.L.circleMarker(points[points.length - 1], { radius: 6, color: "#ffffff", weight: 3, fillColor: "#fc4c02", fillOpacity: 1 }).addTo(map);
-    map.fitBounds(route.getBounds(), { padding: [28, 28], maxZoom: 15 });
-  } else {
-    window.L.marker(points[0]).addTo(map);
-    map.setView(points[0], 14);
-  }
-  state.workoutMap = map;
-  const settleMap = () => {
-    if (state.workoutMap !== map || session !== state.workoutSession || state.activeRunId !== String(run.id) || state.activeWorkoutSection !== "route" || !isWorkoutModalOpen() || !document.body.contains(container)) return;
-    map.invalidateSize({ pan: false });
-    if (points.length > 1) map.fitBounds(route.getBounds(), { padding: [28, 28], maxZoom: 15 });
-  };
-  requestAnimationFrame(settleMap);
-  window.setTimeout(settleMap, 160);
-}
-
-async function requestActivityRoute(run, signal) {
-  const response = await fetch(`/api/activities/${encodeURIComponent(String(run.id))}`, { signal });
-  const data = await readApiJson(response);
-  if (!response.ok) throw new Error(data.error || "Unable to fetch the Strava route.");
-  return data.activity || null;
-}
-
-function applyActivityDetailRoute(run, detail) {
-  const detailMap = detail?.map || {};
-  if (Array.isArray(detail?.start_latlng)) run.start_latlng = detail.start_latlng;
-  if (Array.isArray(detail?.end_latlng)) run.end_latlng = detail.end_latlng;
-  run.map = { ...(run.map || {}) };
-  if (detailMap.polyline) run.map.polyline = detailMap.polyline;
-  if (detailMap.summary_polyline) run.map.summary_polyline = detailMap.summary_polyline;
-  if (Array.isArray(detail?.route_points) && detail.route_points.length) run.route_points = detail.route_points;
-}
-
-async function hydrateRunRoute(run, session = state.workoutSession) {
-  if (session !== state.workoutSession || state.activeRunId !== String(run.id) || !isWorkoutModalOpen() || state.activeWorkoutSection !== "route") return;
-  const container = document.querySelector("#workoutMap");
-  const activityId = String(run.id || "");
-  if (hasDetailedRoute(run) || state.dataSource !== "Strava" || !state.stravaConnected || !/^\d+$/.test(activityId)) {
-    renderWorkoutMap(run, session);
-    return;
-  }
-  if (state.runRouteCache.has(activityId)) {
-    const cached = state.runRouteCache.get(activityId);
-    if (cached) applyActivityDetailRoute(run, cached);
-    renderWorkoutMap(run, session);
-    return;
-  }
-  state.runRouteAbort?.abort();
-  const controller = new AbortController();
-  state.runRouteAbort = controller;
-  if (container) container.innerHTML = routeLoadingMarkup();
-  try {
-    const detail = await requestActivityRoute(run, controller.signal);
-    if (state.runRouteAbort !== controller || session !== state.workoutSession || state.activeRunId !== String(run.id) || !isWorkoutModalOpen()) return;
-    state.runRouteCache.set(activityId, detail);
-    applyActivityDetailRoute(run, detail);
-    renderWorkoutMap(run, session);
-  } catch (error) {
-    if (error.name === "AbortError" || state.runRouteAbort !== controller || session !== state.workoutSession || state.activeRunId !== String(run.id) || !isWorkoutModalOpen()) return;
-    renderWorkoutMap(run, session);
-  } finally {
-    if (state.runRouteAbort === controller) state.runRouteAbort = null;
-  }
-}
-
 function percentileRank(values, value, higherIsBetter = true) {
   const clean = values.filter((candidate) => Number.isFinite(candidate) && candidate > 0);
   if (!clean.length || !Number.isFinite(value) || value <= 0) return 0;
@@ -2803,13 +1524,10 @@ function percentileRank(values, value, higherIsBetter = true) {
 }
 
 function classifyRun(run, distanceMiles, pace, distanceRank, paceRank) {
-  const name = String(run.name || "").toLowerCase();
+  const name = run.name.toLowerCase();
   if (name.includes("race")) return "Race";
-  if (name.includes("tempo") || name.includes("interval") || name.includes("workout")) return "Quality";
-  if (name.includes("easy") || name.includes("recovery")) return "Easy";
-  if (name.includes("long")) return "Long";
+  if (name.includes("tempo") || name.includes("interval") || name.includes("workout") || paceRank >= 75) return "Quality";
   if (distanceRank >= 85 || distanceMiles >= 10) return "Long";
-  if (paceRank >= 85) return "Quality";
   if (pace && pace >= 600) return "Easy";
   return "Steady";
 }
@@ -2817,7 +1535,6 @@ function classifyRun(run, distanceMiles, pace, distanceRank, paceRank) {
 function buildWorkoutDigest(run) {
   const runs = [...state.filteredRuns].sort((a, b) => parseActivityDate(a) - parseActivityDate(b));
   const index = runs.findIndex((candidate) => String(candidate.id) === String(run.id));
-  const runDate = parseActivityDate(run);
   const previousRun = index > 0 ? runs[index - 1] : null;
   const nextRun = index >= 0 && index < runs.length - 1 ? runs[index + 1] : null;
   const distance = miles(run.distance);
@@ -2842,37 +1559,12 @@ function buildWorkoutDigest(run) {
   const distanceRank = percentileRank(runs.map((candidate) => miles(candidate.distance)), distance, true);
   const paceRank = percentileRank(runs.map(paceSeconds), pace, false);
   const loadRank = percentileRank(runs.map(activityLoad), load, true);
-  const bucket = state.buckets.find((candidate) => candidate.key === bucketKey(runDate, state.bucketMode));
+  const bucket = state.buckets.find((candidate) => candidate.key === bucketKey(parseActivityDate(run), els.bucketSelect.value));
   const previousGap = daysBetween(previousRun, run);
   const nextGap = daysBetween(run, nextRun);
   const contextStart = Math.max(0, Math.min(index - 3, runs.length - 7));
   const neighboringRuns = runs.slice(contextStart, contextStart + 7);
   const runType = classifyRun(run, distance, pace, distanceRank, paceRank);
-  const sevenDays = 7 * 86400000;
-  const priorSevenRuns = runs.filter((candidate) => {
-    const date = parseActivityDate(candidate);
-    return date < runDate && runDate - date <= sevenDays;
-  });
-  const nextSevenRuns = runs.filter((candidate) => {
-    const date = parseActivityDate(candidate);
-    return date > runDate && date - runDate <= sevenDays;
-  });
-  const sumMiles = (items) => items.reduce((sum, candidate) => sum + miles(candidate.distance), 0);
-  const sumLoad = (items) => items.reduce((sum, candidate) => sum + activityLoad(candidate), 0);
-  const priorSevenMiles = sumMiles(priorSevenRuns);
-  const nextSevenMiles = sumMiles(nextSevenRuns);
-  const priorSevenLoad = sumLoad(priorSevenRuns);
-  const nextSevenLoad = sumLoad(nextSevenRuns);
-  const periodDistanceShare = bucket?.distanceMiles ? distance / bucket.distanceMiles : 0;
-  const periodLoadShare = bucket?.trainingLoad ? load / bucket.trainingLoad : 0;
-  const similarElevationDensity = average(similar.map((candidate) => {
-    const candidateMiles = miles(candidate.distance);
-    return candidateMiles ? feet(candidate.total_elevation_gain) / candidateMiles : 0;
-  }));
-  const standoutScore = Math.round((Math.abs(distanceRank - 50) + Math.abs(paceRank - 50) + Math.abs(loadRank - 50)) / 3);
-  const hrCoverage = similar.length
-    ? Math.round((similar.filter((candidate) => Number(candidate.average_heartrate) > 0).length / similar.length) * 100)
-    : 0;
   const signals = [
     {
       label: runType,
@@ -2898,8 +1590,7 @@ function buildWorkoutDigest(run) {
 
   return {
     run,
-    weather: state.runWeatherCache.get(runWeatherKey(run)) || null,
-    date: runDate,
+    date: parseActivityDate(run),
     distance,
     pace,
     elevation,
@@ -2923,17 +1614,6 @@ function buildWorkoutDigest(run) {
     nextGap,
     runType,
     neighboringRuns,
-    priorSevenRuns,
-    nextSevenRuns,
-    priorSevenMiles,
-    nextSevenMiles,
-    priorSevenLoad,
-    nextSevenLoad,
-    periodDistanceShare,
-    periodLoadShare,
-    similarElevationDensity,
-    standoutScore,
-    hrCoverage,
     signals
   };
 }
@@ -2974,6 +1654,338 @@ function workoutNarrative(digest) {
   };
 }
 
+function runStartTimeDetails(run) {
+  const raw = String(run.start_date_local || run.start_date || "");
+  const matched = raw.match(/^(\d{4}-\d{2}-\d{2})T(\d{2}):/);
+  if (matched) return { date: matched[1], hour: Number(matched[2]) };
+  const date = parseActivityDate(run);
+  if (Number.isNaN(date.valueOf())) return null;
+  return { date: localDateValue(date), hour: date.getHours() };
+}
+
+function weatherRequestDetails(run) {
+  const coordinates = normalizeLatLng(run.start_latlng);
+  const time = runStartTimeDetails(run);
+  if (!coordinates || !time) return null;
+  const [latitude, longitude] = coordinates;
+  return {
+    lat: Math.round(latitude * 100) / 100,
+    lng: Math.round(longitude * 100) / 100,
+    date: time.date,
+    hour: Math.max(0, Math.min(23, Math.round(time.hour)))
+  };
+}
+
+function runWeatherKey(run) {
+  const details = weatherRequestDetails(run);
+  if (!details) return "";
+  return `${details.lat.toFixed(2)},${details.lng.toFixed(2)}:${details.date}:${details.hour}`;
+}
+
+function weatherCodeLabel(code) {
+  const value = Number(code);
+  if (value === 0) return "Clear";
+  if ([1, 2].includes(value)) return "Partly cloudy";
+  if (value === 3) return "Overcast";
+  if ([45, 48].includes(value)) return "Fog";
+  if ([51, 53, 55, 56, 57].includes(value)) return "Drizzle";
+  if ([61, 63, 65, 66, 67, 80, 81, 82].includes(value)) return "Rain";
+  if ([71, 73, 75, 77, 85, 86].includes(value)) return "Snow";
+  if ([95, 96, 99].includes(value)) return "Thunderstorm";
+  return "Mixed conditions";
+}
+
+function weatherGlyph(code, isDay) {
+  const value = Number(code);
+  if ([61, 63, 65, 66, 67, 80, 81, 82, 95, 96, 99].includes(value)) return "☂";
+  if ([71, 73, 75, 77, 85, 86].includes(value)) return "❄";
+  if ([45, 48].includes(value)) return "≈";
+  if (value === 0) return isDay === false ? "☾" : "☀";
+  return "☁";
+}
+
+function weatherNumber(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : null;
+}
+
+function formatWeatherTemperature(value) {
+  const numeric = weatherNumber(value);
+  return numeric === null ? "—" : `${Math.round(numeric)}°`;
+}
+
+function formatWeatherValue(value, unit) {
+  const numeric = weatherNumber(value);
+  if (numeric === null) return "—";
+  return unit === "%" ? `${Math.round(numeric)}%` : `${Math.round(numeric)} ${unit}`;
+}
+
+function weatherLoadingMarkup() {
+  return `
+    <div class="workout-weather-state">
+      <span class="weather-pulse" aria-hidden="true"></span>
+      <div><strong>Matching run-start conditions</strong><small>Using the activity’s rounded start location and local start hour.</small></div>
+    </div>
+  `;
+}
+
+function weatherUnavailableMarkup(message) {
+  return `
+    <div class="workout-weather-state unavailable">
+      <span class="weather-unavailable-mark" aria-hidden="true">—</span>
+      <div><strong>Conditions unavailable</strong><small>${escapeHtml(message)}</small></div>
+    </div>
+  `;
+}
+
+function weatherMarkup(weather) {
+  const condition = weather.condition || weatherCodeLabel(weather.weatherCode);
+  const source = [weather.source || "Open-Meteo", weather.sourceType].filter(Boolean).join(" · ");
+  const precipitation = weatherNumber(weather.precipitationInches);
+  return `
+    <div class="workout-weather-hero">
+      <span class="weather-glyph" aria-hidden="true">${weatherGlyph(weather.weatherCode, weather.isDay)}</span>
+      <div>
+        <span>Conditions at the start</span>
+        <strong>${formatWeatherTemperature(weather.temperatureF)}</strong>
+        <p>${escapeHtml(condition)} · feels like ${formatWeatherTemperature(weather.feelsLikeF)}</p>
+      </div>
+    </div>
+    <div class="workout-weather-grid">
+      <article><span>Humidity</span><strong>${formatWeatherValue(weather.humidityPercent, "%")}</strong></article>
+      <article><span>Wind</span><strong>${formatWeatherValue(weather.windSpeedMph, "mph")}</strong></article>
+      <article><span>Gusts</span><strong>${formatWeatherValue(weather.windGustMph, "mph")}</strong></article>
+      <article><span>Precipitation</span><strong>${precipitation === null ? "—" : `${precipitation.toFixed(2)} in`}</strong></article>
+    </div>
+    <p class="workout-weather-source">${escapeHtml(source)} modeled context. It uses a rounded run-start location; it is not a watch measurement.</p>
+  `;
+}
+
+function setWorkoutWeatherContent(markup) {
+  const container = els.workoutModalContent.querySelector("#workoutWeatherContent");
+  if (container) container.innerHTML = markup;
+}
+
+async function requestRunWeather(run) {
+  const details = weatherRequestDetails(run);
+  const key = runWeatherKey(run);
+  if (!details || !key) return null;
+  if (state.runWeatherCache.has(key)) return state.runWeatherCache.get(key);
+  if (state.runWeatherPending.has(key)) return state.runWeatherPending.get(key);
+  const query = new URLSearchParams({
+    lat: String(details.lat),
+    lng: String(details.lng),
+    date: details.date,
+    hour: String(details.hour)
+  });
+  const pending = (async () => {
+    const response = await fetch(`/api/weather?${query}`);
+    const data = await readApiJson(response);
+    if (!response.ok) throw new Error(data.error || "Weather service did not return conditions for this run.");
+    if (!data.weather) throw new Error("Weather service returned no conditions for this run.");
+    const weather = { ...data.weather, condition: weatherCodeLabel(data.weather.weatherCode) };
+    state.runWeatherCache.set(key, weather);
+    return weather;
+  })();
+  state.runWeatherPending.set(key, pending);
+  try {
+    return await pending;
+  } finally {
+    state.runWeatherPending.delete(key);
+  }
+}
+
+async function hydrateWorkoutWeather(run, session) {
+  const details = weatherRequestDetails(run);
+  if (!details) {
+    setWorkoutWeatherContent(weatherUnavailableMarkup("This activity does not include a usable start location and local start time."));
+    return null;
+  }
+  setWorkoutWeatherContent(weatherLoadingMarkup());
+  try {
+    const weather = await requestRunWeather(run);
+    if (session !== state.modalSession || state.activeRunId !== String(run.id)) return null;
+    state.activeRunWeather = weather;
+    setWorkoutWeatherContent(weatherMarkup(weather));
+    return weather;
+  } catch (error) {
+    if (session !== state.modalSession || state.activeRunId !== String(run.id)) return null;
+    setWorkoutWeatherContent(weatherUnavailableMarkup(error.message || "Weather could not be matched for this run."));
+    return null;
+  }
+}
+
+function buildRunDigestPayload(digest, weather) {
+  const run = digest.run;
+  const paceDeltaSeconds = digest.similarPace ? Math.round(digest.pace - digest.similarPace) : null;
+  const loadDeltaPercent = digest.similarLoadPerMile
+    ? Math.round(((digest.loadPerMile - digest.similarLoadPerMile) / digest.similarLoadPerMile) * 100)
+    : null;
+  return {
+    kind: "run",
+    run: {
+      runType: digest.runType,
+      distanceMiles: Number(digest.distance.toFixed(2)),
+      movingMinutes: Number((digest.moving / 60).toFixed(1)),
+      stoppedMinutes: Number((digest.stopped / 60).toFixed(1)),
+      paceSecondsPerMile: Math.round(digest.pace),
+      elevationFeet: Math.round(digest.elevation),
+      elevationFeetPerMile: Math.round(digest.elevationDensity),
+      averageHr: Number(run.average_heartrate) || null,
+      trainingLoad: Math.round(digest.load),
+      loadPerMile: Number(digest.loadPerMile.toFixed(1))
+    },
+    comparison: {
+      similarRunCount: digest.similarCount,
+      similarPaceSecondsPerMile: digest.similarPace ? Math.round(digest.similarPace) : null,
+      paceDeltaSeconds,
+      similarLoadPerMile: digest.similarLoadPerMile ? Number(digest.similarLoadPerMile.toFixed(1)) : null,
+      loadPerMileDeltaPercent: loadDeltaPercent,
+      similarAverageHr: digest.similarHr ? Math.round(digest.similarHr) : null,
+      daysSincePreviousRun: digest.previousGap,
+      daysUntilNextRun: digest.nextGap
+    },
+    context: {
+      selectedWindowRunCount: state.filteredRuns.length,
+      distancePercentile: digest.distanceRank,
+      pacePercentile: digest.paceRank,
+      loadPercentile: digest.loadRank
+    },
+    weather: weather ? {
+      temperatureF: weatherNumber(weather.temperatureF),
+      feelsLikeF: weatherNumber(weather.feelsLikeF),
+      humidityPercent: weatherNumber(weather.humidityPercent),
+      windSpeedMph: weatherNumber(weather.windSpeedMph),
+      precipitationInches: weatherNumber(weather.precipitationInches),
+      weatherCode: weatherNumber(weather.weatherCode)
+    } : null,
+    coverage: {
+      hasWeather: Boolean(weather),
+      hasHeartRate: Boolean(Number(run.average_heartrate)),
+      directLoad: Boolean(Number(run.suffer_score)),
+      similarRunCount: digest.similarCount
+    }
+  };
+}
+
+function comparisonPlanMarkup(digest) {
+  const lowerBound = (digest.distance * 0.8).toFixed(1);
+  const upperBound = (digest.distance * 1.2).toFixed(1);
+  const metrics = ["pace", "load per mile"];
+  if (digest.similarHr) metrics.push("average heart rate");
+  const baseline = digest.similarCount
+    ? `${digest.similarCount} similar run${digest.similarCount === 1 ? "" : "s"} · ${formatPace(digest.similarPace)} pace · ${formatNumber(digest.similarLoadPerMile, 1)} load/mi${digest.similarHr ? ` · ${Math.round(digest.similarHr)} bpm` : ""}`
+    : "No similar-distance baseline yet; the next comparable run will begin one.";
+  return `
+    <div class="run-digest-next">
+      <span>What to compare next</span>
+      <strong>On your next ${lowerBound}–${upperBound} mi run, compare ${metrics.join(" and ")} against this run and its similar-distance baseline.</strong>
+      <small>Baseline: ${escapeHtml(baseline)}</small>
+    </div>
+  `;
+}
+
+function runDigestEmptyMarkup(runId) {
+  return `
+    <div class="run-digest-empty">
+      <div><span>Ollama · on demand</span><strong>Turn the evidence into a concise coaching read.</strong><p>Only compact run metrics and modeled conditions are sent—never route points, coordinates, activity names, or descriptions.</p></div>
+      <button type="button" class="run-digest-action" data-action="generate-run-digest" data-run-id="${escapeHtml(String(runId))}">Generate run digest</button>
+    </div>
+  `;
+}
+
+function runDigestLoadingMarkup() {
+  return `
+    <div class="run-digest-state">
+      <span class="weather-pulse" aria-hidden="true"></span>
+      <div><strong>Reading this run in context</strong><p>Ollama is comparing the effort with similar runs and the surrounding training block.</p></div>
+    </div>
+  `;
+}
+
+function runDigestErrorMarkup(runId, message) {
+  return `
+    <div class="run-digest-state error">
+      <div><strong>The digest did not return</strong><p>${escapeHtml(message)}</p></div>
+      <button type="button" class="run-digest-action secondary" data-action="generate-run-digest" data-run-id="${escapeHtml(String(runId))}">Try again</button>
+    </div>
+  `;
+}
+
+function runDigestResultMarkup(insight, model, digest) {
+  const evidence = (insight.evidence || []).slice(0, 3).map((item) => `
+    <article class="run-digest-evidence ${escapeHtml(item.tone || "neutral")}">
+      <span>${escapeHtml(item.label || "Signal")}</span>
+      <p>${escapeHtml(item.detail || "")}</p>
+    </article>
+  `).join("");
+  return `
+    <div class="run-digest-result">
+      <span class="run-digest-kicker">Coach’s read</span>
+      <h4>${escapeHtml(insight.headline || "A grounded view of this effort")}</h4>
+      <p class="run-digest-copy">${escapeHtml(insight.digest || "")}</p>
+      <div class="run-digest-evidence-grid">${evidence}</div>
+      ${comparisonPlanMarkup(digest)}
+      <p class="run-digest-caution">${escapeHtml(insight.caution || "Pattern-based context from your run data, not medical advice.")}</p>
+      <small>Ollama · ${escapeHtml(model || "configured model")} · generated on demand</small>
+    </div>
+  `;
+}
+
+function setRunDigestContent(markup) {
+  const container = els.workoutModalContent.querySelector("#workoutRunDigest");
+  if (container) container.innerHTML = markup;
+}
+
+async function generateRunDigest(runId) {
+  const run = state.filteredRuns.find((candidate) => String(candidate.id) === String(runId));
+  if (!run || String(run.id) !== state.activeRunId) return;
+  const session = state.modalSession;
+  const digest = buildWorkoutDigest(run);
+  setRunDigestContent(runDigestLoadingMarkup());
+  let weather = state.runWeatherCache.get(runWeatherKey(run)) || null;
+  if (!weather && weatherRequestDetails(run)) {
+    try {
+      weather = await requestRunWeather(run);
+      if (session !== state.modalSession || state.activeRunId !== String(run.id)) return;
+      state.activeRunWeather = weather;
+      setWorkoutWeatherContent(weatherMarkup(weather));
+    } catch {
+      // A missing weather match should not block the run digest.
+    }
+  }
+  if (session !== state.modalSession || state.activeRunId !== String(run.id)) return;
+  const payload = buildRunDigestPayload(digest, weather);
+  const cacheKey = JSON.stringify(payload);
+  const cached = state.runDigestCache.get(cacheKey);
+  if (cached) {
+    setRunDigestContent(runDigestResultMarkup(cached.insight, cached.model, digest));
+    return;
+  }
+  state.runDigestAbort?.abort();
+  const controller = new AbortController();
+  state.runDigestAbort = controller;
+  try {
+    const response = await fetch("/api/insights", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload),
+      signal: controller.signal
+    });
+    const data = await readApiJson(response);
+    if (!response.ok) throw new Error(data.error || "Ollama could not analyze this run.");
+    if (session !== state.modalSession || state.activeRunId !== String(run.id)) return;
+    state.runDigestCache.set(cacheKey, data);
+    setRunDigestContent(runDigestResultMarkup(data.insight, data.model, digest));
+  } catch (error) {
+    if (error.name === "AbortError" || session !== state.modalSession || state.activeRunId !== String(run.id)) return;
+    setRunDigestContent(runDigestErrorMarkup(run.id, error.message || "Check that the Ollama endpoint is reachable and try again."));
+  } finally {
+    if (state.runDigestAbort === controller) state.runDigestAbort = null;
+  }
+}
+
 function neighboringRunsChart(digest) {
   const runs = digest.neighboringRuns;
   if (!runs.length) return "";
@@ -3008,422 +2020,15 @@ function nearbyRunText(run, gap) {
   return `${prefix}${formatNumber(miles(run.distance), 1)} mi at ${formatPace(paceSeconds(run))}`;
 }
 
-function comparisonCellMarkup(label, current, benchmark, difference, available = true) {
-  return `
-    <article class="workout-compare-card${available ? "" : " is-limited"}">
-      <div class="workout-compare-card-heading">
-        <span>${escapeHtml(label)}</span>
-        <strong>${escapeHtml(available ? difference : "Benchmark pending")}</strong>
-      </div>
-      <dl>
-        <div><dt>This run</dt><dd>${escapeHtml(current)}</dd></div>
-        <div><dt>Similar runs</dt><dd>${escapeHtml(available ? benchmark : "Not enough data")}</dd></div>
-      </dl>
-    </article>
-  `;
-}
-
-function workoutComparisonMarkup(digest, averageHr) {
-  const paceAvailable = Boolean(digest.similarPace);
-  const hrAvailable = Boolean(averageHr && digest.similarHr);
-  const loadAvailable = Boolean(digest.similarLoadPerMile);
-  const elevationAvailable = Boolean(digest.similarElevationDensity);
-  const paceDifference = paceAvailable ? Math.round(digest.pace - digest.similarPace) : 0;
-  const hrDifference = hrAvailable ? Math.round(averageHr - digest.similarHr) : 0;
-  const loadDifference = loadAvailable ? digest.loadPerMile - digest.similarLoadPerMile : 0;
-  const elevationDifference = elevationAvailable ? digest.elevationDensity - digest.similarElevationDensity : 0;
-  return `
-    <div class="workout-compare" aria-label="Run compared with similar-distance efforts">
-      <p class="workout-compare-intro">Each benchmark uses runs within ±20% of this distance from the selected window.</p>
-      <div class="workout-compare-grid">
-      ${comparisonCellMarkup(
-        "Pace",
-        formatPace(digest.pace),
-        formatPace(digest.similarPace),
-        `${Math.abs(paceDifference)} sec ${paceDifference <= 0 ? "faster" : "slower"}`,
-        paceAvailable
-      )}
-      ${comparisonCellMarkup(
-        "Heart rate",
-        averageHr ? `${Math.round(averageHr)} bpm` : "—",
-        `${Math.round(digest.similarHr)} bpm`,
-        `${hrDifference >= 0 ? "+" : ""}${hrDifference} bpm`,
-        hrAvailable
-      )}
-      ${comparisonCellMarkup(
-        "Load / mile",
-        formatNumber(digest.loadPerMile, 1),
-        formatNumber(digest.similarLoadPerMile, 1),
-        `${loadDifference >= 0 ? "+" : ""}${formatNumber(loadDifference, 1)}`,
-        loadAvailable
-      )}
-      ${comparisonCellMarkup(
-        "Elevation / mile",
-        `${Math.round(digest.elevationDensity)} ft`,
-        `${Math.round(digest.similarElevationDensity)} ft`,
-        `${elevationDifference >= 0 ? "+" : ""}${Math.round(elevationDifference)} ft`,
-        elevationAvailable
-      )}
-      </div>
-    </div>
-  `;
-}
-
-function buildRunInsightPayload(digest) {
-  const run = digest.run;
-  const weather = digest.weather || state.runWeatherCache.get(runWeatherKey(run)) || null;
-  const metrics = weatherMetrics(weather);
-  const weatherFieldCount = Object.values(metrics).filter((value) => value !== null).length;
-  const weatherCoveragePercent = weather
-    ? Math.round((weatherFieldCount / Object.keys(metrics).length) * 100)
-    : 0;
-  const weatherCondition = weather ? weatherConditionLabel(weather) : null;
-  const effectiveTemperature = metrics.feelsLikeF ?? metrics.temperatureF;
-  const weatherStressInputCount = [
-    effectiveTemperature,
-    metrics.humidityPercent,
-    metrics.windSpeedMph,
-    metrics.precipitationInches
-  ].filter((value) => value !== null).length;
-  const hasWeather = Boolean(weather && (weatherFieldCount || finiteWeatherNumber(weather.weatherCode) !== null || String(weather.condition || "").trim()));
-  const summary = summarize(state.filteredRuns, state.buckets);
-  const averageHr = Number(run.average_heartrate) || 0;
-  const rawCadence = Number(run.average_cadence) || 0;
-  const cadence = rawCadence && rawCadence < 120 ? rawCadence * 2 : rawCadence;
-  const paceDifference = digest.similarPace ? Math.round(digest.pace - digest.similarPace) : 0;
-  const loadDifferencePercent = digest.similarLoadPerMile
-    ? Math.round(((digest.loadPerMile - digest.similarLoadPerMile) / digest.similarLoadPerMile) * 100)
-    : 0;
-  const heartRateDifference = averageHr && digest.similarHr ? Math.round(averageHr - digest.similarHr) : null;
-  const terrainDifference = digest.similarElevationDensity
-    ? Math.round(digest.elevationDensity - digest.similarElevationDensity)
-    : null;
-  const relationshipStrength = (first, firstThreshold, second, secondThreshold) => {
-    if (first === null || second === null) return 0;
-    const firstWeight = Math.min(2, Math.abs(first) / firstThreshold);
-    const secondWeight = Math.min(2, Math.abs(second) / secondThreshold);
-    return Math.round(((firstWeight + secondWeight) / 4) * 100);
-  };
-  const paceLoadPattern = Math.abs(paceDifference) <= 5 && Math.abs(loadDifferencePercent) <= 8
-    ? "stability"
-    : paceDifference < -5 && loadDifferencePercent <= 8
-      ? "alignment"
-      : paceDifference < -5 && loadDifferencePercent > 8
-        ? "tradeoff"
-        : "divergence";
-  const weatherStress = weatherStressInputCount
-    ? Math.min(100, Math.round(
-      (effectiveTemperature === null ? 0 : Math.max(0, effectiveTemperature - 72) * 2.2)
-      + (effectiveTemperature === null ? 0 : Math.max(0, 45 - effectiveTemperature) * 1.6)
-      + (metrics.humidityPercent === null ? 0 : Math.max(0, metrics.humidityPercent - 65) * 0.55)
-      + (metrics.windSpeedMph === null ? 0 : metrics.windSpeedMph * 1.2)
-      + (metrics.precipitationInches === null ? 0 : metrics.precipitationInches * 240)
-    ))
-    : null;
-  const weatherPattern = weatherStress === null || weatherStress < 28
-    ? "stability"
-    : paceDifference < -5 && loadDifferencePercent <= 8
-      ? "divergence"
-      : loadDifferencePercent > 8
-        ? "tradeoff"
-        : "context";
-  const relationships = [
-    digest.similarCount && digest.similarLoadPerMile ? {
-      id: "pace_load",
-      pattern: paceLoadPattern,
-      strength: relationshipStrength(paceDifference, 5, loadDifferencePercent, 8),
-      coverage: Number(run.suffer_score) > 0 ? 100 : 60
-    } : null,
-    digest.similarCount && heartRateDifference !== null && digest.hrCoverage >= 50 ? {
-      id: "pace_heart_rate",
-      pattern: Math.abs(paceDifference) <= 5 && Math.abs(heartRateDifference) <= 3
-        ? "stability"
-        : Math.sign(paceDifference) === Math.sign(heartRateDifference) ? "alignment" : "tradeoff",
-      strength: relationshipStrength(paceDifference, 5, heartRateDifference, 3),
-      coverage: digest.hrCoverage
-    } : null,
-    digest.similarCount && terrainDifference !== null ? {
-      id: "terrain_pace",
-      pattern: Math.abs(terrainDifference) <= 15 && Math.abs(paceDifference) <= 5
-        ? "stability"
-        : Math.sign(terrainDifference) === Math.sign(paceDifference) ? "alignment" : "divergence",
-      strength: relationshipStrength(terrainDifference, 15, paceDifference, 5),
-      coverage: 100
-    } : null,
-    digest.previousGap !== null ? {
-      id: "spacing_load",
-      pattern: digest.previousGap <= 1 && digest.loadRank >= 75 ? "tradeoff"
-        : digest.previousGap >= 5 && digest.loadRank >= 75 ? "alignment" : "stability",
-      strength: Math.min(100, Math.round(Math.abs(digest.loadRank - 50) + (digest.previousGap <= 1 || digest.previousGap >= 5 ? 35 : 10))),
-      coverage: 100
-    } : null,
-    {
-      id: "distance_load",
-      pattern: Math.abs(digest.distanceRank - digest.loadRank) <= 15 ? "alignment" : "divergence",
-      strength: Math.min(100, Math.round((Math.abs(digest.distanceRank - 50) + Math.abs(digest.loadRank - 50)))),
-      coverage: Number(run.suffer_score) > 0 ? 100 : 60
-    },
-    weatherStress !== null ? {
-      id: "weather_pace",
-      pattern: weatherPattern,
-      strength: Math.min(100, Math.round(weatherStress * 0.62 + Math.abs(paceDifference) * 1.8)),
-      coverage: weatherCoveragePercent
-    } : null,
-    weatherStress !== null ? {
-      id: "weather_load",
-      pattern: weatherPattern,
-      strength: Math.min(100, Math.round(weatherStress * 0.62 + Math.abs(loadDifferencePercent) * 1.2)),
-      coverage: weatherCoveragePercent
-    } : null
-  ].filter(Boolean).sort((a, b) => b.strength - a.strength);
-  const weatherFact = hasWeather
-    ? `Open-Meteo modeled start conditions: ${[
-      weatherCondition,
-      metrics.temperatureF === null ? null : `${Math.round(metrics.temperatureF)}°F`,
-      metrics.feelsLikeF === null ? null : `felt like ${Math.round(metrics.feelsLikeF)}°F`,
-      metrics.humidityPercent === null ? null : `${Math.round(metrics.humidityPercent)}% humidity`,
-      metrics.windSpeedMph === null ? null : `${Math.round(metrics.windSpeedMph)} mph wind`
-    ].filter(Boolean).join(", ")}${weatherFieldCount < Object.keys(metrics).length ? " (partial hourly fields)" : ""}.`
-    : null;
-  const verifiedFacts = [
-    `This run: ${digest.distance.toFixed(2)} miles at ${formatPace(digest.pace)}, with ${Math.round(digest.elevation)} feet of elevation and an app-calculated ${digest.loadPerMile.toFixed(1)} load-per-mile score.`,
-    averageHr ? `Heart-rate context: ${Math.round(averageHr)} bpm average for this run.` : null,
-    digest.similarCount
-      ? `Across ${digest.similarCount} similar-distance runs, the benchmark pace was ${formatPace(digest.similarPace)}; this run was ${Math.abs(paceDifference)} sec/mi ${paceDifference <= 0 ? "faster" : "slower"}.`
-      : "There are no usable similar-distance runs for a pace benchmark.",
-    digest.similarCount && digest.similarLoadPerMile
-      ? `The similar-run load-per-mile benchmark was ${digest.similarLoadPerMile.toFixed(1)}; this run was ${Math.abs(loadDifferencePercent)}% ${loadDifferencePercent >= 0 ? "higher" : "lower"}.`
-      : null,
-    `Window position: distance percentile ${digest.distanceRank}, pace percentile ${digest.paceRank}, and load percentile ${digest.loadRank}.`,
-    digest.previousGap === null
-      ? "No previous run is available inside the selected window."
-      : `This run started ${digest.previousGap} days after the previous run in the selected window.`,
-    weatherFact
-  ].filter(Boolean);
-  return {
-    kind: "run",
-    focus: state.activeRunFocus,
-    verifiedFacts,
-    run: {
-      name: String(run.name || "Run").slice(0, 100),
-      date: localDateValue(digest.date),
-      runType: digest.runType,
-      distanceMiles: Number(digest.distance.toFixed(2)),
-      paceSecondsPerMile: Math.round(digest.pace),
-      movingMinutes: Math.round(digest.moving / 60),
-      stoppedMinutes: Math.round(digest.stopped / 60),
-      elevationFeet: Math.round(digest.elevation),
-      elevationFeetPerMile: Math.round(digest.elevationDensity),
-      averageHr: averageHr ? Math.round(averageHr) : null,
-      maxHr: run.max_heartrate ? Math.round(run.max_heartrate) : null,
-      trainingLoad: Math.round(digest.load),
-      loadPerMile: Number(digest.loadPerMile.toFixed(1)),
-      cadenceSpm: cadence ? Math.round(cadence) : null
-    },
-    comparison: {
-      distancePercentile: digest.distanceRank,
-      pacePercentile: digest.paceRank,
-      loadPercentile: digest.loadRank,
-      similarRunCount: digest.similarCount,
-      similarPaceSecondsPerMile: digest.similarPace ? Math.round(digest.similarPace) : null,
-      paceDifferenceSeconds: digest.similarPace ? paceDifference : null,
-      similarAverageHr: digest.similarHr ? Math.round(digest.similarHr) : null,
-      heartRateDifference,
-      similarLoadPerMile: digest.similarLoadPerMile ? Number(digest.similarLoadPerMile.toFixed(1)) : null,
-      loadPerMileDifferencePercent: digest.similarLoadPerMile ? loadDifferencePercent : null,
-      daysSincePreviousRun: digest.previousGap,
-      daysUntilNextRun: digest.nextGap,
-      similarElevationFeetPerMile: digest.similarElevationDensity ? Math.round(digest.similarElevationDensity) : null,
-      elevationDifferenceFeetPerMile: terrainDifference
-    },
-    baseline: {
-      runCount: summary.runCount,
-      averageRunMiles: Number(summary.averageRunMiles.toFixed(1)),
-      averagePaceSecondsPerMile: Math.round(summary.averagePace),
-      averageHr: summary.averageHr ? Math.round(summary.averageHr) : null,
-      averageLoadPerMile: Number(summary.averageLoadPerMile.toFixed(1))
-    },
-    context: {
-      priorSevenRunCount: digest.priorSevenRuns.length,
-      priorSevenMiles: Number(digest.priorSevenMiles.toFixed(1)),
-      priorSevenLoad: Math.round(digest.priorSevenLoad),
-      nextSevenRunCount: digest.nextSevenRuns.length,
-      nextSevenMiles: Number(digest.nextSevenMiles.toFixed(1)),
-      nextSevenLoad: Math.round(digest.nextSevenLoad),
-      periodDistanceSharePercent: Math.round(digest.periodDistanceShare * 100),
-      periodLoadSharePercent: Math.round(digest.periodLoadShare * 100),
-      standoutScore: digest.standoutScore
-    },
-    weather: hasWeather ? {
-      condition: weatherCondition,
-      temperatureF: metrics.temperatureF === null ? null : Math.round(metrics.temperatureF),
-      feelsLikeF: metrics.feelsLikeF === null ? null : Math.round(metrics.feelsLikeF),
-      humidityPercent: metrics.humidityPercent === null ? null : Math.round(metrics.humidityPercent),
-      windSpeedMph: metrics.windSpeedMph === null ? null : Math.round(metrics.windSpeedMph),
-      windGustMph: metrics.windGustMph === null ? null : Math.round(metrics.windGustMph),
-      precipitationInches: metrics.precipitationInches === null ? null : Number(metrics.precipitationInches.toFixed(2)),
-      source: weather.source,
-      sourceType: weather.sourceType,
-      observedAt: weather.observedAt,
-      weatherStress,
-      coveragePercent: weatherCoveragePercent,
-      partial: weatherFieldCount < Object.keys(metrics).length
-    } : null,
-    relationships,
-    coverage: {
-      similarRunCount: digest.similarCount,
-      similarHeartRatePercent: digest.hrCoverage,
-      directLoad: Number(run.suffer_score) > 0,
-      hasPreviousRun: Boolean(digest.previousRun),
-      hasNextRun: Boolean(digest.nextRun),
-      hasWeather,
-      weatherCoveragePercent
-    }
-  };
-}
-
-function runInsightLoadingMarkup() {
-  return `
-    <div class="workout-ai-loading" aria-busy="true">
-      <span class="workout-ai-pulse" aria-hidden="true"></span>
-      <div>
-        <strong>Reading this effort in context…</strong>
-        <p>Comparing similar-distance runs, training context, and sourced conditions when available.</p>
-      </div>
-    </div>
-  `;
-}
-
-function renderRunInsightResult(result) {
-  const content = document.querySelector("#workoutAiContent");
-  if (!content) return;
-  const insight = result.insight;
-  const model = document.querySelector("#workoutAiModel");
-  const trainingReadLabels = {
-    easy_aerobic: "Easy / aerobic",
-    recovery: "Recovery",
-    steady: "Steady",
-    long_run: "Long run",
-    tempo_threshold: "Tempo / threshold",
-    intervals: "Intervals",
-    hills: "Hills",
-    progression: "Progression",
-    race_test: "Race / time trial",
-    mixed: "Mixed workout",
-    unknown: "Type not established"
-  };
-  if (model) model.textContent = result.model || "qwen3.5:0.8b";
-  content.innerHTML = `
-    <div class="workout-ai-result">
-      <h4>${escapeHtml(insight.headline)}</h4>
-      <p class="workout-ai-read">${escapeHtml(insight.read)}</p>
-      <div class="workout-ai-evidence">
-        <span>Evidence: ${escapeHtml(insight.answerability || "Partial")}</span>
-        <span>Confidence: ${escapeHtml(insight.confidence || "Medium")}</span>
-        ${insight.limitation ? `<span>${escapeHtml(insight.limitation)}</span>` : ""}
-      </div>
-      <div class="workout-ai-training-lens">
-        <span>Workout lens</span>
-        <strong>${escapeHtml(trainingReadLabels[insight.trainingRead] || trainingReadLabels.unknown)}</strong>
-        <p>${escapeHtml(insight.trainingReadBasis || "The supplied activity does not establish a specific workout type.")}</p>
-      </div>
-      <div class="workout-ai-analysis">
-        <span>${escapeHtml(insight.analysisLabel || "Analytical frame")}</span>
-        <p>${escapeHtml(insight.analysis || "A stronger relationship read needs more comparable runs.")}</p>
-      </div>
-      <div class="workout-ai-signals">
-        ${insight.signals.map((signal) => `
-          <article class="workout-ai-signal ${escapeHtml(signal.tone)}">
-            <span>${escapeHtml(signal.title)}</span>
-            <p>${escapeHtml(signal.detail)}</p>
-          </article>
-        `).join("")}
-      </div>
-      <div class="workout-ai-next">
-        <span>Watch on the next similar run</span>
-        <p>${escapeHtml(insight.watchNext)}</p>
-      </div>
-      <small>${escapeHtml(insight.caution)}</small>
-    </div>
-  `;
-}
-
-function renderRunInsightError(message, runId) {
-  const content = document.querySelector("#workoutAiContent");
-  if (!content) return;
-  content.innerHTML = `
-    <div class="workout-ai-error">
-      <div>
-        <strong>The run read did not finish.</strong>
-        <p>${escapeHtml(message)}</p>
-      </div>
-      <button class="workout-ai-retry" type="button" data-action="retry-run-insight" data-run-id="${escapeHtml(runId)}">Try again</button>
-    </div>
-  `;
-}
-
-async function requestRunInsight(digest, { force = false } = {}) {
-  const session = state.workoutSession;
-  const runId = String(digest.run.id);
-  const key = `${digest.run.id}:${state.insightFingerprint}:${state.activeRunFocus}:${runInsightWeatherFingerprint(digest.run)}`;
-  state.activeRunInsightKey = key;
-  const cached = state.runInsightCache.get(key);
-  if (cached && !force) {
-    if (session === state.workoutSession && state.activeRunId === runId && isWorkoutModalOpen()) {
-      renderRunInsightResult(cached);
-    }
-    return;
-  }
-  state.runInsightAbort?.abort();
-  const controller = new AbortController();
-  let timedOut = false;
-  const timeoutId = window.setTimeout(() => {
-    timedOut = true;
-    controller.abort();
-  }, 130_000);
-  state.runInsightAbort = controller;
-  const content = document.querySelector("#workoutAiContent");
-  if (content) content.innerHTML = runInsightLoadingMarkup();
-  try {
-    const response = await fetch("/api/insights", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(buildRunInsightPayload(digest)),
-      signal: controller.signal
-    });
-    const data = await readApiJson(response);
-    if (!response.ok) throw new Error(data.error || "Unable to generate this run read.");
-    if (state.runInsightAbort !== controller || session !== state.workoutSession || state.activeRunId !== runId || state.activeRunInsightKey !== key || !isWorkoutModalOpen()) return;
-    state.runInsightCache.set(key, data);
-    renderRunInsightResult(data);
-  } catch (error) {
-    if ((error.name === "AbortError" && !timedOut) || state.runInsightAbort !== controller || session !== state.workoutSession || state.activeRunId !== runId || state.activeRunInsightKey !== key || !isWorkoutModalOpen()) return;
-    renderRunInsightError(timedOut ? "The model took too long to answer. Try again once the Ollama service is warm." : error.message, digest.run.id);
-  } finally {
-    window.clearTimeout(timeoutId);
-    if (state.runInsightAbort === controller) state.runInsightAbort = null;
-  }
-}
-
 function showWorkoutModal(runId, trigger = document.activeElement) {
   const run = state.filteredRuns.find((candidate) => String(candidate.id) === String(runId));
   if (!run) return;
-  const modalWasOpen = isWorkoutModalOpen();
-  const runChanged = state.activeRunId !== String(run.id);
-  if (!modalWasOpen && trigger instanceof HTMLElement && !els.workoutModal.contains(trigger)) {
-    state.modalTrigger = trigger;
-  }
-  state.workoutSession += 1;
-  const session = state.workoutSession;
-  abortWorkoutRequests();
-  state.workoutMap?.remove();
-  state.workoutMap = null;
-  if (!modalWasOpen || runChanged) {
-    state.activeRunFocus = "balanced";
-    state.activeWorkoutSection = "analysis";
-  }
+  state.modalSession += 1;
+  const session = state.modalSession;
+  state.runDigestAbort?.abort();
+  state.runDigestAbort = null;
   state.activeRunId = String(run.id);
-
+  state.activeRunWeather = state.runWeatherCache.get(runWeatherKey(run)) || null;
   const digest = buildWorkoutDigest(run);
   const narrative = workoutNarrative(digest);
   const averageHr = Number(run.average_heartrate) || 0;
@@ -3432,242 +2037,115 @@ function showWorkoutModal(runId, trigger = document.activeElement) {
   const cadence = rawCadence && rawCadence < 120 ? rawCadence * 2 : rawCadence;
   const watts = Number(run.average_watts) || 0;
   const maxSpeedPace = run.max_speed ? formatPace(1609.344 / run.max_speed) : "-";
-  const dateLabel = digest.date.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric", year: "numeric" });
-  const bucketLabelText = digest.bucket ? digest.bucket.label + ": " + digest.bucket.distanceMiles.toFixed(1) + " mi, " + digest.bucket.runs + " runs" : "No group context";
-  const similarPaceText = digest.similarPace ? formatPace(digest.similarPace) + " across " + digest.similarCount + " similar" : "Needs more similar runs";
-  const hrCompare = averageHr && digest.similarHr
-    ? (Math.round(averageHr - digest.similarHr) >= 0 ? "+" : "") + Math.round(averageHr - digest.similarHr) + " bpm vs similar"
-    : "HR comparison unavailable";
-  const socialText = (run.kudos_count || 0) + " kudos &middot; " + (run.achievement_count || 0) + " achievements &middot; " + (run.pr_count || 0) + " PRs";
-  const workoutStats = [
-    statMarkup("Elevation", Math.round(digest.elevation).toLocaleString() + " ft", Math.round(digest.elevationDensity) + " ft/mi"),
-    statMarkup("Heart rate", averageHr ? Math.round(averageHr) + " bpm" : "-", maxHr ? "Max " + Math.round(maxHr) + " bpm" : hrCompare),
-    statMarkup("Training load", Math.round(digest.load).toLocaleString(), formatNumber(digest.loadPerMile, 1) + " per mile"),
-    statMarkup("Cadence", cadence ? Math.round(cadence) + " spm" : "-", watts ? Math.round(watts) + " avg watts" : "From activity data"),
-    statMarkup("Top speed", maxSpeedPace, run.pr_count ? run.pr_count + " personal record" + (run.pr_count === 1 ? "" : "s") : "No PR recorded"),
-    statMarkup("Elapsed time", formatDuration(digest.elapsed), digest.stopped ? formatDuration(digest.stopped) + " not moving" : "Matches moving time")
-  ].join("");
+  const bucketLabelText = digest.bucket ? `${digest.bucket.label}: ${digest.bucket.distanceMiles.toFixed(1)} mi, ${digest.bucket.runs} runs` : "No group context";
+  const similarPaceText = digest.similarPace ? `${formatPace(digest.similarPace)} across ${digest.similarCount} similar` : "Needs more similar runs";
+  const hrCompare = averageHr && digest.similarHr ? `${Math.round(averageHr - digest.similarHr) >= 0 ? "+" : ""}${Math.round(averageHr - digest.similarHr)} bpm vs similar` : "HR comparison unavailable";
+  const socialText = `${run.kudos_count || 0} kudos · ${run.achievement_count || 0} achievements · ${run.pr_count || 0} PRs`;
 
-  els.workoutModalContent.innerHTML = [
-    '<header class="workout-header run-review-header">',
-      '<p class="workout-kicker">' + escapeHtml(dateLabel) + '</p>',
-      '<h2 id="workoutModalTitle">' + escapeHtml(run.name) + '</h2>',
-      '<div class="workout-header-meta">',
-        '<span class="workout-type">' + escapeHtml(digest.runType) + ' run</span>',
-        '<span id="workoutModalMeta">' + escapeHtml(bucketLabelText) + '</span>',
-        '<span>' + socialText + '</span>',
-      '</div>',
-      '<nav class="workout-run-nav" aria-label="Browse workouts">',
-        '<button type="button" data-action="navigate-run" data-run-id="' + escapeHtml(digest.previousRun?.id || "") + '"' + (digest.previousRun ? "" : " disabled") + '>',
-          '<span aria-hidden="true">&larr;</span><small>Older run</small><strong>' + escapeHtml(digest.previousRun?.name || "Start of range") + '</strong>',
-        '</button>',
-        '<button type="button" data-action="navigate-run" data-run-id="' + escapeHtml(digest.nextRun?.id || "") + '"' + (digest.nextRun ? "" : " disabled") + '>',
-          '<small>Newer run</small><strong>' + escapeHtml(digest.nextRun?.name || "End of range") + '</strong><span aria-hidden="true">&rarr;</span>',
-        '</button>',
-      '</nav>',
-    '</header>',
-    '<nav class="workout-section-nav" role="tablist" aria-label="Run review sections">',
-      '<button id="workoutTab-analysis" type="button" role="tab" aria-selected="true" aria-controls="workoutPanel-analysis" tabindex="0" data-action="workout-section" data-section="analysis">Analysis</button>',
-      '<button id="workoutTab-compare" type="button" role="tab" aria-selected="false" aria-controls="workoutPanel-compare" tabindex="-1" data-action="workout-section" data-section="compare">Compare</button>',
-      '<button id="workoutTab-route" type="button" role="tab" aria-selected="false" aria-controls="workoutPanel-route" tabindex="-1" data-action="workout-section" data-section="route">Route &amp; conditions</button>',
-      '<button id="workoutTab-details" type="button" role="tab" aria-selected="false" aria-controls="workoutPanel-details" tabindex="-1" data-action="workout-section" data-section="details">Details</button>',
-    '</nav>',
-    '<div class="workout-body run-review-body">',
-      '<section id="workoutPanel-analysis" class="workout-panel" data-workout-panel="analysis" role="tabpanel" aria-labelledby="workoutTab-analysis">',
-        '<section class="run-review-hero" aria-label="Run at a glance">',
-          '<div class="run-review-metrics">',
-            '<article><span>Distance</span><strong>' + digest.distance.toFixed(2) + ' mi</strong><small>' + formatOrdinal(digest.distanceRank) + ' percentile in this window</small></article>',
-            '<article><span>Average pace</span><strong>' + escapeHtml(formatPace(digest.pace)) + '</strong><small>' + escapeHtml(similarPaceText) + '</small></article>',
-            '<article><span>Moving time</span><strong>' + escapeHtml(formatDuration(digest.moving)) + '</strong><small>' + (digest.stopped ? escapeHtml(formatDuration(digest.stopped)) + ' stopped' : 'Continuous effort') + '</small></article>',
-            '<article><span>Training load</span><strong>' + Math.round(digest.load).toLocaleString() + '</strong><small>' + formatNumber(digest.loadPerMile, 1) + ' per mile</small></article>',
-          '</div>',
-          '<article class="run-review-story">',
-            '<span>What stood out</span>',
-            '<h3>' + escapeHtml(narrative.headline) + '</h3>',
-            '<p>' + escapeHtml(narrative.detail) + '</p>',
-            '<div class="run-review-story-score" style="--score: ' + digest.standoutScore + '%"><span>' + digest.standoutScore + '% away from the middle of this window</span></div>',
-          '</article>',
-        '</section>',
-        '<section class="run-review-timeline" aria-label="Training context around this run">',
-          '<article><span>Lead-in</span><strong>' + digest.priorSevenMiles.toFixed(1) + ' mi</strong><small>' + digest.priorSevenRuns.length + ' runs &middot; ' + Math.round(digest.priorSevenLoad) + ' load</small></article>',
-          '<article class="is-current"><span>This effort</span><strong>' + Math.round(digest.periodDistanceShare * 100) + '% of this group&rsquo;s miles</strong><small>' + Math.round(digest.periodLoadShare * 100) + '% of this group&rsquo;s load</small></article>',
-          '<article><span>Follow-through</span><strong>' + digest.nextSevenMiles.toFixed(1) + ' mi</strong><small>' + digest.nextSevenRuns.length + ' runs &middot; ' + Math.round(digest.nextSevenLoad) + ' load</small></article>',
-        '</section>',
-        '<section class="workout-ai" aria-labelledby="workoutAiTitle">',
-          '<div class="workout-ai-heading">',
-            '<div><p class="workout-ai-kicker"><span class="ai-status-dot" aria-hidden="true"></span> Ollama run analysis</p><h3 id="workoutAiTitle">Read this effort in context.</h3></div>',
-            '<span id="workoutAiModel">qwen3.5:0.8b</span>',
-          '</div>',
-          '<div class="workout-ai-focus" role="group" aria-label="Run analysis focus">',
-            '<button type="button" data-action="run-focus" data-focus="balanced" aria-pressed="true">Overall</button>',
-            '<button type="button" data-action="run-focus" data-focus="standout" aria-pressed="false">Why it stands out</button>',
-            '<button type="button" data-action="run-focus" data-focus="load" aria-pressed="false">Load</button>',
-            '<button type="button" data-action="run-focus" data-focus="spacing" aria-pressed="false">Spacing</button>',
-            '<button type="button" data-action="run-focus" data-focus="weather" aria-pressed="false">Weather</button>',
-          '</div>',
-          '<div id="workoutAiContent" class="workout-ai-content" aria-live="polite">' + runInsightLoadingMarkup() + '</div>',
-        '</section>',
-      '</section>',
-      '<section id="workoutPanel-compare" class="workout-panel" data-workout-panel="compare" role="tabpanel" aria-labelledby="workoutTab-compare" hidden>',
-        '<div class="run-review-panel-heading"><div><span>Matched comparison</span><h3>Same distance, different day.</h3></div><p>' + digest.similarCount + ' runs within &plusmn;20% of this distance are available in the selected window.</p></div>',
-        workoutComparisonMarkup(digest, averageHr),
-        '<section class="workout-section run-review-effort"><div class="workout-section-heading"><h3>Effort profile</h3><span>Percentile within selected range</span></div><div class="effort-profile">' + profileMarkup("Distance", digest.distanceRank) + profileMarkup("Pace", digest.paceRank) + profileMarkup("Load", digest.loadRank) + '</div></section>',
-        '<section class="workout-section"><div class="workout-section-heading"><h3>Neighboring runs</h3><span>Miles &middot; selected run in orange</span></div><div class="neighbor-chart">' + neighboringRunsChart(digest) + '</div></section>',
-      '</section>',
-      '<section id="workoutPanel-route" class="workout-panel" data-workout-panel="route" role="tabpanel" aria-labelledby="workoutTab-route" hidden>',
-        '<div class="run-review-panel-heading"><div><span>Place &amp; conditions</span><h3>Where the work happened.</h3></div><p>Your route loads here on demand; start-point weather is used in the analysis when available.</p></div>',
-        '<section class="workout-environment" aria-label="Conditions and route">',
-          '<article class="workout-map-panel"><div class="workout-environment-heading"><div><span>Route</span><h3>Your activity path.</h3></div><a id="workoutMapLink" href="#" target="_blank" rel="noreferrer" hidden>Open map &nearr;</a></div><div id="workoutMap" class="workout-map" aria-label="Interactive workout route map"></div></article>',
-          '<article class="workout-weather-panel"><div class="workout-environment-heading"><div><span>Conditions</span><h3>What the day added.</h3></div></div><div id="workoutWeatherContent" class="workout-weather-content" aria-live="polite">' + weatherLoadingMarkup() + '</div></article>',
-        '</section>',
-      '</section>',
-      '<section id="workoutPanel-details" class="workout-panel" data-workout-panel="details" role="tabpanel" aria-labelledby="workoutTab-details" hidden>',
-        '<div class="run-review-detail-grid">',
-          '<section class="workout-section"><div class="workout-section-heading"><h3>Run details</h3><span>From activity data</span></div><div class="workout-stats">' + workoutStats + '</div></section>',
-          '<section class="workout-section"><div class="workout-section-heading"><h3>Context</h3><span>Inside this selected window</span></div><dl class="context-list"><dt>Benchmark</dt><dd>' + escapeHtml(similarPaceText) + '</dd><dt>Heart rate</dt><dd>' + escapeHtml(hrCompare) + '</dd><dt>Previous</dt><dd>' + escapeHtml(nearbyRunText(digest.previousRun, digest.previousGap)) + '</dd><dt>Next</dt><dd>' + escapeHtml(nearbyRunText(digest.nextRun, digest.nextGap)) + '</dd><dt>Evidence depth</dt><dd>' + digest.similarCount + ' similar runs &middot; ' + digest.hrCoverage + '% HR coverage</dd><dt>Device</dt><dd>' + escapeHtml(run.device_name || "Not included in activity data") + '</dd></dl></section>',
-        '</div>',
-        '<details class="run-review-signals"><summary>See the signals behind this read</summary><div class="workout-signals">' + digest.signals.map(signalMarkup).join("") + '</div></details>',
-      '</section>',
-    '</div>'
-  ].join("");
-
-  if (!modalWasOpen) {
-    if (typeof els.workoutModal.showModal === "function") els.workoutModal.showModal();
-    else els.workoutModal.setAttribute("open", "");
-  }
+  els.workoutModalContent.innerHTML = `
+    <header class="workout-header">
+      <p class="workout-kicker">${escapeHtml(digest.date.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric", year: "numeric" }))}</p>
+      <h2 id="workoutModalTitle">${escapeHtml(run.name)}</h2>
+      <div class="workout-header-meta">
+        <span class="workout-type">${escapeHtml(digest.runType)} run</span>
+        <span id="workoutModalMeta">${escapeHtml(bucketLabelText)}</span>
+        <span>${escapeHtml(socialText)}</span>
+      </div>
+    </header>
+    <div class="workout-body">
+      <section class="workout-lead" aria-label="Workout summary">
+        <div class="workout-lead-metrics">
+          <article class="workout-lead-metric"><span>Distance</span><strong>${digest.distance.toFixed(2)} mi</strong><small>${formatOrdinal(digest.distanceRank)} percentile</small></article>
+          <article class="workout-lead-metric"><span>Average pace</span><strong>${escapeHtml(formatPace(digest.pace))}</strong><small>${escapeHtml(similarPaceText)}</small></article>
+          <article class="workout-lead-metric"><span>Moving time</span><strong>${escapeHtml(formatDuration(digest.moving))}</strong><small>${digest.stopped ? `${escapeHtml(formatDuration(digest.stopped))} stopped` : "Continuous effort"}</small></article>
+        </div>
+        <aside class="workout-read">
+          <span>The read</span>
+          <strong>${escapeHtml(narrative.headline)}</strong>
+          <p>${escapeHtml(narrative.detail)}</p>
+        </aside>
+      </section>
+      <div class="workout-grid">
+        <div>
+          <section class="workout-section">
+            <div class="workout-section-heading"><h3>Effort profile</h3><span>Percentile within selected range</span></div>
+            <div class="effort-profile">
+              ${profileMarkup("Distance", digest.distanceRank)}
+              ${profileMarkup("Pace", digest.paceRank)}
+              ${profileMarkup("Load", digest.loadRank)}
+            </div>
+          </section>
+          <section class="workout-section">
+            <div class="workout-section-heading"><h3>Neighboring runs</h3><span>Miles · selected run in orange</span></div>
+            <div class="neighbor-chart">${neighboringRunsChart(digest)}</div>
+          </section>
+          <section class="workout-section">
+            <h3>Signals</h3>
+            <div class="workout-signals">${digest.signals.map(signalMarkup).join("")}</div>
+          </section>
+          <section class="workout-section workout-ai-digest" aria-labelledby="workoutDigestTitle">
+            <div class="workout-section-heading"><h3 id="workoutDigestTitle">Coach’s read</h3><span>Optional · on demand</span></div>
+            <div id="workoutRunDigest" class="workout-run-digest" aria-live="polite">${runDigestEmptyMarkup(run.id)}</div>
+          </section>
+        </div>
+        <aside>
+          <section class="workout-section workout-weather" aria-labelledby="workoutWeatherTitle">
+            <div class="workout-section-heading"><h3 id="workoutWeatherTitle">Conditions</h3><span>At the run start</span></div>
+            <div id="workoutWeatherContent" class="workout-weather-content" aria-live="polite">${state.activeRunWeather ? weatherMarkup(state.activeRunWeather) : weatherLoadingMarkup()}</div>
+          </section>
+          <section class="workout-section">
+            <h3>Run details</h3>
+            <div class="workout-stats">
+              ${statMarkup("Elevation", `${Math.round(digest.elevation).toLocaleString()} ft`, `${Math.round(digest.elevationDensity)} ft/mi`)}
+              ${statMarkup("Heart rate", averageHr ? `${Math.round(averageHr)} bpm` : "-", maxHr ? `Max ${Math.round(maxHr)} bpm` : hrCompare)}
+              ${statMarkup("Training load", `${Math.round(digest.load).toLocaleString()}`, `${formatNumber(digest.loadPerMile, 1)} per mile`)}
+              ${statMarkup("Cadence", cadence ? `${Math.round(cadence)} spm` : "-", watts ? `${Math.round(watts)} avg watts` : "From activity data")}
+              ${statMarkup("Top speed", maxSpeedPace, run.pr_count ? `${run.pr_count} personal record${run.pr_count === 1 ? "" : "s"}` : "No PR recorded")}
+              ${statMarkup("Elapsed time", formatDuration(digest.elapsed), digest.stopped ? `${formatDuration(digest.stopped)} not moving` : "Matches moving time")}
+            </div>
+          </section>
+          <section class="workout-section">
+            <h3>Context</h3>
+            <dl class="context-list">
+              <dt>Benchmark</dt><dd>${escapeHtml(similarPaceText)}</dd>
+              <dt>Heart rate</dt><dd>${escapeHtml(hrCompare)}</dd>
+              <dt>Previous</dt><dd>${escapeHtml(nearbyRunText(digest.previousRun, digest.previousGap))}</dd>
+              <dt>Next</dt><dd>${escapeHtml(nearbyRunText(digest.nextRun, digest.nextGap))}</dd>
+              <dt>Device</dt><dd>${escapeHtml(run.device_name || "Not included in activity data")}</dd>
+            </dl>
+          </section>
+        </aside>
+      </div>
+    </div>
+  `;
+  state.modalTrigger = trigger instanceof HTMLElement ? trigger : null;
+  els.workoutModal.hidden = false;
   document.body.classList.add("modal-open");
-  els.workoutModal.scrollTop = 0;
   els.workoutModalClose.focus();
-  hydrateRunWeather(digest, session).finally(() => {
-    if (session === state.workoutSession && state.activeRunId === String(run.id) && isWorkoutModalOpen()) {
-      requestRunInsight(buildWorkoutDigest(run));
-    }
-  });
-}
-
-function clearWorkoutModal({ restoreFocus = true } = {}) {
-  const trigger = state.modalTrigger;
-  state.workoutSession += 1;
-  abortWorkoutRequests();
-  state.workoutMap?.remove();
-  state.workoutMap = null;
-  state.activeRunId = "";
-  state.activeRunFocus = "balanced";
-  state.activeWorkoutSection = "analysis";
-  document.body.classList.remove("modal-open");
-  els.workoutModalContent.replaceChildren();
-  state.modalTrigger = null;
-  if (!restoreFocus) return;
-  if (trigger?.isConnected) {
-    trigger.focus();
-    return;
+  if (state.activeRunWeather) {
+    setWorkoutWeatherContent(weatherMarkup(state.activeRunWeather));
+  } else {
+    hydrateWorkoutWeather(run, session);
   }
-  els.activitySearch?.focus();
 }
 
 function closeWorkoutModal() {
-  if (isWorkoutModalOpen()) {
-    els.workoutModal.close();
-    return;
-  }
-  clearWorkoutModal();
-}
-
-function invalidateWorkoutForDataChange() {
-  if (!isWorkoutModalOpen()) return;
-  closeWorkoutModal();
-  setStatus("The run review closed because its training context changed. Reopen a run for the refreshed comparison.");
-}
-
-function setWorkoutSection(section, { moveFocus = false } = {}) {
-  const sections = ["analysis", "compare", "route", "details"];
-  if (!sections.includes(section) || !isWorkoutModalOpen()) return;
-  state.activeWorkoutSection = section;
-  els.workoutModalContent.querySelectorAll("[data-action='workout-section']").forEach((button) => {
-    const selected = button.dataset.section === section;
-    button.setAttribute("aria-selected", String(selected));
-    button.tabIndex = selected ? 0 : -1;
-    if (selected && moveFocus) button.focus();
-  });
-  els.workoutModalContent.querySelectorAll("[data-workout-panel]").forEach((panel) => {
-    panel.hidden = panel.dataset.workoutPanel !== section;
-  });
-  els.workoutModal.scrollTop = 0;
-  if (section !== "route") return;
-  const session = state.workoutSession;
-  const run = state.filteredRuns.find((candidate) => String(candidate.id) === state.activeRunId);
-  if (!run) return;
-  requestAnimationFrame(() => {
-    if (session !== state.workoutSession || state.activeWorkoutSection !== "route" || !isWorkoutModalOpen()) return;
-    if (state.workoutMap) {
-      state.workoutMap.invalidateSize({ pan: false });
-      return;
-    }
-    hydrateRunRoute(run, session);
-  });
-}
-
-function activityRunTypes(runs) {
-  const distances = runs.map((run) => miles(run.distance));
-  const paces = runs.map(paceSeconds);
-  return new Map(runs.map((run) => {
-    const distance = miles(run.distance);
-    const pace = paceSeconds(run);
-    return [
-      String(run.id),
-      classifyRun(
-        run,
-        distance,
-        pace,
-        percentileRank(distances, distance, true),
-        percentileRank(paces, pace, false)
-      )
-    ];
-  }));
+  state.modalSession += 1;
+  state.runDigestAbort?.abort();
+  state.runDigestAbort = null;
+  state.activeRunId = "";
+  state.activeRunWeather = null;
+  els.workoutModal.hidden = true;
+  document.body.classList.remove("modal-open");
+  els.workoutModalContent.replaceChildren();
+  if (state.modalTrigger?.isConnected) state.modalTrigger.focus();
+  state.modalTrigger = null;
 }
 
 function renderTable() {
-  const types = activityRunTypes(state.filteredRuns);
-  const query = els.activitySearch.value.trim().toLowerCase();
-  const selectedType = els.activityType.value;
-  const sort = els.activitySort.value;
-  const matching = state.filteredRuns.filter((run) => {
-    const type = types.get(String(run.id));
-    if (selectedType !== "all" && type !== selectedType) return false;
-    if (!query) return true;
-    const date = parseActivityDate(run);
-    const searchable = [
-      run.name,
-      type,
-      date.toLocaleDateString(),
-      date.toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" })
-    ].join(" ").toLowerCase();
-    return searchable.includes(query);
-  }).sort((left, right) => {
-    if (sort === "distance") return miles(right.distance) - miles(left.distance);
-    if (sort === "pace") return paceSeconds(left) - paceSeconds(right);
-    if (sort === "load") return activityLoad(right) - activityLoad(left);
-    return parseActivityDate(right) - parseActivityDate(left);
-  });
-  const visible = matching.slice(0, state.activityVisible);
-  els.activityCount.textContent = matching.length === state.filteredRuns.length
-    ? `${matching.length} runs in range`
-    : `${matching.length} of ${state.filteredRuns.length} runs`;
-  els.loadMoreRuns.hidden = visible.length >= matching.length;
-  els.loadMoreRuns.textContent = `Show ${Math.min(15, matching.length - visible.length)} more runs`;
-
-  if (!visible.length) {
-    const row = document.createElement("tr");
-    const cell = document.createElement("td");
-    cell.colSpan = 8;
-    cell.className = "run-browser-empty";
-    cell.textContent = state.filteredRuns.length ? "No runs match these filters." : "Load running data to browse workouts.";
-    row.append(cell);
-    els.activityRows.replaceChildren(row);
-    return;
-  }
-
-  els.activityRows.replaceChildren(...visible.map((run) => {
+  const recent = [...state.filteredRuns].sort((a, b) => parseActivityDate(b) - parseActivityDate(a)).slice(0, 15);
+  els.activityCount.textContent = `${state.filteredRuns.length} runs in range`;
+  els.activityRows.replaceChildren(...recent.map((run) => {
     const row = document.createElement("tr");
     row.className = "activity-row";
     row.dataset.activityId = run.id;
@@ -3681,25 +2159,16 @@ function renderTable() {
     action.textContent = "→";
     actionCell.appendChild(action);
     row.appendChild(actionCell);
-
-    const dateCell = document.createElement("td");
-    dateCell.textContent = parseActivityDate(run).toLocaleDateString();
-    const nameCell = document.createElement("td");
-    nameCell.className = "run-name-cell";
-    const name = document.createElement("strong");
-    const type = document.createElement("small");
-    name.textContent = run.name;
-    type.textContent = `${types.get(String(run.id))} run`;
-    nameCell.append(name, type);
-    row.append(dateCell, nameCell);
-
-    [
+    const values = [
+      parseActivityDate(run).toLocaleDateString(),
+      run.name,
       `${miles(run.distance).toFixed(2)} mi`,
       formatPace(paceSeconds(run)),
       `${Math.round(feet(run.total_elevation_gain)).toLocaleString()} ft`,
       run.average_heartrate ? `${Math.round(run.average_heartrate)} bpm` : "-",
       `${Math.round(run.suffer_score || runMinutes(run) * effortMultiplier(run))}`
-    ].forEach((value) => {
+    ];
+    values.forEach((value) => {
       const cell = document.createElement("td");
       cell.textContent = value;
       row.appendChild(cell);
@@ -3712,91 +2181,19 @@ function renderTable() {
   }));
 }
 
-function resetRunBrowser() {
-  els.activitySearch.value = "";
-  els.activityType.value = "all";
-  els.activitySort.value = "newest";
-  state.activityVisible = 15;
-}
-
-function csvCell(value) {
-  const text = String(value ?? "");
-  return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
-}
-
-function exportCurrentView() {
-  if (!state.filteredRuns.length) return;
-  const types = activityRunTypes(state.filteredRuns);
-  const headers = ["Date", "Name", "Profile", "Distance (mi)", "Pace (sec/mi)", "Moving time (sec)", "Elevation (ft)", "Average HR (bpm)", "Training load", "Load per mile"];
-  const rows = state.filteredRuns.map((run) => {
-    const distance = miles(run.distance);
-    const load = activityLoad(run);
-    return [
-      localDateValue(parseActivityDate(run)),
-      run.name,
-      types.get(String(run.id)) || "Run",
-      distance.toFixed(2),
-      Math.round(paceSeconds(run)),
-      Math.round(Number(run.moving_time) || 0),
-      Math.round(feet(run.total_elevation_gain)),
-      run.average_heartrate ? Math.round(run.average_heartrate) : "",
-      Math.round(load),
-      distance ? (load / distance).toFixed(1) : ""
-    ].map(csvCell).join(",");
-  });
-  const csv = `${headers.map(csvCell).join(",")}\r\n${rows.join("\r\n")}\r\n`;
-  const blob = new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" });
-  const link = document.createElement("a");
-  const { start, end } = getRangeDates();
-  const startName = start ? localDateValue(start) : "window";
-  const endName = end ? localDateValue(end) : "current";
-  link.href = URL.createObjectURL(blob);
-  link.download = `stride-${startName}-to-${endName}.csv`;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  window.setTimeout(() => URL.revokeObjectURL(link.href), 1000);
-  setStatus(`Exported ${state.filteredRuns.length} runs from the selected window.`);
-}
-
 async function fetchActivities() {
-  state.activityAbort?.abort();
-  const controller = new AbortController();
-  const requestId = ++state.activityRequestId;
-  state.activityAbort = controller;
-  let timedOut = false;
-  const timeoutId = window.setTimeout(() => {
-    timedOut = true;
-    controller.abort();
-  }, 45_000);
-  try {
-    setStatus("Pulling activities from Strava...");
-    const { start, end } = getStravaFetchRange();
-    const pages = els.rangeSelect.value === "all" ? "12" : "8";
-    const params = new URLSearchParams({ pages, per_page: "100" });
-    if (start) params.set("after", Math.floor(start.getTime() / 1000));
-    if (end) params.set("before", Math.floor(end.getTime() / 1000));
-    const response = await fetch(`/api/activities?${params}`, { signal: controller.signal });
-    const data = await readApiJson(response);
-    if (!response.ok) throw new Error(data.error || "Unable to fetch Strava activities.");
-    if (!Array.isArray(data.activities)) throw new Error("Strava returned no activity list.");
-    if (requestId !== state.activityRequestId) return;
-    state.rawActivities = data.activities;
-    state.dataSource = "Strava";
-    state.activityTruncated = Boolean(data.truncated);
-    state.runRouteCache.clear();
-    syncRangeInputs();
-    const historyNote = state.activityTruncated ? " History request reached its page limit; older runs may be missing." : "";
-    setStatus(`Loaded ${data.activities.length} activities from Strava.${historyNote}`);
-    render();
-  } catch (error) {
-    if (error.name === "AbortError" && !timedOut) return;
-    if (requestId !== state.activityRequestId) return;
-    throw new Error(timedOut ? "Strava activity request timed out. Try again." : error.message);
-  } finally {
-    window.clearTimeout(timeoutId);
-    if (state.activityAbort === controller) state.activityAbort = null;
-  }
+  setStatus("Pulling activities from Strava...");
+  const { start, end } = getRangeDates();
+  const params = new URLSearchParams({ pages: "8", per_page: "100" });
+  if (start) params.set("after", Math.floor(start.getTime() / 1000));
+  if (end) params.set("before", Math.floor(end.getTime() / 1000));
+  const response = await fetch(`/api/activities?${params}`);
+  const data = await readApiJson(response);
+  if (!response.ok) throw new Error(data.error || "Unable to fetch Strava activities.");
+  state.rawActivities = data.activities;
+  syncRangeInputs();
+  setStatus(`Loaded ${data.activities.length} activities from Strava.`);
+  render();
 }
 
 async function readApiJson(response) {
@@ -3815,7 +2212,7 @@ async function readApiJson(response) {
 }
 
 async function checkStatus() {
-  const response = await fetch("/api/status", { signal: AbortSignal.timeout(15_000) });
+  const response = await fetch("/api/status");
   const data = await readApiJson(response);
   if (!response.ok) {
     state.stravaReady = false;
@@ -3824,7 +2221,6 @@ async function checkStatus() {
     els.connectButton.disabled = false;
     els.connectButton.textContent = "Connect Strava";
     els.connectButton.title = state.stravaError;
-    els.disconnectButton.hidden = true;
     setStatus(state.stravaError, true);
     return;
   }
@@ -3835,11 +2231,6 @@ async function checkStatus() {
     els.connectButton.disabled = false;
     els.connectButton.textContent = "Connect Strava";
     els.connectButton.title = state.stravaError;
-    els.disconnectButton.hidden = true;
-    if (state.dataSource === "Demo") {
-      setStatus("Loaded demo running history. Strava is not configured for this server.");
-      return;
-    }
     setStatus(`${state.stravaError} You can still import an export file or use demo data.`, true);
     return;
   }
@@ -3848,135 +2239,73 @@ async function checkStatus() {
   state.stravaError = "";
   els.connectButton.disabled = false;
   els.connectButton.title = "";
-  els.disconnectButton.hidden = !data.connected;
   if (data.connected) {
     els.connectButton.textContent = "Refresh Strava";
-    if (state.dataSource !== "Demo") await fetchActivities();
-    else setStatus("Loaded demo running history.");
-  } else if (state.dataSource === "Demo") {
-    setStatus("Loaded demo running history. Connect Strava to replace it.");
+    await fetchActivities();
   } else {
     setStatus(`Ready to connect. Callback URL: ${data.redirectUri}`);
   }
 }
 
 function parseCsv(text) {
-  const rows = [];
-  let row = [];
-  let field = "";
-  let quoted = false;
-  for (let index = 0; index < text.length; index += 1) {
-    const character = text[index];
-    if (quoted) {
-      if (character === '"' && text[index + 1] === '"') {
-        field += '"';
-        index += 1;
-      } else if (character === '"') {
-        quoted = false;
-      } else {
-        field += character;
-      }
-    } else if (character === '"' && field.length === 0) {
-      quoted = true;
-    } else if (character === ",") {
-      row.push(field);
-      field = "";
-    } else if (character === "\n" || character === "\r") {
-      if (character === "\r" && text[index + 1] === "\n") index += 1;
-      row.push(field);
-      if (row.some((value) => value.trim())) rows.push(row);
-      row = [];
-      field = "";
-    } else {
-      field += character;
-    }
-  }
-  if (field || row.length) {
-    row.push(field);
-    if (row.some((value) => value.trim())) rows.push(row);
-  }
-  const headers = (rows.shift() || []).map((header, index) => (index === 0 ? header.replace(/^\uFEFF/, "") : header).trim());
-  return rows.map((values) => headers.reduce((result, header, index) => {
-    if (header) result[header] = values[index] || "";
-    return result;
-  }, {}));
+  const lines = text.trim().split(/\r?\n/);
+  const headers = lines.shift().split(",").map((h) => h.trim());
+  return lines.map((line) => {
+    const values = line.match(/("([^"]|"")*"|[^,]+)/g) || [];
+    return headers.reduce((row, header, index) => {
+      row[header] = (values[index] || "").replace(/^"|"$/g, "").replace(/""/g, "\"");
+      return row;
+    }, {});
+  });
 }
 
 async function importFile(file) {
-  if (file.size > 20 * 1024 * 1024) throw new Error("Choose an export smaller than 20 MB.");
   const text = await file.text();
   const data = file.name.toLowerCase().endsWith(".csv") ? parseCsv(text) : JSON.parse(text);
-  const activities = Array.isArray(data) ? data : Array.isArray(data?.activities) ? data.activities : [];
-  if (!activities.length) throw new Error("The file did not contain any activities.");
-  state.rawActivities = activities;
-  state.dataSource = "Import";
-  state.activityTruncated = false;
-  state.runRouteCache.clear();
-  resetRunBrowser();
+  state.rawActivities = Array.isArray(data) ? data : data.activities || [];
   syncRangeInputs();
-  const runCount = state.rawActivities.filter((activity) => isRun(normalizeActivity(activity))).length;
-  if (!runCount) throw new Error("The file did not contain any running activities.");
-  setStatus(`Imported ${state.rawActivities.length} activities, including ${runCount} runs.`);
+  setStatus(`Imported ${state.rawActivities.length} activities.`);
   render();
 }
 
 function makeDemoData() {
   const activities = [];
   const today = new Date();
-  const historyDays = 760;
-  let seed = 20260727;
-  const random = () => {
-    seed = (seed * 1664525 + 1013904223) >>> 0;
-    return seed / 4294967296;
-  };
-  for (let i = 0; i < historyDays; i += 1) {
+  for (let i = 0; i < 390; i += 1) {
     const date = new Date(today);
     date.setDate(today.getDate() - i);
-    if (![1, 3, 5, 6].includes(date.getDay()) || random() < 0.16) continue;
+    if (![1, 3, 5, 6].includes(date.getDay()) || Math.random() < 0.16) continue;
     const longRun = date.getDay() === 6;
-    const baseMiles = longRun ? 8 + random() * 7 : 3 + random() * 5;
-    const trend = 1 + (historyDays - i) / 1800;
+    const baseMiles = longRun ? 8 + Math.random() * 7 : 3 + Math.random() * 5;
+    const trend = 1 + (390 - i) / 900;
     const distanceMiles = baseMiles * trend;
-    const pace = 530 - (historyDays - i) * 0.08 + random() * 45;
-    const hr = 136 + random() * 24 + (longRun ? 4 : 0);
+    const pace = 520 - (390 - i) * 0.16 + Math.random() * 45;
+    const hr = 136 + Math.random() * 24 + (longRun ? 4 : 0);
     const movingTime = Math.round(distanceMiles * pace);
-    const routeCenter = [42.355 + (i % 7) * 0.006, -71.075 + (i % 5) * 0.007];
-    const routeRadius = 0.012 + Math.min(0.02, distanceMiles * 0.0012);
-    const routePoints = Array.from({ length: 32 }, (_, pointIndex) => {
-      const progress = pointIndex / 31;
-      const angle = progress * Math.PI * 2;
-      const wobble = 1 + 0.16 * Math.sin(angle * (2 + i % 3));
-      return [
-        Number((routeCenter[0] + Math.sin(angle) * routeRadius * 0.62 * wobble).toFixed(6)),
-        Number((routeCenter[1] + Math.cos(angle) * routeRadius * wobble).toFixed(6))
-      ];
-    });
     activities.push({
       id: `demo-${i}`,
-      name: longRun ? "Long run" : ["Easy run", "Workout", "Steady run"][Math.floor(random() * 3)],
+      name: longRun ? "Long run" : ["Easy run", "Workout", "Steady run"][Math.floor(Math.random() * 3)],
       sport_type: "Run",
       start_date_local: date.toISOString(),
+      start_latlng: [40.71 + (Math.random() - 0.5) * 0.06, -74 + (Math.random() - 0.5) * 0.06],
       distance: distanceMiles * 1609.344,
       moving_time: movingTime,
-      elapsed_time: movingTime + Math.round(random() * 180),
-      total_elevation_gain: (40 + random() * 95) * distanceMiles / 3.28084,
+      elapsed_time: movingTime + Math.round(Math.random() * 180),
+      total_elevation_gain: (40 + Math.random() * 95) * distanceMiles / 3.28084,
       average_heartrate: Math.round(hr),
-      max_heartrate: Math.round(hr + 18 + random() * 18),
-      average_cadence: Math.round(160 + random() * 18),
-      max_speed: 1609.344 / Math.max(300, pace - 75 - random() * 30),
+      max_heartrate: Math.round(hr + 18 + Math.random() * 18),
+      average_cadence: Math.round(160 + Math.random() * 18),
+      max_speed: 1609.344 / Math.max(300, pace - 75 - Math.random() * 30),
       suffer_score: Math.round(distanceMiles * (hr / 18)),
-      kudos_count: Math.floor(random() * 18),
-      achievement_count: random() > 0.78 ? Math.ceil(random() * 4) : 0,
-      pr_count: random() > 0.9 ? 1 : 0,
-      start_latlng: routePoints[0],
-      end_latlng: routePoints[routePoints.length - 1],
-      route_points: routePoints
+      kudos_count: Math.floor(Math.random() * 18),
+      achievement_count: Math.random() > 0.78 ? Math.ceil(Math.random() * 4) : 0,
+      pr_count: Math.random() > 0.9 ? 1 : 0
     });
   }
   return activities;
 }
 
-els.connectButton.addEventListener("click", () => {
+function connectToStrava() {
   if (!state.stravaReady) {
     setStatus(state.stravaError || "Strava is not configured yet.", true);
     if (!state.stravaError) window.location.href = "/auth/login";
@@ -3985,64 +2314,37 @@ els.connectButton.addEventListener("click", () => {
   } else {
     window.location.href = "/auth/login";
   }
-});
+}
 
-els.disconnectButton.addEventListener("click", () => {
-  window.location.href = "/auth/logout";
-});
-
-els.demoButton.addEventListener("click", () => {
+function loadDemoData() {
   state.rawActivities = makeDemoData();
-  state.dataSource = "Demo";
-  state.activityTruncated = false;
-  state.runRouteCache.clear();
-  resetRunBrowser();
   syncRangeInputs();
   setStatus("Loaded demo running history.");
   render();
+}
+
+function handleFileInput(event) {
+  const [file] = event.target.files;
+  if (file) importFile(file).catch((error) => setStatus(error.message, true));
+}
+
+[els.connectButton, els.emptyConnectButton].filter(Boolean).forEach((button) => {
+  button.addEventListener("click", connectToStrava);
 });
 
-els.exportViewButton.addEventListener("click", exportCurrentView);
+[els.demoButton, els.emptyDemoButton].filter(Boolean).forEach((button) => {
+  button.addEventListener("click", loadDemoData);
+});
 
 els.aiAnalyzeButton.addEventListener("click", analyzeWithOllama);
 
-document.querySelector(".metric-switcher").addEventListener("click", (event) => {
-  const button = event.target.closest("[data-metric]");
-  if (!button) return;
-  els.metricSelect.value = button.dataset.metric;
-  renderMainChart();
-  syncViewUrl();
-});
-
-document.querySelector(".ai-prompt-chips").addEventListener("click", (event) => {
-  const button = event.target.closest("[data-question]");
-  if (!button) return;
-  els.aiFocus.value = button.dataset.focus || "balanced";
-  els.aiQuestion.value = button.dataset.question;
-  invalidateAiInsight();
-  els.aiAnalyzeButton.focus();
-});
-
-function invalidateAiInsight() {
-  state.insightFingerprint = currentInsightFingerprint();
+els.aiFocus.addEventListener("change", () => {
   state.renderedInsightFingerprint = "";
   renderAiState();
-}
+});
 
-function refreshRangeView() {
-  if (state.dataSource === "Strava") {
-    fetchActivities().catch((error) => setStatus(error.message, true));
-    return;
-  }
-  render();
-}
-
-els.aiFocus.addEventListener("change", invalidateAiInsight);
-els.aiQuestion.addEventListener("input", invalidateAiInsight);
-
-els.fileInput.addEventListener("change", (event) => {
-  const [file] = event.target.files;
-  if (file) importFile(file).catch((error) => setStatus(error.message, true));
+[els.fileInput, els.emptyFileInput].filter(Boolean).forEach((input) => {
+  input.addEventListener("change", handleFileInput);
 });
 
 els.activityRows.addEventListener("click", (event) => {
@@ -4050,191 +2352,92 @@ els.activityRows.addEventListener("click", (event) => {
   if (button) showWorkoutModal(button.dataset.activityId, button);
 });
 
-els.trainingBriefSignals.addEventListener("click", (event) => {
-  const button = event.target.closest("[data-action='open-hardest-run']");
-  if (button?.dataset.runId) showWorkoutModal(button.dataset.runId, button);
-});
-
-els.workoutModalContent.addEventListener("click", (event) => {
-  const sectionButton = event.target.closest("[data-action='workout-section']");
-  if (sectionButton?.dataset.section) {
-    setWorkoutSection(sectionButton.dataset.section);
-    return;
-  }
-  const focusButton = event.target.closest("[data-action='run-focus']");
-  if (focusButton?.dataset.focus) {
-    state.activeRunFocus = focusButton.dataset.focus;
-    els.workoutModalContent.querySelectorAll("[data-action='run-focus']").forEach((button) => {
-      button.setAttribute("aria-pressed", String(button === focusButton));
-    });
-    const run = state.filteredRuns.find((candidate) => String(candidate.id) === state.activeRunId);
-    if (run) requestRunInsight(buildWorkoutDigest(run));
-    return;
-  }
-  const navigate = event.target.closest("[data-action='navigate-run']");
-  if (navigate?.dataset.runId) {
-    showWorkoutModal(navigate.dataset.runId, state.modalTrigger);
-    return;
-  }
-  const retry = event.target.closest("[data-action='retry-run-insight']");
-  if (!retry) return;
-  const run = state.filteredRuns.find((candidate) => String(candidate.id) === String(retry.dataset.runId));
-  if (run) requestRunInsight(buildWorkoutDigest(run), { force: true });
-});
-
 els.workoutModalClose.addEventListener("click", closeWorkoutModal);
 
 els.workoutModal.addEventListener("click", (event) => {
-  if (event.target !== els.workoutModal) return;
-  const bounds = els.workoutModal.getBoundingClientRect();
-  const clickedOutside = event.clientX < bounds.left
-    || event.clientX > bounds.right
-    || event.clientY < bounds.top
-    || event.clientY > bounds.bottom;
-  if (clickedOutside) closeWorkoutModal();
+  if (event.target === els.workoutModal) {
+    closeWorkoutModal();
+    return;
+  }
+  const digestAction = event.target.closest("[data-action='generate-run-digest']");
+  if (digestAction?.dataset.runId) generateRunDigest(digestAction.dataset.runId);
+  const runAction = event.target.closest("[data-action='open-run']");
+  if (runAction?.dataset.runId) showWorkoutModal(runAction.dataset.runId, runAction);
 });
 
-els.workoutModal.addEventListener("cancel", (event) => {
+els.goalForm.addEventListener("submit", (event) => {
   event.preventDefault();
-  closeWorkoutModal();
+  coachingContext.goal = { mode: els.goalMode.value, miles: els.goalMiles.value, raceName: els.goalRaceName.value.trim(), raceDistance: els.goalRaceDistance.value, raceDate: els.goalRaceDate.value, runDays: els.goalRunDays.value, longRunDay: els.goalLongRunDay.value, availability: els.goalAvailability.value.trim() };
+  saveCoachingContext();
+  state.renderedInsightFingerprint = "";
+  render();
+  setStatus("Training goal saved in this browser.");
 });
 
-els.workoutModal.addEventListener("close", () => {
-  clearWorkoutModal();
+els.checkinForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  coachingContext.checkin = { feel: els.checkinFeel.value, limiter: els.checkinLimiter.value, intent: els.checkinIntent.value };
+  saveCoachingContext();
+  state.renderedInsightFingerprint = "";
+  render();
+  setStatus("Weekly check-in saved in this browser.");
+});
+
+els.copyPlanButton.addEventListener("click", async () => {
+  try { await navigator.clipboard.writeText(els.planDraftCopy.textContent); setStatus("Next-week draft copied. Review it before using it."); } catch { setStatus("Copy is unavailable in this browser.", true); }
+});
+
+els.keyRuns.addEventListener("click", (event) => {
+  const card = event.target.closest(".key-run-card");
+  if (card?.dataset.activityId) showWorkoutModal(card.dataset.activityId, card);
+});
+
+els.recommendedCalendar.addEventListener("click", (event) => {
+  const day = event.target.closest("[data-action='cycle-plan-status']");
+  if (day?.dataset.planDate) cyclePlanStatus(day.dataset.planDate);
+});
+
+els.aiInsightContent.addEventListener("click", (event) => {
+  const source = event.target.closest("[data-action='open-run']");
+  if (source?.dataset.runId) showWorkoutModal(source.dataset.runId, source);
 });
 
 document.addEventListener("keydown", (event) => {
-  if (!isWorkoutModalOpen()) return;
-  const sectionTab = event.target.closest?.("[data-action='workout-section']");
-  if (sectionTab && (event.key === "ArrowLeft" || event.key === "ArrowRight")) {
-    const tabs = [...els.workoutModalContent.querySelectorAll("[data-action='workout-section']")];
-    const index = tabs.indexOf(sectionTab);
-    const next = tabs[(index + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length];
-    event.preventDefault();
-    setWorkoutSection(next.dataset.section, { moveFocus: true });
-    return;
-  }
-  const interactiveTarget = event.target.closest?.("input, textarea, select, button, a, [contenteditable='true'], [tabindex], .leaflet-container");
-  if ((event.key === "ArrowLeft" || event.key === "ArrowRight") && !interactiveTarget) {
-    const runs = [...state.filteredRuns].sort((left, right) => parseActivityDate(left) - parseActivityDate(right));
-    const index = runs.findIndex((run) => String(run.id) === state.activeRunId);
-    const target = event.key === "ArrowLeft" ? runs[index - 1] : runs[index + 1];
-    if (target) {
+  if (els.workoutModal.hidden) return;
+  if (event.key === "Escape") closeWorkoutModal();
+  if (event.key === "Tab") {
+    const focusable = [els.workoutModalClose, ...els.workoutModalContent.querySelectorAll("button, a, input, select, textarea")]
+      .filter((element) => !element.disabled && element.offsetParent !== null);
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
       event.preventDefault();
-      showWorkoutModal(target.id, state.modalTrigger);
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
     }
   }
 });
 
 els.rangeSelect.addEventListener("change", () => {
-  state.activityVisible = 15;
   syncRangeInputs();
-  refreshRangeView();
-});
-
-els.rangePresetButtons.forEach((button) => {
-  button.addEventListener("click", () => {
-    state.activityVisible = 15;
-    els.rangeSelect.value = button.dataset.range;
-    els.customRangePanel.hidden = true;
-    els.customRangeToggle.setAttribute("aria-expanded", "false");
-    syncRangeInputs();
-    refreshRangeView();
-  });
-});
-
-els.customRangeToggle.addEventListener("click", () => {
-  const opening = els.customRangePanel.hidden;
-  els.customRangePanel.hidden = !opening;
-  els.customRangeToggle.setAttribute("aria-expanded", String(opening));
-  if (opening) {
-    els.rangeSelect.value = "custom";
-    syncRangeInputs();
-    const { start, end } = getRangeDates();
-    syncRangeControlState(start, end);
-    els.startDate.focus();
-  }
+  render();
 });
 
 [els.startDate, els.endDate].forEach((element) => {
   element.addEventListener("change", () => {
-    state.activityVisible = 15;
     els.rangeSelect.value = "custom";
-    if (els.startDate.value && els.endDate.value && els.startDate.value > els.endDate.value) {
-      if (element === els.startDate) els.endDate.value = els.startDate.value;
-      else els.startDate.value = els.endDate.value;
-    }
-    refreshRangeView();
+    render();
   });
 });
 
-els.comparisonSelect.addEventListener("change", () => {
-  state.activityVisible = 15;
-  refreshRangeView();
+[els.bucketSelect, els.metricSelect].forEach((element) => {
+  element.addEventListener("change", render);
 });
 
-els.bucketSelect.addEventListener("change", render);
-els.metricSelect.addEventListener("change", () => {
-  renderMainChart();
-  syncViewUrl();
-});
-
-els.copyViewButton.addEventListener("click", async () => {
-  syncViewUrl();
-  try {
-    await navigator.clipboard.writeText(window.location.href);
-    const original = els.copyViewButton.textContent;
-    els.copyViewButton.textContent = "Copied";
-    setStatus("Copied a link to this training view.");
-    window.setTimeout(() => {
-      els.copyViewButton.textContent = original;
-    }, 1800);
-  } catch {
-    setStatus(`Copy this view: ${window.location.href}`);
-  }
-});
-
-els.activitySearch.addEventListener("input", () => {
-  state.activityVisible = 15;
-  syncViewUrl();
-  renderTable();
-});
-
-[els.activityType, els.activitySort].forEach((element) => {
-  element.addEventListener("change", () => {
-    state.activityVisible = 15;
-    syncViewUrl();
-    renderTable();
-  });
-});
-
-els.loadMoreRuns.addEventListener("click", () => {
-  state.activityVisible += 15;
-  renderTable();
-});
-
-function setupSectionNavigation() {
-  const links = [...document.querySelectorAll("[data-section-link]")];
-  const sections = links
-    .map((link) => document.querySelector(`#${link.dataset.sectionLink}`))
-    .filter(Boolean);
-  if (!("IntersectionObserver" in window)) return;
-  const observer = new IntersectionObserver((entries) => {
-    const visible = entries
-      .filter((entry) => entry.isIntersecting)
-      .sort((left, right) => right.intersectionRatio - left.intersectionRatio)[0];
-    if (!visible) return;
-    links.forEach((link) => {
-      if (link.dataset.sectionLink === visible.target.id) link.setAttribute("aria-current", "true");
-      else link.removeAttribute("aria-current");
-    });
-  }, { rootMargin: "-18% 0px -66% 0px", threshold: [0, 0.15, 0.4] });
-  sections.forEach((section) => observer.observe(section));
-}
-
-restoreViewFromUrl();
-syncRangeInputs();
-bindTooltips();
-setupSectionNavigation();
-render();
 checkStatus().catch((error) => setStatus(error.message, true));
+syncRangeInputs();
+syncCoachingInputs();
+bindTooltips();
+render();
