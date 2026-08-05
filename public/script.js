@@ -51,6 +51,7 @@ const els = {
   intelGrid: document.querySelector("#intelGrid"),
   trainingTextureStats: document.querySelector("#trainingTextureStats"),
   aiFocus: document.querySelector("#aiFocus"),
+  coachQuestion: document.querySelector("#coachQuestion"),
   aiAnalyzeButton: document.querySelector("#aiAnalyzeButton"),
   aiInsightContent: document.querySelector("#aiInsightContent"),
   activityRows: document.querySelector("#activityRows"),
@@ -70,8 +71,11 @@ const els = {
   checkinFeel: document.querySelector("#checkinFeel"),
   checkinLimiter: document.querySelector("#checkinLimiter"),
   checkinIntent: document.querySelector("#checkinIntent"),
+  checkinOutcome: document.querySelector("#checkinOutcome"),
   readinessContent: document.querySelector("#readinessContent"),
   planDraftCopy: document.querySelector("#planDraftCopy"),
+  planAdaptation: document.querySelector("#planAdaptation"),
+  milestoneStats: document.querySelector("#milestoneStats"),
   recommendedCalendar: document.querySelector("#recommendedCalendar"),
   copyPlanButton: document.querySelector("#copyPlanButton"),
   workoutModal: document.querySelector("#workoutModal"),
@@ -102,6 +106,7 @@ function syncCoachingInputs() {
   els.checkinFeel.value = coachingContext.checkin.feel || "";
   els.checkinLimiter.value = coachingContext.checkin.limiter || "none";
   els.checkinIntent.value = coachingContext.checkin.intent || "mixed";
+  els.checkinOutcome.value = coachingContext.checkin.outcome || "";
 }
 
 const METRICS = {
@@ -460,6 +465,7 @@ function render() {
   renderBlockReview(summary, previous);
   renderCoachingWorkspace(summary);
   renderTrainingTexture();
+  renderMilestones(summary);
   renderKeyRuns();
   renderIntel(summary, previous, start, end);
   renderAiState();
@@ -549,6 +555,22 @@ function renderTrainingTexture() {
   });
 }
 
+function renderMilestones(summary) {
+  if (!els.milestoneStats) return;
+  if (!summary.runCount) {
+    els.milestoneStats.innerHTML = textureStat("Consistency", "—", "Load a block") + textureStat("Longest run", "—", "Your durable effort") + textureStat("Active days", "—", "Rhythm over the selected window");
+    return;
+  }
+  const threshold = summary.averageWeeklyMiles ? Math.round(summary.averageWeeklyMiles) : 0;
+  els.milestoneStats.innerHTML = [
+    textureStat("Consistency", `${Math.round(summary.consistency * 100)}%`, "Active days across the window"),
+    textureStat("Longest run", `${summary.longRun.toFixed(1)} mi`, "Your durable effort so far"),
+    textureStat("Active days", `${summary.activeDays}`, `${summary.runCount} runs logged`),
+    textureStat("Baseline", `${summary.averageWeeklyMiles.toFixed(1)} mi/wk`, threshold ? `A repeatable ${threshold}-mile rhythm` : "A starting point"),
+    textureStat("Recovery space", `${summary.longestRestGap} days`, "Longest gap in this block")
+  ].join("");
+}
+
 function renderAiState() {
   els.aiAnalyzeButton.disabled = !state.filteredRuns.length;
   if (state.renderedInsightFingerprint === state.insightFingerprint) return;
@@ -593,6 +615,7 @@ function buildInsightPayload() {
   }));
   return {
     focus: els.aiFocus.value,
+    question: els.coachQuestion.value.trim(),
     coachingContext,
     range: {
       start: els.startDate.value || null,
@@ -966,6 +989,7 @@ function renderCoachingWorkspace(summary) {
     els.planDraftCopy.textContent = "Load a block to create a transparent draft.";
     els.recommendedCalendar.replaceChildren();
     els.copyPlanButton.disabled = true;
+    els.planAdaptation.textContent = "";
     return;
   }
   const newest = state.filteredRuns[state.filteredRuns.length - 1];
@@ -981,6 +1005,14 @@ function renderCoachingWorkspace(summary) {
   const recommendation = recommendIntent(summary, race);
   const chosenIntent = coachingContext.goal.mode || "auto";
   const intent = chosenIntent === "auto" ? recommendation.intent : chosenIntent;
+  const outcome = coachingContext.checkin?.outcome;
+  els.planAdaptation.textContent = outcome === "missed"
+    ? "Adapted from your missed session: protect recovery first; the quality option is replaced with easy/rest space."
+    : outcome === "shortened"
+      ? "Adapted from your shortened session: keep the quality option optional and do not chase missed work."
+      : outcome === "completed"
+        ? "Plan stays on course: your last planned session was completed."
+        : "Log your last planned session to let this draft adapt.";
   els.intentRecommendation.textContent = chosenIntent === "auto"
     ? `Recommended: ${recommendation.intent} — ${recommendation.reason}`
     : `Manual override: ${intent}. Auto recommends ${recommendation.intent} because ${recommendation.reason}`;
@@ -1034,6 +1066,7 @@ function cyclePlanStatus(date) {
 
 function recommendIntent(summary, race) {
   const checkin = coachingContext.checkin || {};
+  if (checkin.outcome === "missed") return { intent: "recover", reason: "a missed session is a cue to protect recovery, not make it up" };
   if (checkin.feel && Number(checkin.feel) <= 2) return { intent: "recover", reason: "your check-in reported a hard block" };
   if (checkin.limiter && checkin.limiter !== "none") return { intent: "maintain", reason: `${checkin.limiter} was marked as a limiting factor` };
   if (race && race.weeks <= 2) return { intent: "recover", reason: "the race is close enough to prioritize freshness" };
@@ -2446,7 +2479,7 @@ els.goalForm.addEventListener("submit", (event) => {
 
 els.checkinForm.addEventListener("submit", (event) => {
   event.preventDefault();
-  coachingContext.checkin = { feel: els.checkinFeel.value, limiter: els.checkinLimiter.value, intent: els.checkinIntent.value };
+  coachingContext.checkin = { feel: els.checkinFeel.value, limiter: els.checkinLimiter.value, intent: els.checkinIntent.value, outcome: els.checkinOutcome.value };
   saveCoachingContext();
   state.renderedInsightFingerprint = "";
   render();

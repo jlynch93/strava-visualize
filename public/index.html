@@ -171,6 +171,8 @@
                 <option value="pace-trend">What supports my pace trend?</option>
                 <option value="race-plan">Refine my race-week draft</option>
               </select>
+              <label for="coachQuestion">Ask your coach</label>
+              <input id="coachQuestion" type="text" maxlength="180" placeholder="e.g. Should I keep the quality session this week?">
               <button id="aiAnalyzeButton" class="ai-action" type="button" disabled>Analyze this block</button>
             </div>
             <p class="ai-model-note">Ollama · qwen3:0.6b · on-demand</p>
@@ -205,11 +207,12 @@
             <label for="checkinFeel">How did this block feel?</label><select id="checkinFeel"><option value="">Not logged</option><option value="1">1 · very hard</option><option value="2">2 · hard</option><option value="3">3 · manageable</option><option value="4">4 · good</option><option value="5">5 · strong</option></select>
             <label for="checkinLimiter">Main limiting factor</label><select id="checkinLimiter"><option value="none">None noted</option><option value="sleep">Sleep</option><option value="heat">Heat / weather</option><option value="soreness">Soreness</option><option value="stress">Life stress</option><option value="terrain">Terrain</option></select>
             <label for="checkinIntent">Most runs were</label><select id="checkinIntent"><option value="mixed">Mixed</option><option value="easy">Easy</option><option value="workout">Workouts</option><option value="long">Long runs</option><option value="race">Race effort</option></select>
+            <label for="checkinOutcome">Last planned session</label><select id="checkinOutcome"><option value="">Not logged</option><option value="completed">Completed as planned</option><option value="shortened">Shortened</option><option value="missed">Missed</option></select>
             <button type="submit" class="context-save">Save check-in</button>
           </form>
           <section class="context-card readiness-card" aria-labelledby="readinessTitle"><h3 id="readinessTitle">Training readiness</h3><div id="readinessContent"></div></section>
         </div>
-        <section class="plan-draft" aria-labelledby="planDraftTitle"><div><span class="section-kicker">Reviewable draft</span><h3 id="planDraftTitle">Next-week plan</h3><p id="planDraftCopy">Load a block to create a transparent draft.</p><div id="recommendedCalendar" class="recommended-calendar" aria-label="Recommended training calendar"></div></div><button id="copyPlanButton" type="button" class="context-save" disabled>Copy draft</button></section>
+        <section class="plan-draft" aria-labelledby="planDraftTitle"><div><span class="section-kicker">Adaptive draft</span><h3 id="planDraftTitle">Next-week plan</h3><p id="planDraftCopy">Load a block to create a transparent draft.</p><p id="planAdaptation" class="plan-adaptation"></p><div id="recommendedCalendar" class="recommended-calendar" aria-label="Recommended training calendar"></div></div><button id="copyPlanButton" type="button" class="context-save" disabled>Copy draft</button></section>
       </section>
 
       <section class="training-texture" aria-labelledby="trainingTextureTitle">
@@ -219,6 +222,7 @@
         </div>
         <div id="trainingTextureStats" class="training-texture-grid" aria-live="polite"></div>
       </section>
+      <section class="training-texture milestones" aria-labelledby="milestoneTitle"><div class="training-texture-heading"><div><span class="section-kicker">Progress markers</span><h2 id="milestoneTitle">What this block is building</h2></div><p>Milestones are evidence, not a score.</p></div><div id="milestoneStats" class="training-texture-grid" aria-live="polite"></div></section>
 
       <section class="dashboard" aria-label="Training visuals">
         <section class="chart-panel" aria-labelledby="structureTitle">
