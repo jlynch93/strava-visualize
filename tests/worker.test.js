@@ -13,6 +13,12 @@ function assetBinding(body = "asset", headers = {}) {
   };
 }
 
+test("Worker receives document requests before the asset binding", () => {
+  const config = JSON.parse(fs.readFileSync(path.resolve(__dirname, "../wrangler.jsonc"), "utf8"));
+  assert.ok(config.assets.run_worker_first.includes("/"));
+  assert.ok(config.assets.run_worker_first.includes("/index.html"));
+});
+
 test("Worker reports an actionable configuration state", async () => {
   const worker = await workerPromise;
   const response = await worker.fetch(new Request("https://example.test/api/status"), {
