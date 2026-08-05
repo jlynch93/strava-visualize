@@ -942,11 +942,24 @@ function renderRecommendedCalendar(intent, summary, targetMiles, race) {
     if (!isRun || remainingRuns-- > 0) return session;
     return ["Rest / optional", "Above your selected weekly run limit"];
   });
+  const planState = coachingContext.plan || {};
   els.recommendedCalendar.innerHTML = schedule.map(([title, detail], index) => {
     const date = new Date(start); date.setDate(start.getDate() + index);
     const isRace = race && localDateValue(date) === coachingContext.goal.raceDate;
-    return `<article class="recommended-day${isRace ? " race-day" : ""}"><span>${date.toLocaleDateString(undefined, { weekday: "short" })}</span><time>${date.toLocaleDateString(undefined, { month: "short", day: "numeric" })}</time><strong>${isRace ? "Race day" : title}</strong><small>${isRace ? race.label : detail}</small></article>`;
+    const dateKey = localDateValue(date);
+    const completed = state.filteredRuns.some((run) => localDateValue(parseActivityDate(run)) === dateKey);
+    const status = completed ? "completed" : planState[dateKey] || "planned";
+    return `<button type="button" class="recommended-day ${status}${isRace ? " race-day" : ""}" data-action="cycle-plan-status" data-plan-date="${dateKey}"><span>${date.toLocaleDateString(undefined, { weekday: "short" })}</span><time>${date.toLocaleDateString(undefined, { month: "short", day: "numeric" })}</time><strong>${isRace ? "Race day" : title}</strong><small>${isRace ? race.label : detail}</small><em>${status === "completed" ? "Completed from Strava" : status === "skipped" ? "Skipped" : "Planned · click to update"}</em></button>`;
   }).join("");
+}
+
+function cyclePlanStatus(date) {
+  const current = coachingContext.plan?.[date] || "planned";
+  const next = current === "planned" ? "completed" : current === "completed" ? "skipped" : "planned";
+  coachingContext.plan = { ...(coachingContext.plan || {}), [date]: next };
+  saveCoachingContext();
+  render();
+  setStatus(`Plan session marked ${next}.`);
 }
 
 function recommendIntent(summary, race) {
@@ -2377,6 +2390,11 @@ els.copyPlanButton.addEventListener("click", async () => {
 els.keyRuns.addEventListener("click", (event) => {
   const card = event.target.closest(".key-run-card");
   if (card?.dataset.activityId) showWorkoutModal(card.dataset.activityId, card);
+});
+
+els.recommendedCalendar.addEventListener("click", (event) => {
+  const day = event.target.closest("[data-action='cycle-plan-status']");
+  if (day?.dataset.planDate) cyclePlanStatus(day.dataset.planDate);
 });
 
 els.aiInsightContent.addEventListener("click", (event) => {

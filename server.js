@@ -533,6 +533,11 @@ async function handleApi(req, res) {
   }
 
   if (url.pathname === "/api/activities") {
+    const config = requireConfig();
+    if (config.error) {
+      sendJson(res, 503, { error: config.error });
+      return;
+    }
     const accessToken = await getAccessToken();
     const after = url.searchParams.get("after");
     const before = url.searchParams.get("before");

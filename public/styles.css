@@ -1064,11 +1064,14 @@ svg {
 .plan-draft .section-kicker { color: var(--accent); }
 .plan-draft .context-save { flex: 0 0 auto; margin: 0; background: var(--accent); color: var(--accent-ink); }
 .recommended-calendar { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; margin-top: 16px; }
-.recommended-day { min-height: 108px; padding: 10px; border: 1px solid oklch(34% .02 210); background: oklch(16% .025 219); }
+.recommended-day { min-height: 108px; padding: 10px; border: 1px solid oklch(34% .02 210); border-radius: 0; background: oklch(16% .025 219); text-align: left; }
 .recommended-day > span, .recommended-day time, .recommended-day small { display: block; color: oklch(70% .018 198); font-size: .64rem; line-height: 1.35; }
 .recommended-day > span { color: var(--accent); font-weight: 800; letter-spacing: .07em; text-transform: uppercase; }
 .recommended-day time { margin-top: 3px; }
 .recommended-day strong { display: block; margin: 10px 0 6px; color: oklch(96% .008 135); font-size: .75rem; line-height: 1.3; }
+.recommended-day em { display: block; margin-top: 7px; color: oklch(67% .015 198); font-size: .61rem; font-style: normal; }
+.recommended-day.completed { border-color: var(--teal); background: oklch(21% .05 188); }
+.recommended-day.skipped { opacity: .58; }
 .recommended-day.race-day { border-color: var(--accent); background: oklch(26% .065 106); }
 .ai-sources { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 16px; padding-top: 13px; border-top: 1px solid var(--rule); }
 .ai-sources > span { margin-right: 4px; color: var(--ink-faint); font-size: .68rem; font-weight: 760; letter-spacing: .07em; text-transform: uppercase; }
