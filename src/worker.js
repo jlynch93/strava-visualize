@@ -474,7 +474,22 @@ async function handleRequest(request, env) {
   if (url.pathname === "/api/insights" && request.method === "POST") return handleInsights(env, request);
   if (url.pathname === "/auth/login") return handleLogin(env, request);
   if (url.pathname === "/auth/callback") return handleCallback(env, request);
-  return env.ASSETS.fetch(request);
+  const asset = await env.ASSETS.fetch(request);
+  // The document is the deployment boundary: serving a cached old shell with
+  // newer JS/CSS (or the reverse) makes a deployment appear to have reverted.
+  // Keep fingerprinted assets cacheable, but force navigations to read the
+  // current deployment's HTML.
+  if ((request.headers.get("accept") || "").includes("text/html")) {
+    const headers = new Headers(asset.headers);
+    headers.set("cache-control", "no-store, max-age=0");
+    headers.set("cdn-cache-control", "no-store");
+    return new Response(asset.body, {
+      status: asset.status,
+      statusText: asset.statusText,
+      headers
+    });
+  }
+  return asset;
 }
 
 export default {
