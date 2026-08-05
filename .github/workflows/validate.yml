@@ -19,11 +19,10 @@ jobs:
       - name: Run regression tests
         run: npm test
       - name: Check JavaScript syntax
-        shell: pwsh
         run: |
           node --check public/script.js
           node --check server.js
-          Get-Content -LiteralPath 'src/worker.js' -Raw | node --input-type=module --check
-          Get-Content -LiteralPath 'functions/api/insights.js' -Raw | node --input-type=module --check
+          node --input-type=module --check < src/worker.js
+          node --input-type=module --check < functions/api/insights.js
       - name: Check patch whitespace
         run: git diff --check HEAD^ HEAD
