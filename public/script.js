@@ -67,6 +67,7 @@ const els = {
   checkinIntent: document.querySelector("#checkinIntent"),
   readinessContent: document.querySelector("#readinessContent"),
   planDraftCopy: document.querySelector("#planDraftCopy"),
+  recommendedCalendar: document.querySelector("#recommendedCalendar"),
   copyPlanButton: document.querySelector("#copyPlanButton"),
   workoutModal: document.querySelector("#workoutModal"),
   workoutModalClose: document.querySelector("#workoutModalClose"),
@@ -887,6 +888,7 @@ function renderCoachingWorkspace(summary) {
   if (!summary.runCount) {
     els.readinessContent.innerHTML = '<p class="context-muted">Add a training block to see the inputs behind this view.</p>';
     els.planDraftCopy.textContent = "Load a block to create a transparent draft.";
+    els.recommendedCalendar.replaceChildren();
     els.copyPlanButton.disabled = true;
     return;
   }
@@ -909,7 +911,25 @@ function renderCoachingWorkspace(summary) {
   const range = intent === "build" ? `${goalMiles.toFixed(0)}–${(goalMiles * 1.08).toFixed(0)}` : intent === "recover" ? `${(goalMiles * 0.7).toFixed(0)}–${(goalMiles * 0.85).toFixed(0)}` : `${(goalMiles * 0.9).toFixed(0)}–${goalMiles.toFixed(0)}`;
   const raceLead = race ? `${race.label} is ${race.weeks} week${race.weeks === 1 ? "" : "s"} away (${race.phase} phase). ` : "";
   els.planDraftCopy.textContent = `${raceLead}${intent[0].toUpperCase() + intent.slice(1)} week draft: ${range} mi across about ${Math.max(2, Math.round(summary.averageRunsPerWeek))} runs. Keep the longest run at or below ${summary.longRun.toFixed(1)} mi. Review and adjust it to your schedule, race goal, and how you feel.`;
+  renderRecommendedCalendar(intent, summary, goalMiles, race);
   els.copyPlanButton.disabled = false;
+}
+
+function renderRecommendedCalendar(intent, summary, targetMiles, race) {
+  const start = new Date();
+  const day = start.getDay();
+  start.setDate(start.getDate() + ((8 - day) % 7 || 7));
+  start.setHours(0, 0, 0, 0);
+  const runCount = Math.max(3, Math.round(summary.averageRunsPerWeek));
+  const longRun = Math.min(summary.longRun, targetMiles * 0.35);
+  const schedule = intent === "recover"
+    ? [["Rest / mobility", "Leave room to recover"], ["Easy run", "Conversational effort"], ["Rest", "Optional walk"], ["Easy run", "Keep it short and easy"], ["Rest", "Review how you feel"], ["Easy long run", `At or below ${longRun.toFixed(1)} mi`], ["Rest / optional easy", "Only if you feel ready"]]
+    : [["Easy run", "Conversational effort"], ["Quality option", "Choose only if your check-in supports it"], ["Easy or rest", "Create space between demanding days"], ["Steady run", "Keep the weekly range in view"], ["Easy or rest", "Adjust to life and recovery"], ["Long run", `At or below ${longRun.toFixed(1)} mi`], ["Easy / optional", `${runCount} runs is a reference, not a requirement`]];
+  els.recommendedCalendar.innerHTML = schedule.map(([title, detail], index) => {
+    const date = new Date(start); date.setDate(start.getDate() + index);
+    const isRace = race && localDateValue(date) === coachingContext.goal.raceDate;
+    return `<article class="recommended-day${isRace ? " race-day" : ""}"><span>${date.toLocaleDateString(undefined, { weekday: "short" })}</span><time>${date.toLocaleDateString(undefined, { month: "short", day: "numeric" })}</time><strong>${isRace ? "Race day" : title}</strong><small>${isRace ? race.label : detail}</small></article>`;
+  }).join("");
 }
 
 function recommendIntent(summary, race) {
