@@ -25,4 +25,9 @@ jobs:
           node --input-type=module --check < src/worker.js
           node --input-type=module --check < functions/api/insights.js
       - name: Check patch whitespace
-        run: git diff --check HEAD^ HEAD
+        run: |
+          if git rev-parse --verify HEAD^ >/dev/null 2>&1; then
+            git diff --check HEAD^ HEAD
+          else
+            echo "No parent commit in this shallow checkout; skipping patch diff."
+          fi
