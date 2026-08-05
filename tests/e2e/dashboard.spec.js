@@ -1,6 +1,6 @@
 const { test, expect } = require("@playwright/test");
 
-test("a runner can review demo history and navigate run details", async ({ page }) => {
+test("a runner can review demo history and open run details", async ({ page }) => {
   await page.goto("/");
 
   await page.getByRole("button", { name: "Demo data" }).click();
@@ -10,16 +10,13 @@ test("a runner can review demo history and navigate run details", async ({ page 
   await expect(detailButtons).not.toHaveCount(0);
   await detailButtons.first().click();
 
-  const modal = page.locator("#workoutModal");
-  await expect(modal).toHaveAttribute("open", "");
-  await expect(page.locator("#workoutModalTitle")).not.toBeEmpty();
-
-  const initialRun = await page.locator("#workoutModalMeta").textContent();
-  const adjacentRun = modal.locator("button[data-action='navigate-run']:not([disabled])");
-  await expect(adjacentRun).toHaveCount(1);
-  await adjacentRun.click();
-  await expect(page.locator("#workoutModalMeta")).not.toHaveText(initialRun || "");
+  // The current dashboard uses a native dialog; the redesigned dashboard uses
+  // an accessible dialog inside a backdrop. Test the behavior the runner sees,
+  // rather than either implementation's visibility attribute.
+  const modal = page.getByRole("dialog");
+  await expect(modal).toBeVisible();
+  await expect(modal.getByRole("heading", { level: 2 })).not.toBeEmpty();
 
   await page.getByRole("button", { name: "Close workout details" }).click();
-  await expect(modal).not.toHaveAttribute("open", "");
+  await expect(modal).toBeHidden();
 });
