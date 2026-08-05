@@ -1,0 +1,31 @@
+name: Verify production
+
+on:
+  workflow_dispatch:
+    inputs:
+      production_url:
+        description: Public production URL
+        required: true
+        default: https://strava.jeer.rest
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify the active production release
+        env:
+          PRODUCTION_URL: ${{ inputs.production_url }}
+        run: |
+          base="${PRODUCTION_URL%/}"
+          curl --fail --silent --show-error "$base/api/status" | grep -q 'configured'
+          curl --fail --silent --show-error -H 'Accept: text/html' "$base/?release-check=${GITHUB_SHA}" | grep -q 'Read the work'
+          headers="$(curl --fail --silent --show-error -D - -o /dev/null -H 'Accept: text/html' "$base/?release-check=${GITHUB_SHA}")"
+          printf '%s' "$headers" | grep -qi '^cache-control:.*no-store'
+          curl --fail --silent --show-error "$base/styles.css?v=release-20260804" >/dev/null
+          curl --fail --silent --show-error "$base/script.js?v=release-20260804" >/dev/null

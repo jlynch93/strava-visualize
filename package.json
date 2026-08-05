@@ -5,7 +5,7 @@
   "description": "A local web dashboard for visualizing Strava running trends over time.",
   "scripts": {
     "start": "node server.js",
-    "test": "node --test tests/server.test.js",
+    "test": "node --test tests/server.test.js tests/worker.test.js",
     "test:e2e": "playwright test",
     "deploy": "wrangler deploy",
     "deploy:pages": "wrangler pages deploy public --project-name strava-visualize"
