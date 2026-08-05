@@ -60,6 +60,9 @@ const els = {
   goalRaceName: document.querySelector("#goalRaceName"),
   goalRaceDistance: document.querySelector("#goalRaceDistance"),
   goalRaceDate: document.querySelector("#goalRaceDate"),
+  goalRunDays: document.querySelector("#goalRunDays"),
+  goalLongRunDay: document.querySelector("#goalLongRunDay"),
+  goalAvailability: document.querySelector("#goalAvailability"),
   intentRecommendation: document.querySelector("#intentRecommendation"),
   checkinForm: document.querySelector("#checkinForm"),
   checkinFeel: document.querySelector("#checkinFeel"),
@@ -91,6 +94,9 @@ function syncCoachingInputs() {
   els.goalRaceName.value = coachingContext.goal.raceName || coachingContext.goal.event || "";
   els.goalRaceDistance.value = coachingContext.goal.raceDistance || "";
   els.goalRaceDate.value = coachingContext.goal.raceDate || "";
+  els.goalRunDays.value = coachingContext.goal.runDays || "";
+  els.goalLongRunDay.value = coachingContext.goal.longRunDay || "Sat";
+  els.goalAvailability.value = coachingContext.goal.availability || "";
   els.checkinFeel.value = coachingContext.checkin.feel || "";
   els.checkinLimiter.value = coachingContext.checkin.limiter || "none";
   els.checkinIntent.value = coachingContext.checkin.intent || "mixed";
@@ -920,11 +926,22 @@ function renderRecommendedCalendar(intent, summary, targetMiles, race) {
   const day = start.getDay();
   start.setDate(start.getDate() + ((8 - day) % 7 || 7));
   start.setHours(0, 0, 0, 0);
-  const runCount = Math.max(3, Math.round(summary.averageRunsPerWeek));
+  const runCount = Number(coachingContext.goal.runDays) || Math.max(3, Math.round(summary.averageRunsPerWeek));
   const longRun = Math.min(summary.longRun, targetMiles * 0.35);
-  const schedule = intent === "recover"
+  let schedule = intent === "recover"
     ? [["Rest / mobility", "Leave room to recover"], ["Easy run", "Conversational effort"], ["Rest", "Optional walk"], ["Easy run", "Keep it short and easy"], ["Rest", "Review how you feel"], ["Easy long run", `At or below ${longRun.toFixed(1)} mi`], ["Rest / optional easy", "Only if you feel ready"]]
     : [["Easy run", "Conversational effort"], ["Quality option", "Choose only if your check-in supports it"], ["Easy or rest", "Create space between demanding days"], ["Steady run", "Keep the weekly range in view"], ["Easy or rest", "Adjust to life and recovery"], ["Long run", `At or below ${longRun.toFixed(1)} mi`], ["Easy / optional", `${runCount} runs is a reference, not a requirement`]];
+  const dayNames = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  const longIndex = dayNames.indexOf(coachingContext.goal.longRunDay || "Sat");
+  if (longIndex >= 0 && longIndex !== 5) [schedule[5], schedule[longIndex]] = [schedule[longIndex], schedule[5]];
+  const available = String(coachingContext.goal.availability || "").toLowerCase().match(/mon|tue|wed|thu|fri|sat|sun/g);
+  if (available?.length) schedule = schedule.map((session, index) => available.includes(dayNames[index].toLowerCase()) ? session : ["Rest / unavailable", "Outside your saved availability"]);
+  let remainingRuns = runCount;
+  schedule = schedule.map((session) => {
+    const isRun = /run|quality|long|steady|optional/i.test(session[0]);
+    if (!isRun || remainingRuns-- > 0) return session;
+    return ["Rest / optional", "Above your selected weekly run limit"];
+  });
   els.recommendedCalendar.innerHTML = schedule.map(([title, detail], index) => {
     const date = new Date(start); date.setDate(start.getDate() + index);
     const isRace = race && localDateValue(date) === coachingContext.goal.raceDate;
@@ -2337,7 +2354,7 @@ els.workoutModal.addEventListener("click", (event) => {
 
 els.goalForm.addEventListener("submit", (event) => {
   event.preventDefault();
-  coachingContext.goal = { mode: els.goalMode.value, miles: els.goalMiles.value, raceName: els.goalRaceName.value.trim(), raceDistance: els.goalRaceDistance.value, raceDate: els.goalRaceDate.value };
+  coachingContext.goal = { mode: els.goalMode.value, miles: els.goalMiles.value, raceName: els.goalRaceName.value.trim(), raceDistance: els.goalRaceDistance.value, raceDate: els.goalRaceDate.value, runDays: els.goalRunDays.value, longRunDay: els.goalLongRunDay.value, availability: els.goalAvailability.value.trim() };
   saveCoachingContext();
   state.renderedInsightFingerprint = "";
   render();
