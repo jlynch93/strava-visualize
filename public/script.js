@@ -15,7 +15,8 @@ const state = {
   runDigestCache: new Map(),
   runDigestAbort: null,
   insightFingerprint: "",
-  renderedInsightFingerprint: ""
+  renderedInsightFingerprint: "",
+  textureWeatherFingerprint: ""
 };
 
 const els = {
@@ -48,6 +49,7 @@ const els = {
   paceZoneChart: document.querySelector("#paceZoneChart"),
   intelSubtitle: document.querySelector("#intelSubtitle"),
   intelGrid: document.querySelector("#intelGrid"),
+  trainingTextureStats: document.querySelector("#trainingTextureStats"),
   aiFocus: document.querySelector("#aiFocus"),
   aiAnalyzeButton: document.querySelector("#aiAnalyzeButton"),
   aiInsightContent: document.querySelector("#aiInsightContent"),
@@ -457,6 +459,7 @@ function render() {
   renderHeroStatus(summary);
   renderBlockReview(summary, previous);
   renderCoachingWorkspace(summary);
+  renderTrainingTexture();
   renderKeyRuns();
   renderIntel(summary, previous, start, end);
   renderAiState();
@@ -477,6 +480,73 @@ function renderHeroStatus(summary) {
   els.heroStatus.textContent = hasData
     ? `${summary.runCount} runs · ${summary.activeDays} active days`
     : "Ready for training data";
+}
+
+function textureStat(label, value, detail, tone = "") {
+  return `<article class="texture-stat ${tone}"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong><small>${escapeHtml(detail)}</small></article>`;
+}
+
+function startTimeLabel(runs) {
+  const hours = runs.map((run) => runStartTimeDetails(run)?.hour).filter(Number.isFinite);
+  if (!hours.length) return { value: "—", detail: "No local start times" };
+  const average = hours.reduce((sum, hour) => sum + hour, 0) / hours.length;
+  const period = average < 11 ? "Morning" : average < 16 ? "Midday" : average < 20 ? "Evening" : "Night";
+  const count = hours.filter((hour) => period === "Morning" ? hour < 11 : period === "Midday" ? hour >= 11 && hour < 16 : period === "Evening" ? hour >= 16 && hour < 20 : hour >= 20).length;
+  return { value: period, detail: `${Math.round((count / hours.length) * 100)}% of logged starts` };
+}
+
+function favoriteRunDay(runs) {
+  const counts = new Map();
+  runs.forEach((run) => {
+    const day = parseActivityDate(run).toLocaleDateString(undefined, { weekday: "long" });
+    counts.set(day, (counts.get(day) || 0) + 1);
+  });
+  const favorite = [...counts.entries()].sort((a, b) => b[1] - a[1])[0];
+  return favorite ? { value: favorite[0], detail: `${favorite[1]} runs in this window` } : { value: "—", detail: "No running days" };
+}
+
+function textureWeatherRuns(runs, limit = 10) {
+  const eligible = runs.filter((run) => weatherRequestDetails(run));
+  if (eligible.length <= limit) return eligible;
+  const sample = [];
+  for (let index = 0; index < limit; index += 1) sample.push(eligible[Math.floor(index * (eligible.length - 1) / (limit - 1))]);
+  return sample;
+}
+
+function renderTrainingTexture() {
+  if (!els.trainingTextureStats) return;
+  const runs = state.filteredRuns;
+  if (!runs.length) {
+    els.trainingTextureStats.innerHTML = textureStat("Start temperature", "—", "Load a running block") + textureStat("Typical start", "—", "Local activity time") + textureStat("Favorite day", "—", "Most common run day") + textureStat("Long-run share", "—", "Miles from your longest runs") + textureStat("Climb per mile", "—", "Elevation across this window");
+    return;
+  }
+  const weatherRuns = textureWeatherRuns(runs);
+  const temperatures = weatherRuns.map((run) => state.runWeatherCache.get(runWeatherKey(run))?.temperatureF).map(weatherNumber).filter((value) => value !== null);
+  const temperature = temperatures.length
+    ? { value: `${Math.round(temperatures.reduce((sum, value) => sum + value, 0) / temperatures.length)}°F`, detail: `Modeled start weather · ${temperatures.length}/${weatherRuns.length} sampled` }
+    : weatherRuns.length
+      ? { value: "Checking", detail: `Modeled start weather · up to ${weatherRuns.length} runs` }
+      : { value: "—", detail: "No route coordinates available" };
+  const start = startTimeLabel(runs);
+  const day = favoriteRunDay(runs);
+  const distances = runs.map((run) => miles(run.distance)).sort((a, b) => b - a);
+  const longestCount = Math.max(1, Math.ceil(distances.length * 0.2));
+  const totalMiles = distances.reduce((sum, value) => sum + value, 0);
+  const longestMiles = distances.slice(0, longestCount).reduce((sum, value) => sum + value, 0);
+  const longRunShare = totalMiles ? Math.round((longestMiles / totalMiles) * 100) : 0;
+  const elevation = runs.reduce((sum, run) => sum + feet(run.total_elevation_gain), 0);
+  els.trainingTextureStats.innerHTML = [
+    textureStat("Start temperature", temperature.value, temperature.detail, temperatures.length ? "weather-ready" : ""),
+    textureStat("Typical start", start.value, start.detail),
+    textureStat("Favorite day", day.value, day.detail),
+    textureStat("Long-run share", `${longRunShare}%`, "Miles from your longest fifth"),
+    textureStat("Climb per mile", totalMiles ? `${Math.round(elevation / totalMiles)} ft` : "—", "Across this selected window")
+  ].join("");
+  if (!weatherRuns.length || state.textureWeatherFingerprint === state.insightFingerprint) return;
+  state.textureWeatherFingerprint = state.insightFingerprint;
+  Promise.all(weatherRuns.map((run) => requestRunWeather(run).catch(() => null))).then(() => {
+    if (state.textureWeatherFingerprint === state.insightFingerprint) renderTrainingTexture();
+  });
 }
 
 function renderAiState() {

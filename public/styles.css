@@ -1048,6 +1048,18 @@ svg {
 
 .coaching-workspace { margin-top: 24px; padding: 22px; }
 .coaching-workspace .panel-heading h2 { margin: 0; }
+.training-texture { margin-top: 24px; padding: 18px 22px; border-top: 1px solid var(--rule-strong); border-bottom: 1px solid var(--rule); }
+.training-texture-heading { display: flex; align-items: end; justify-content: space-between; gap: 24px; margin-bottom: 14px; }
+.training-texture-heading .section-kicker { margin-bottom: 4px; color: var(--ink-faint); }
+.training-texture-heading h2 { margin: 0; color: var(--ink-strong); font-size: 1rem; letter-spacing: -.025em; }
+.training-texture-heading p { max-width: 300px; margin: 0; color: var(--ink-faint); font-size: .73rem; line-height: 1.45; text-align: right; }
+.training-texture-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); border: 1px solid var(--rule); background: var(--surface-muted); }
+.texture-stat { min-width: 0; padding: 13px 15px; border-right: 1px solid var(--rule); }
+.texture-stat:last-child { border-right: 0; }
+.texture-stat > span, .texture-stat small { display: block; color: var(--ink-faint); font-size: .63rem; font-weight: 750; letter-spacing: .065em; line-height: 1.35; text-transform: uppercase; }
+.texture-stat strong { display: block; overflow: hidden; margin: 7px 0 4px; color: var(--ink-strong); font-size: 1.03rem; letter-spacing: -.035em; text-overflow: ellipsis; white-space: nowrap; }
+.texture-stat small { font-weight: 500; letter-spacing: 0; text-transform: none; }
+.texture-stat.weather-ready strong { color: var(--teal); }
 .coaching-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 .context-card { padding: 16px; border: 1px solid var(--rule); background: var(--surface-muted); }
 .context-card h3 { margin: 0 0 14px; color: var(--ink-strong); font-size: 0.98rem; }
@@ -2160,6 +2172,18 @@ body.modal-open {
     grid-template-columns: 1fr;
   }
 
+  .training-texture-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .texture-stat:nth-child(3) {
+    border-right: 0;
+  }
+
+  .texture-stat:nth-child(-n + 3) {
+    border-bottom: 1px solid var(--rule);
+  }
+
   .key-runs-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -2280,6 +2304,39 @@ body.modal-open {
   .key-runs,
   .advanced-exploration .dashboard {
     padding: 16px;
+  }
+
+  .training-texture {
+    padding: 16px;
+  }
+
+  .training-texture-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .training-texture-heading p {
+    max-width: none;
+    text-align: left;
+  }
+
+  .training-texture-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .texture-stat,
+  .texture-stat:nth-child(3) {
+    border-right: 1px solid var(--rule);
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .texture-stat:nth-child(2n) {
+    border-right: 0;
+  }
+
+  .texture-stat:last-child {
+    border-bottom: 0;
   }
 
   .key-runs-grid {

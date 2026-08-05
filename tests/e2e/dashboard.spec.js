@@ -5,6 +5,8 @@ test("a runner can review demo history and open run details", async ({ page }) =
 
   await page.getByRole("button", { name: "Demo data" }).click();
   await expect(page.locator("#activityCount")).toContainText(/runs in range/);
+  await expect(page.getByRole("heading", { name: "Small patterns around your running" })).toBeVisible();
+  await expect(page.locator("#trainingTextureStats .texture-stat")).toHaveCount(5);
 
   const detailButtons = page.locator("#activityRows .row-detail-button");
   await expect(detailButtons).not.toHaveCount(0);
