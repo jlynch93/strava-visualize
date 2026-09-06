@@ -403,13 +403,13 @@ button:disabled {
   box-shadow: 0 0 0 3px var(--blue-soft);
 }
 
-.control:nth-child(2),
-.control:nth-child(3) {
+.toolbar-controls .control:nth-child(2),
+.toolbar-controls .control:nth-child(3) {
   transition: opacity 180ms var(--ease), visibility 180ms var(--ease), max-width 180ms var(--ease), margin 180ms var(--ease);
 }
 
-body:not(.is-custom-range) .control:nth-child(2),
-body:not(.is-custom-range) .control:nth-child(3) {
+body:not(.is-custom-range) .toolbar-controls .control:nth-child(2),
+body:not(.is-custom-range) .toolbar-controls .control:nth-child(3) {
   display: none;
 }
 

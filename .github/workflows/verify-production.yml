@@ -24,8 +24,9 @@ jobs:
         run: |
           base="${PRODUCTION_URL%/}"
           curl --fail --silent --show-error "$base/api/status" | grep -q 'configured'
-          curl --fail --silent --show-error -H 'Accept: text/html' "$base/?release-check=${GITHUB_SHA}" | grep -q 'Read the work'
+          curl --fail --silent --show-error -H 'Accept: text/html' "$base/?release-check=${GITHUB_SHA}" | grep -q 'id="overviewTitle"'
           headers="$(curl --fail --silent --show-error -D - -o /dev/null -H 'Accept: text/html' "$base/?release-check=${GITHUB_SHA}")"
           printf '%s' "$headers" | grep -qi '^cache-control:.*no-store'
-          curl --fail --silent --show-error "$base/styles.css?v=release-20260804" >/dev/null
-          curl --fail --silent --show-error "$base/script.js?v=release-20260804" >/dev/null
+          curl --fail --silent --show-error "$base/styles.css?v=review-20260905" >/dev/null
+          curl --fail --silent --show-error "$base/dashboard.css?v=review-20260905" >/dev/null
+          curl --fail --silent --show-error "$base/script.js?v=review-20260905" >/dev/null

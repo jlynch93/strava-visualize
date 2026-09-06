@@ -18,24 +18,52 @@ Run the local regression checks with:
 npm test
 ```
 
+Run the browser workflows with `npm run test:e2e` (install Chromium once with
+`npx playwright install chromium`). The suite covers imports, date calculations,
+search and pagination, chart keyboard navigation, CSV round trips, saved views,
+planning preferences, and mobile layouts. It runs against an isolated local
+server without Strava credentials.
+
+## Reviewing a training block
+
+Connect Strava, import a JSON/CSV activity export, or select **Demo data**. The
+overview combines the block comparison, mileage, pace, and run frequency with
+an interactive trend. Select a chart period to open its runs. Empty calendar
+periods remain visible; weekly metrics use the selected calendar window and
+stay independent of the chart's grouping.
+
+**Plan** brings together goals, availability, the weekly check-in, and a draft
+calendar. Open the goal or check-in disclosure to edit it. The draft reserves
+an available long-run day, respects the weekly run limit, and gives a race
+priority during race week. Its summary and copied text include the calendar.
+
+**Runs** searches the entire selected history, with sorting and 15-row pages.
+On mobile, each row emphasizes the run name, date, distance, and pace; open the
+run for the remaining metrics. **Export CSV** downloads the entire selected
+window, using meters for distance and elevation and seconds for duration.
+**Copy view link** preserves range, grouping, trend, search, and sort settings.
+The link contains no activity history; load the data separately when reopening.
+
+Imported activities live only in the current tab. Goals, check-ins, and plan
+statuses are saved in this browser. Demo history is clearly labeled and does
+not include location coordinates or make weather requests.
+
 ## GitHub workflows
 
 `Validate dashboard` runs on pushes to `main` and `codex/**` using a trusted
 self-hosted runner. It cancels older validation runs for the same branch.
 
-`Deploy production` is manual and only deploys from `main`. Configure a GitHub
-environment named `production`, protect it with the desired reviewers, and add
-`CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` as environment secrets. The
-self-hosted runner must have the Cloudflare `wrangler` CLI installed. Dispatch
-the workflow with the public production URL; it verifies the deployed status,
-dashboard HTML, and client script before reporting success.
+`Verify production` is manual and runs only from `main`. Dispatch it with the
+public production URL after deployment; it checks the status endpoint, dashboard
+HTML, cache headers, stylesheets, and client script. It does not deploy changes.
+`Playwright smoke test` runs the browser suite on pushes and pull requests.
 
 ## Definition of done
 
 The dashboard is ready to ship when the selected training block, race goal,
 weekly check-in, and recommended calendar can be reviewed in one place. Goals,
 check-ins, and plan states are intentionally stored only in the current
-browser; export/import and account sync remain future enhancements.
+browser; exporting or syncing that coaching context remains a future enhancement.
 
 The recommended calendar is a reviewable proposal. It uses the runner's saved
 availability, long-run preference, selected intent, recent workload, and race
@@ -43,7 +71,7 @@ countdown. A planned session can be marked completed or skipped; an activity on
 the same date is automatically recognized as completed. It is not medical
 guidance or an autonomous training prescription.
 
-Pull requests run `Validate dashboard` on a self-hosted runner. The workflow
+`Validate dashboard` runs on branch pushes using a self-hosted runner. The workflow
 runs the regression suite, JavaScript syntax checks for all deployment targets,
 and a Git whitespace check. Ensure the runner is labeled `self-hosted` and has
 Node 20 available.

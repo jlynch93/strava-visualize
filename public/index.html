@@ -5,7 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#eef2ec">
     <title>Strava Run Trends</title>
-    <link rel="stylesheet" href="/styles.css?v=release-20260804">
+    <link rel="stylesheet" href="/styles.css?v=review-20260905">
+    <link rel="stylesheet" href="/dashboard.css?v=review-20260905">
   </head>
   <body>
     <!--
@@ -15,7 +16,8 @@
       FIRST VIEWPORT: A compact tool header leads to the selected-block statement, its primary trend, and one continuous metric strip; the data connection action stays at the top right.
       FORM: Operate-mode dashboard, designed for repeat post-run review. FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review and verdict.
     -->
-    <main class="app">
+    <a class="skip-link" href="#overview">Skip to training overview</a>
+    <main class="app" id="app">
       <header class="app-header" aria-label="Application header">
         <a class="brand-lockup" href="#overview" aria-label="Run Trends overview">
           <span class="brand-mark" aria-hidden="true"></span>
@@ -24,6 +26,7 @@
         <nav class="app-nav" aria-label="Dashboard sections">
           <a href="#overview">Overview</a>
           <a href="#signals">Signals</a>
+          <a href="#planning">Plan</a>
           <a href="#runs">Runs</a>
         </nav>
         <div class="header-actions">
@@ -34,20 +37,22 @@
               <span>Import data</span>
               <input id="fileInput" type="file" accept=".json,.csv,text/csv,application/json">
             </label>
-            <button id="demoButton" class="ghost-action">Try demo</button>
+            <button id="demoButton" class="ghost-action">Demo data</button>
+            <button id="disconnectButton" class="ghost-action" hidden>Disconnect</button>
           </div>
         </div>
       </header>
 
       <section class="toolbar" aria-label="Time and metric filters">
         <div class="toolbar-intro">
-          <strong>Review window</strong>
-          <span>Every panel updates together.</span>
+          <strong id="windowDates">Review window</strong>
+          <span id="windowContext">Choose the history you want to understand.</span>
         </div>
         <div class="toolbar-controls">
           <div class="control">
             <label for="rangeSelect">Range</label>
             <select id="rangeSelect">
+              <option value="30">Last 30 days</option>
               <option value="90" selected>Last 90 days</option>
               <option value="180">Last 6 months</option>
               <option value="365">Last year</option>
@@ -64,33 +69,18 @@
             <label for="endDate">End</label>
             <input id="endDate" type="date">
           </div>
-          <div class="control">
-            <label for="bucketSelect">Group by</label>
-            <select id="bucketSelect">
-              <option value="week" selected>Week</option>
-              <option value="month">Month</option>
-            </select>
-          </div>
-          <div class="control metric-control">
-            <label for="metricSelect">Trend</label>
-            <select id="metricSelect">
-              <option value="distance" selected>Mileage</option>
-              <option value="runs">Run count</option>
-              <option value="avgRun">Average run</option>
-              <option value="longRun">Long run</option>
-              <option value="pace">Pace</option>
-              <option value="elevation">Elevation</option>
-              <option value="elevationDensity">Elevation density</option>
-              <option value="heartrate">Heart rate</option>
-              <option value="load">Training load</option>
-              <option value="loadPerMile">Load per mile</option>
-              <option value="efficiency">Aerobic efficiency</option>
-            </select>
-          </div>
+
+
         </div>
       </section>
 
       <section id="status" class="status" role="status"></section>
+
+      <section id="emptyWindow" class="empty-window" aria-labelledby="emptyWindowTitle" hidden>
+        <h2 id="emptyWindowTitle">No runs in this window</h2>
+        <p id="emptyWindowCopy">Your history is still loaded. Choose a wider range to find your runs.</p>
+        <button id="resetWindowButton" class="primary" type="button">Show all history</button>
+      </section>
 
       <section class="onboarding" aria-labelledby="onboardingTitle">
         <div class="onboarding-copy">
@@ -104,7 +94,7 @@
             </label>
             <button id="emptyDemoButton" class="link-action" type="button">Preview demo data</button>
           </div>
-          <p class="privacy-note">You control the data source. The local coach read uses only a compact training summary when you request it.</p>
+          <p class="privacy-note">Imports stay in this browser tab. Coach analysis shares a compact summary only when you request it.</p>
         </div>
         <div class="onboarding-field" aria-hidden="true">
           <span class="field-label">What becomes visible</span>
@@ -121,15 +111,14 @@
       <section id="overview" class="overview" aria-labelledby="overviewTitle">
         <div class="overview-head">
           <div>
-            <h1 id="overviewTitle">Read the work.<br>Choose the next one.</h1>
-            <p>Volume, effort, and consistency — connected in one clear view of your current training block.</p>
+            <h1 id="overviewTitle">Your training, in view.</h1>
+            <p>See what changed. Find the runs behind it.</p>
           </div>
-          <p class="overview-note">Start with the block story. Open the evidence when you want to inspect it.</p>
+          <span id="dataSource" class="source-label">Training history</span>
         </div>
 
         <section class="block-review" aria-labelledby="blockReviewTitle">
           <div class="block-review-lead">
-            <span class="section-kicker">Selected block</span>
             <h2 id="blockReviewTitle">Load training data to review your block</h2>
             <p id="blockReviewSummary">Your volume, pace, and training rhythm will be compared with the preceding window.</p>
           </div>
@@ -138,14 +127,43 @@
 
         <section class="chart-panel chart-panel-featured primary-chart" aria-labelledby="mainChartTitle">
           <div class="panel-heading">
-            <h2 id="mainChartTitle">Mileage trend</h2>
-            <span id="mainChartSubtitle"></span>
+            <div><h2 id="mainChartTitle">Mileage trend</h2><span id="mainChartSubtitle"></span></div>
+            <div id="chartControls" class="chart-controls">          <div class="control metric-control">
+            <label for="metricSelect">Trend</label>
+            <select id="metricSelect">
+              <option value="distance" selected>Mileage</option>
+              <option value="runs">Run count</option>
+              <option value="avgRun">Average run</option>
+              <option value="longRun">Long run</option>
+              <option value="pace">Pace</option>
+              <option value="elevation">Elevation</option>
+              <option value="elevationDensity">Elevation density</option>
+              <option value="heartrate">Heart rate</option>
+              <option value="load">Training load</option>
+              <option value="loadPerMile">Load per mile</option>
+              <option value="efficiency">Aerobic efficiency</option>
+            </select>
+          </div>          <div class="control">
+            <label for="bucketSelect">Group by</label>
+            <select id="bucketSelect">
+              <option value="week" selected>Week</option>
+              <option value="month">Month</option>
+            </select>
+          </div></div>
           </div>
           <div id="mainChart" class="chart"></div>
+          <p class="chart-caption">Select a period to explore its runs. Empty periods stay visible.</p>
         </section>
 
       </section>
 
+      <section class="key-runs data-panel" aria-labelledby="keyRunsTitle">
+        <div class="panel-heading">
+          <div><h2 id="keyRunsTitle">Key runs in this block</h2></div>
+          <span>Open a run for full context</span>
+        </div>
+        <div id="keyRuns" class="key-runs-grid"></div>
+      </section>
       <div class="analysis-row">
         <section id="signals" class="runner-intel data-panel" aria-labelledby="signalsTitle">
           <div class="panel-heading">
@@ -160,7 +178,7 @@
             <div>
               <span class="ai-status-dot" aria-hidden="true"></span>
               <h2 id="aiInsightsTitle">Ask for a coach’s read.</h2>
-              <p>Get a compact analysis of the selected block. Route coordinates and the full Strava response never leave the app.</p>
+              <p>Ask about this window using a compact summary of your training. Analysis excludes route coordinates and raw activity records.</p>
             </div>
             <div class="ai-controls">
               <label for="aiFocus">Focus</label>
@@ -175,7 +193,7 @@
               <input id="coachQuestion" type="text" maxlength="180" placeholder="e.g. Should I keep the quality session this week?">
               <button id="aiAnalyzeButton" class="ai-action" type="button" disabled>Analyze this block</button>
             </div>
-            <p class="ai-model-note">Ollama · qwen3:0.6b · on-demand</p>
+            <p class="ai-model-note">On-demand analysis · powered by Ollama</p>
           </div>
           <div id="aiInsightContent" class="ai-insight-content" aria-live="polite">
             <div class="ai-empty">
@@ -189,11 +207,11 @@
         </section>
       </div>
 
-      <section class="coaching-workspace data-panel" aria-labelledby="coachingWorkspaceTitle">
-        <div class="panel-heading"><div><span class="section-kicker">Your context</span><h2 id="coachingWorkspaceTitle">A clearer coaching picture</h2></div><span>Saved only in this browser</span></div>
+      <section id="planning" class="coaching-workspace data-panel" aria-labelledby="coachingWorkspaceTitle">
+        <div class="panel-heading"><h2 id="coachingWorkspaceTitle">Make room for your next week</h2><span>Goals and check-ins stay in this browser</span></div>
         <div class="coaching-grid">
-          <form id="goalForm" class="context-card">
-            <h3>Training goal</h3>
+          <details class="context-disclosure"><summary>Goal &amp; availability<span>Personalize your week</span></summary><form id="goalForm" class="context-card">
+
             <label for="goalMode">Block intent</label><select id="goalMode"><option value="auto">Auto — use my context</option><option value="build">Build</option><option value="maintain">Maintain</option><option value="recover">Recover</option></select><p id="intentRecommendation" class="context-muted"></p>
             <label for="goalMiles">Weekly mileage target</label><input id="goalMiles" type="number" min="0" step="1" placeholder="Optional">
             <label for="goalRaceName">Race name</label><input id="goalRaceName" type="text" maxlength="48" placeholder="e.g. City Marathon">
@@ -201,28 +219,28 @@
             <div class="goal-race-fields"><div><label for="goalRunDays">Max runs / week</label><select id="goalRunDays"><option value="">Use recent pattern</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option></select></div><div><label for="goalLongRunDay">Long-run day</label><select id="goalLongRunDay"><option value="Sat">Saturday</option><option value="Sun">Sunday</option><option value="Fri">Friday</option></select></div></div>
             <label for="goalAvailability">Available days</label><input id="goalAvailability" type="text" maxlength="40" placeholder="e.g. Mon, Tue, Thu, Sat">
             <button type="submit" class="context-save">Save goal</button>
-          </form>
-          <form id="checkinForm" class="context-card">
-            <h3>Weekly check-in</h3>
+          </form></details>
+          <details class="context-disclosure"><summary>Weekly check-in<span>How you feel matters</span></summary><form id="checkinForm" class="context-card">
+
             <label for="checkinFeel">How did this block feel?</label><select id="checkinFeel"><option value="">Not logged</option><option value="1">1 · very hard</option><option value="2">2 · hard</option><option value="3">3 · manageable</option><option value="4">4 · good</option><option value="5">5 · strong</option></select>
             <label for="checkinLimiter">Main limiting factor</label><select id="checkinLimiter"><option value="none">None noted</option><option value="sleep">Sleep</option><option value="heat">Heat / weather</option><option value="soreness">Soreness</option><option value="stress">Life stress</option><option value="terrain">Terrain</option></select>
             <label for="checkinIntent">Most runs were</label><select id="checkinIntent"><option value="mixed">Mixed</option><option value="easy">Easy</option><option value="workout">Workouts</option><option value="long">Long runs</option><option value="race">Race effort</option></select>
             <label for="checkinOutcome">Last planned session</label><select id="checkinOutcome"><option value="">Not logged</option><option value="completed">Completed as planned</option><option value="shortened">Shortened</option><option value="missed">Missed</option></select>
             <button type="submit" class="context-save">Save check-in</button>
-          </form>
+          </form></details>
           <section class="context-card readiness-card" aria-labelledby="readinessTitle"><h3 id="readinessTitle">Training readiness</h3><div id="readinessContent"></div></section>
         </div>
-        <section class="plan-draft" aria-labelledby="planDraftTitle"><div><span class="section-kicker">Adaptive draft</span><h3 id="planDraftTitle">Next-week plan</h3><p id="planDraftCopy">Load a block to create a transparent draft.</p><p id="planAdaptation" class="plan-adaptation"></p><div id="recommendedCalendar" class="recommended-calendar" aria-label="Recommended training calendar"></div></div><button id="copyPlanButton" type="button" class="context-save" disabled>Copy draft</button></section>
+        <section class="plan-draft" aria-labelledby="planDraftTitle"><div><h3 id="planDraftTitle">Next-week plan</h3><p id="planDraftCopy">Load a block to create a transparent draft.</p><p id="planAdaptation" class="plan-adaptation"></p><div id="recommendedCalendar" class="recommended-calendar" aria-label="Recommended training calendar"></div></div><button id="copyPlanButton" type="button" class="context-save" disabled>Copy draft</button></section>
       </section>
 
       <section class="training-texture" aria-labelledby="trainingTextureTitle">
         <div class="training-texture-heading">
-          <div><span class="section-kicker">Training texture</span><h2 id="trainingTextureTitle">Small patterns around your running</h2></div>
+          <div><h2 id="trainingTextureTitle">Small patterns around your running</h2></div>
           <p>Useful context, kept secondary to your training story.</p>
         </div>
         <div id="trainingTextureStats" class="training-texture-grid" aria-live="polite"></div>
       </section>
-      <section class="training-texture milestones" aria-labelledby="milestoneTitle"><div class="training-texture-heading"><div><span class="section-kicker">Progress markers</span><h2 id="milestoneTitle">What this block is building</h2></div><p>Milestones are evidence, not a score.</p></div><div id="milestoneStats" class="training-texture-grid" aria-live="polite"></div></section>
+      <section class="training-texture milestones" aria-labelledby="milestoneTitle"><div class="training-texture-heading"><div><h2 id="milestoneTitle">What this block is building</h2></div><p>Milestones are evidence, not a score.</p></div><div id="milestoneStats" class="training-texture-grid" aria-live="polite"></div></section>
 
       <section class="dashboard" aria-label="Training visuals">
         <section class="chart-panel" aria-labelledby="structureTitle">
@@ -241,13 +259,7 @@
         </section>
       </section>
 
-      <section class="key-runs data-panel" aria-labelledby="keyRunsTitle">
-        <div class="panel-heading">
-          <div><span class="section-kicker">Start here</span><h2 id="keyRunsTitle">Key runs in this block</h2></div>
-          <span>Open a run for full context</span>
-        </div>
-        <div id="keyRuns" class="key-runs-grid"></div>
-      </section>
+
 
       <details class="advanced-exploration">
         <summary><span>Explore supporting data</span><small>Distributions, workload, and volume–pace patterns</small></summary>
@@ -288,6 +300,13 @@
           <h2 id="runsTitle">Run ledger</h2>
           <span id="activityCount">No activities loaded</span>
         </div>
+        <div class="ledger-controls">
+          <div class="control run-search"><label for="runSearch">Find a run</label><input id="runSearch" type="search" placeholder="Search by run name" autocomplete="off"></div>
+          <div class="control"><label for="runSort">Sort by</label><select id="runSort"><option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="distance">Longest distance</option><option value="pace">Fastest pace</option></select></div>
+          <button id="exportButton" class="ghost-action" type="button">Export CSV</button>
+          <button id="copyViewButton" class="ghost-action" type="button">Copy view link</button>
+        </div>
+        <p id="ledgerEmpty" class="ledger-empty" hidden>No runs match this search. <button id="clearSearchButton" type="button" class="link-action">Clear search</button></p>
         <div class="table-wrap">
           <table>
             <thead>
@@ -305,6 +324,7 @@
             <tbody id="activityRows"></tbody>
           </table>
         </div>
+        <div class="ledger-pagination"><span id="pageSummary" role="status"></span><div><button id="previousPage" class="ghost-action" type="button">Previous</button><button id="nextPage" class="ghost-action" type="button">Next</button></div></div>
       </section>
 
       <footer class="app-footer">
@@ -319,6 +339,6 @@
         <div id="workoutModalContent"></div>
       </section>
     </div>
-    <script src="/script.js?v=release-20260804"></script>
+    <script src="/script.js?v=review-20260905"></script>
   </body>
 </html>

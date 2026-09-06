@@ -2,6 +2,7 @@ const http = require("http");
 const https = require("https");
 const fs = require("fs");
 const path = require("path");
+const { randomUUID } = require("crypto");
 const { URL, URLSearchParams } = require("url");
 
 const PORT = Number(process.env.PORT || 4173);
@@ -98,13 +99,36 @@ function loadLocalEnv() {
 }
 
 function sendJson(res, status, payload, headers = {}) {
-  res.writeHead(status, { "Content-Type": "application/json; charset=utf-8", ...headers });
+  res.writeHead(status, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "private, no-store", ...headers });
   res.end(JSON.stringify(payload));
 }
 
-function sendRedirect(res, location) {
-  res.writeHead(302, { Location: location });
+function sendRedirect(res, location, headers = {}) {
+  res.writeHead(302, { Location: location, "Cache-Control": "no-store", ...headers });
   res.end();
+}
+
+function oauthStateCookie(value, redirectUri, maxAge = 600) {
+  const secure = new URL(redirectUri).protocol === "https:" ? "; Secure" : "";
+  return `sv_oauth_state=${encodeURIComponent(value)}; Path=/; Max-Age=${maxAge}; HttpOnly; SameSite=Lax${secure}`;
+}
+
+function readOauthState(req) {
+  const entry = String(req.headers.cookie || "").split(";").find((part) => part.trim().startsWith("sv_oauth_state="));
+  try {
+    return entry ? decodeURIComponent(entry.trim().slice("sv_oauth_state=".length)) : null;
+  } catch {
+    return null;
+  }
+}
+
+function appError(message, status) {
+  return Object.assign(new Error(message), { status });
+}
+
+function pageLimit(value, fallback, maximum) {
+  const numeric = Number(value || fallback);
+  return Number.isFinite(numeric) ? Math.max(1, Math.min(Math.floor(numeric), maximum)) : fallback;
 }
 
 function readToken() {
@@ -134,20 +158,28 @@ function requestJson(url, options = {}, body = null) {
   return new Promise((resolve, reject) => {
     const request = https.request(url, options, (response) => {
       let raw = "";
+      response.on("error", reject);
       response.on("data", (chunk) => {
         raw += chunk;
       });
       response.on("end", () => {
         const contentType = response.headers["content-type"] || "";
-        const parsed = contentType.includes("application/json") && raw ? JSON.parse(raw) : raw;
+        let parsed;
+        try {
+          parsed = contentType.includes("application/json") && raw ? JSON.parse(raw) : raw;
+        } catch {
+          reject(appError("The upstream service returned invalid JSON. Try again.", 502));
+          return;
+        }
         if (response.statusCode >= 400) {
-          reject(new Error(typeof parsed === "string" ? parsed : JSON.stringify(parsed)));
+          reject(appError(typeof parsed === "string" ? parsed : JSON.stringify(parsed), response.statusCode));
           return;
         }
         resolve(parsed);
       });
     });
     request.on("error", reject);
+    request.setTimeout(30_000, () => request.destroy(appError("The upstream service timed out. Try again.", 504)));
     if (body) request.write(body);
     request.end();
   });
@@ -441,9 +473,9 @@ async function exchangeToken(params) {
 
 async function getAccessToken() {
   const config = requireConfig();
-  if (config.error) throw new Error(config.error);
+  if (config.error) throw appError(config.error, 503);
   const token = readToken();
-  if (!token) throw new Error("Connect Strava first.");
+  if (!token) throw appError("Connect Strava first.", 401);
   const now = Math.floor(Date.now() / 1000);
   if (token.access_token && token.expires_at && token.expires_at - 60 > now) {
     return token.access_token;
@@ -460,10 +492,18 @@ async function getAccessToken() {
 
 function serveStatic(req, res) {
   const url = new URL(req.url, `http://${req.headers.host}`);
-  const requestedPath = url.pathname === "/" ? "/index.html" : decodeURIComponent(url.pathname);
+  let requestedPath;
+  try {
+    requestedPath = url.pathname === "/" ? "/index.html" : decodeURIComponent(url.pathname);
+    if (requestedPath.includes("\0")) throw new Error("Invalid path");
+  } catch {
+    sendJson(res, 400, { error: "The requested path is not valid." });
+    return;
+  }
   const safePath = path.normalize(requestedPath).replace(/^(\.\.[/\\])+/, "");
   const filePath = path.join(PUBLIC_DIR, safePath);
-  if (!filePath.startsWith(PUBLIC_DIR)) {
+  const relativePath = path.relative(PUBLIC_DIR, filePath);
+  if (relativePath === ".." || relativePath.startsWith(`..${path.sep}`) || path.isAbsolute(relativePath)) {
     res.writeHead(403);
     res.end("Forbidden");
     return;
@@ -498,15 +538,17 @@ async function handleApi(req, res) {
       sendJson(res, 400, { error: config.error });
       return;
     }
+    const oauthState = randomUUID();
     const authUrl = new URL("https://www.strava.com/oauth/authorize");
     authUrl.search = new URLSearchParams({
       client_id: config.clientId,
       redirect_uri: config.redirectUri,
       response_type: "code",
       approval_prompt: "auto",
-      scope: "read,activity:read_all"
+      scope: "read,activity:read_all",
+      state: oauthState
     }).toString();
-    sendRedirect(res, authUrl.toString());
+    sendRedirect(res, authUrl.toString(), { "Set-Cookie": oauthStateCookie(oauthState, config.redirectUri) });
     return;
   }
 
@@ -521,6 +563,11 @@ async function handleApi(req, res) {
       sendJson(res, 400, { error: "Missing Strava authorization code." });
       return;
     }
+    const returnedState = url.searchParams.get("state");
+    if (!returnedState || returnedState !== readOauthState(req)) {
+      sendJson(res, 400, { error: "The Strava authorization session expired. Start the connection again." });
+      return;
+    }
     const token = await exchangeToken({
       client_id: config.clientId,
       client_secret: config.clientSecret,
@@ -528,7 +575,14 @@ async function handleApi(req, res) {
       grant_type: "authorization_code"
     });
     writeToken(token);
-    sendRedirect(res, "/?connected=1");
+    sendRedirect(res, "/?connected=1", { "Set-Cookie": oauthStateCookie("", config.redirectUri, 0) });
+    return;
+  }
+
+  if (url.pathname === "/auth/logout") {
+    fs.rmSync(TOKEN_FILE, { force: true });
+    const redirectUri = process.env.STRAVA_REDIRECT_URI || `http://localhost:${PORT}/auth/callback`;
+    sendRedirect(res, "/?disconnected=1", { "Set-Cookie": oauthStateCookie("", redirectUri, 0) });
     return;
   }
 
@@ -541,9 +595,10 @@ async function handleApi(req, res) {
     const accessToken = await getAccessToken();
     const after = url.searchParams.get("after");
     const before = url.searchParams.get("before");
-    const perPage = Math.min(Number(url.searchParams.get("per_page") || 100), 200);
-    const maxPages = Math.min(Number(url.searchParams.get("pages") || 6), 12);
+    const perPage = pageLimit(url.searchParams.get("per_page"), 100, 200);
+    const maxPages = pageLimit(url.searchParams.get("pages"), 6, 12);
     const activities = [];
+    let truncated = true;
     for (let page = 1; page <= maxPages; page += 1) {
       const params = new URLSearchParams({ page: String(page), per_page: String(perPage) });
       if (after) params.set("after", after);
@@ -551,10 +606,27 @@ async function handleApi(req, res) {
       const batch = await requestJson(`${STRAVA_API}/athlete/activities?${params}`, {
         headers: { Authorization: `Bearer ${accessToken}` }
       });
+      if (!Array.isArray(batch)) throw appError("Strava returned an invalid activity list.", 502);
       activities.push(...batch);
-      if (!Array.isArray(batch) || batch.length < perPage) break;
+      if (batch.length < perPage) {
+        truncated = false;
+        break;
+      }
     }
-    sendJson(res, 200, { activities });
+    sendJson(res, 200, { activities, truncated });
+    return;
+  }
+
+  const activityRoute = url.pathname.match(/^\/api\/activities\/(\d+)$/);
+  if (activityRoute && req.method === "GET") {
+    const accessToken = await getAccessToken();
+    const activity = await requestJson(`${STRAVA_API}/activities/${activityRoute[1]}`, {
+      headers: { Authorization: `Bearer ${accessToken}` }
+    });
+    if (!activity || typeof activity !== "object" || Array.isArray(activity)) {
+      throw appError("Strava returned an invalid activity detail.", 502);
+    }
+    sendJson(res, 200, { activity });
     return;
   }
 
@@ -593,7 +665,7 @@ async function handleApi(req, res) {
 const server = http.createServer((req, res) => {
   if (req.url.startsWith("/api/") || req.url.startsWith("/auth/")) {
     handleApi(req, res).catch((error) => {
-      sendJson(res, 500, { error: error.message });
+      sendJson(res, Number(error.status) || 500, { error: error.message });
     });
   } else {
     serveStatic(req, res);
