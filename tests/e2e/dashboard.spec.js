@@ -45,19 +45,34 @@ test("interactive charts and the training calendar respond to runner input", asy
   await expect(dialog).toBeHidden();
 });
 
+test("a missed session adapts the next-week plan without asking the runner to make it up", async ({ page }) => {
+  await loadDemoBlock(page);
+  await page.locator("#checkinOutcome").selectOption("missed");
+  await page.getByRole("button", { name: "Save check-in" }).click();
+
+  await expect(page.locator("#planAdaptation")).toContainText("missed session");
+  await expect(page.locator("#recommendedCalendar")).not.toContainText("Quality option");
+});
+
 test("an unavailable coach read explains the failure without breaking the dashboard", async ({ page }) => {
-  await page.route("**/api/insights", (route) => route.fulfill({
+  let coachPayload;
+  await page.route("**/api/insights", (route) => {
+    coachPayload = route.request().postDataJSON();
+    return route.fulfill({
     status: 503,
     contentType: "application/json",
     body: JSON.stringify({ error: "Coach service is temporarily unavailable." })
-  }));
+    });
+  });
   await loadDemoBlock(page);
 
+  await page.locator("#coachQuestion").fill("Should I keep the quality session this week?");
   await page.getByRole("button", { name: "Analyze this block" }).click();
   const coachRead = page.locator("#aiInsightContent");
   await expect(coachRead).toContainText("The model did not return an analysis");
   await expect(coachRead).toContainText("Coach service is temporarily unavailable.");
   await expect(page.locator("#activityRows .row-detail-button")).not.toHaveCount(0);
+  expect(coachPayload.question).toBe("Should I keep the quality session this week?");
 });
 
 test.describe("mobile runner review", () => {

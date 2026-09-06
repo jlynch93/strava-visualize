@@ -301,6 +301,7 @@ function buildInsightPrompt(input) {
   );
   return [
     `Focus: ${input.focus || "balanced"}. Window: ${input.range?.start || "unknown"} to ${input.range?.end || "unknown"}.`,
+    input.question ? `Runner question: ${String(input.question).slice(0, 180)} Answer this directly using the supplied evidence; say when the data cannot answer it.` : "",
     `Runner context (self-reported, optional): goal ${context.goal?.mode || "not set"}, weekly target ${context.goal?.miles || "not set"}, race ${context.goal?.raceName || "not set"} ${context.goal?.raceDistance || ""} on ${context.goal?.raceDate || "not set"}; feel ${context.checkin?.feel || "not logged"}/5, limiter ${context.checkin?.limiter || "not logged"}, run intent ${context.checkin?.intent || "not logged"}.`,
     input.focus === "race-plan" ? "For this focus, make the observations a reviewable next-week outline: frequency, a long-run boundary, and easy/rest space. Do not prescribe paces or claim medical safety." : "",
     `Totals: ${summary.runCount} runs, ${summary.totalMiles} mi, average pace ${pace(summary.averagePaceSeconds)}, average ${summary.averageWeeklyMiles} mi/week and ${summary.averageRunsPerWeek} runs/week.`,

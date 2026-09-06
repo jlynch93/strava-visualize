@@ -1073,6 +1073,8 @@ svg {
 .plan-draft { display: flex; align-items: center; justify-content: space-between; gap: 22px; margin-top: 12px; padding: 18px; border-left: 3px solid var(--accent); background: var(--ink-strong); color: var(--surface); }
 .plan-draft h3 { margin: 0; font-size: 1rem; }
 .plan-draft p { max-width: 850px; margin: 7px 0 0; color: oklch(80% .015 198); font-size: .78rem; line-height: 1.5; }
+.plan-draft .plan-adaptation { max-width: 760px; color: oklch(92% .03 106); }
+.milestones { margin-top: 12px; }
 .plan-draft .section-kicker { color: var(--accent); }
 .plan-draft .context-save { flex: 0 0 auto; margin: 0; background: var(--accent); color: var(--accent-ink); }
 .recommended-calendar { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; margin-top: 16px; }
