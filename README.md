@@ -82,7 +82,8 @@ previous/next navigation, comparison-set selection, and an Open in Strava link.
 ## GitHub workflows
 
 `Validate dashboard` runs on pushes to `main` and `codex/**` using a trusted
-self-hosted runner. It cancels older validation runs for the same branch.
+GitHub-hosted `ubuntu-latest` runner, matching Playwright. It cancels older
+validation runs for the same branch.
 
 `Verify production` is manual and runs only from `main`. Dispatch it with the
 public production URL after deployment; it checks the status endpoint, dashboard
@@ -102,10 +103,10 @@ countdown. A planned session can be marked completed or skipped and explicitly
 matched to an activity. It is not medical
 guidance or an autonomous training prescription.
 
-`Validate dashboard` runs on branch pushes using a self-hosted runner. The workflow
+`Validate dashboard` runs on branch pushes using a GitHub-hosted Ubuntu runner. The workflow
 runs the regression suite, JavaScript syntax checks for all deployment targets,
-and a Git whitespace check. Ensure the runner is labeled `self-hosted` and has
-Node 22 available.
+and a Git whitespace check. Node 22 is installed by the workflow; no local runner
+is required.
 
 ## Cloudflare Workers
 

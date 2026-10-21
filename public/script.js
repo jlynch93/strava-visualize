@@ -1002,11 +1002,13 @@ function renderDelta(element, current, previous, unit, higherIsBetter, neutral =
 }
 
 function renderMainChart() {
+  const focusedKey = els.mainChart.contains(document.activeElement) ? document.activeElement.dataset.chartKey : null;
   const metric = METRICS[els.metricSelect.value];
   els.mainChartTitle.textContent = `${metric.label} trend`;
   const periodLabel = `${state.buckets.length} ${els.bucketSelect.value === "week" ? "weeks" : "months"}`;
   els.mainChartSubtitle.textContent = els.metricSelect.value === "pace" ? `${periodLabel} · faster is higher` : periodLabel;
   renderBarLineChart(els.mainChart, state.buckets, metric);
+  if (focusedKey) findChartAction(els.mainChart.id, focusedKey)?.focus({ preventScroll: true });
 }
 
 function svg(tag, attrs = {}, children = []) {
@@ -1248,6 +1250,7 @@ function runsForBucket(bucket) {
 function attachChartAction(element, title, runs) {
   if (!runs.length) return;
   element.classList.add("chart-action");
+  element.dataset.chartKey = JSON.stringify([element.tagName, title, String(runs[0].id)]);
   element.setAttribute("role", "button");
   element.setAttribute("aria-label", `${title}. Open ${runs.length} run${runs.length === 1 ? "" : "s"}.`);
   const open = () => showRunCollectionModal(title, runs, element);
@@ -1259,6 +1262,18 @@ function attachChartAction(element, title, runs) {
   });
 }
 
+function findChartAction(containerId, key) {
+  return [...(document.getElementById(containerId)?.querySelectorAll("[data-chart-key]") || [])].find((element) => element.dataset.chartKey === key);
+}
+
+function rememberModalTrigger(trigger) {
+  // Run details can replace a collection inside the same dialog. Keep its outer opener.
+  if (trigger instanceof Element && els.workoutModal.contains(trigger)) return;
+  state.modalTrigger = trigger instanceof Element ? trigger : null;
+  const chart = state.modalTrigger?.closest(".chart");
+  state.modalReturn = chart && trigger.dataset.chartKey ? { containerId: chart.id, key: trigger.dataset.chartKey } : null;
+}
+
 function showRunCollectionModal(title, runs, trigger = document.activeElement) {
   if (!runs.length) return;
   const totalMiles = runs.reduce((sum, run) => sum + miles(run.distance), 0);
@@ -1267,7 +1282,7 @@ function showRunCollectionModal(title, runs, trigger = document.activeElement) {
   state.runDigestAbort?.abort();
   state.runDigestAbort = null;
   state.activeRunId = "";
-  state.modalTrigger = trigger instanceof Element ? trigger : null;
+  rememberModalTrigger(trigger);
   els.workoutModalContent.innerHTML = `
     <header class="workout-header collection-header">
       <p class="workout-kicker">Chart selection</p>
@@ -2291,6 +2306,7 @@ function nearbyRunText(run, gap) {
 function showWorkoutModal(runId, trigger = document.activeElement) {
   const run = state.filteredRuns.find((candidate) => String(candidate.id) === String(runId));
   if (!run) return;
+  rememberModalTrigger(trigger);
   state.modalSession += 1;
   const session = state.modalSession;
   state.runDigestAbort?.abort();
@@ -2389,7 +2405,6 @@ function showWorkoutModal(runId, trigger = document.activeElement) {
       </div>
     </div>
   `;
-  state.modalTrigger = trigger instanceof Element ? trigger : null;
   els.workoutModal.hidden = false;
   hydrateRunDetail(run, session);
   finishModalRender(run);
@@ -2411,8 +2426,10 @@ function closeWorkoutModal() {
   els.workoutModal.hidden = true;
   document.body.classList.remove("modal-open");
   els.workoutModalContent.replaceChildren();
-  if (state.modalTrigger?.isConnected) state.modalTrigger.focus();
+  const returnTarget = state.modalTrigger?.isConnected ? state.modalTrigger : state.modalReturn ? findChartAction(state.modalReturn.containerId, state.modalReturn.key) : null;
+  returnTarget?.focus({ preventScroll: true });
   state.modalTrigger = null;
+  state.modalReturn = null;
 }
 
 function renderTable() {

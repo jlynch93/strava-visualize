@@ -107,8 +107,18 @@ test("the main trend supports keyboard drilldown and returns focus to the select
   await expect(dialog).toBeVisible();
   await expect(dialog).toContainText("Chart selection");
   await expect(dialog.locator(".chart-run-option")).toHaveCount(5);
+  // A resize redraw can replace the SVG mark while its dialog is open.
+  const originalMark = await chartAction.elementHandle();
+  await page.setViewportSize({ width: 1100, height: 850 });
+  await expect.poll(() => originalMark.evaluate((element) => element.isConnected)).toBe(false);
   await page.keyboard.press("Escape");
   await expect(dialog).toBeHidden();
+  await expect(chartAction).toBeFocused();
+
+  // A later redraw must retain focus too, so Space still opens the period.
+  const returnedMark = await chartAction.elementHandle();
+  await page.setViewportSize({ width: 1200, height: 850 });
+  await expect.poll(() => returnedMark.evaluate((element) => element.isConnected)).toBe(false);
   await expect(chartAction).toBeFocused();
 
   await page.keyboard.press("Space");
@@ -119,6 +129,7 @@ test("the main trend supports keyboard drilldown and returns focus to the select
   await expect(dialog.getByRole("heading", { level: 2 })).toHaveText(runName);
   await page.keyboard.press("Escape");
   await expect(dialog).toBeHidden();
+  await expect(chartAction).toBeFocused();
 });
 
 test("the run ledger reaches every page and searches the full selected history", async ({ page }) => {
