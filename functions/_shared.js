@@ -19,7 +19,8 @@ function appError(message, status) {
 
 function getConfig(env, request) {
   const url = new URL(request.url);
-  const redirectUri = env.STRAVA_REDIRECT_URI || `${url.origin}/auth/callback`;
+  const baseUrl = (env.APP_BASE_URL || url.origin).replace(/\/+$/, "");
+  const redirectUri = env.STRAVA_REDIRECT_URI || `${baseUrl}/auth/callback`;
   if (!env.STRAVA_CLIENT_ID || !env.STRAVA_CLIENT_SECRET) {
     return {
       error: "Add STRAVA_CLIENT_ID and STRAVA_CLIENT_SECRET to Cloudflare Pages environment variables.",
@@ -82,7 +83,7 @@ async function exchangeToken(params) {
     signal: AbortSignal.timeout(20_000)
   });
   const data = await response.json();
-  if (!response.ok) throw new Error(data.message || JSON.stringify(data));
+  if (!response.ok) throw appError(params.grant_type === "refresh_token" && [400, 401].includes(response.status) ? "Your Strava session expired. Connect Strava again." : data.message || "Strava authorization failed.", params.grant_type === "refresh_token" && [400, 401].includes(response.status) ? 401 : response.status);
   return data;
 }
 

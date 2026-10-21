@@ -3,7 +3,8 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { test } = require("node:test");
 
-const workerSource = fs.readFileSync(path.resolve(__dirname, "../src/worker.js"), "utf8");
+const { pathToFileURL } = require("node:url");
+const workerSource = fs.readFileSync(path.resolve(__dirname, "../src/worker.js"), "utf8").replace(/"\.\.\/shared\/([^"]+)"/g, (_, name) => JSON.stringify(pathToFileURL(path.resolve(__dirname, "../shared", name)).href));
 const workerModuleUrl = `data:text/javascript;base64,${Buffer.from(workerSource).toString("base64")}`;
 const workerPromise = import(workerModuleUrl).then((module) => module.default);
 
@@ -40,8 +41,23 @@ test("Worker reports an actionable configuration state", async () => {
     configured: false,
     connected: false,
     redirectUri: "https://example.test/auth/callback",
+    analysisService: "https://ollama.jeer.rest",
+    analysisModel: "qwen3.5:0.8b",
     error: "Add STRAVA_CLIENT_ID and STRAVA_CLIENT_SECRET to this Cloudflare Worker."
   });
+});
+
+test("Worker uses the configured app base URL for Strava and respects callback overrides", async () => {
+  const worker = await workerPromise;
+  for (const trailingSlash of ["", "/"]) {
+    const env = { ...configuredEnv, APP_BASE_URL: `https://new.example${trailingSlash}` };
+    const login = await worker.fetch(new Request("https://old.example/auth/login"), env);
+    assert.equal(new URL(login.headers.get("location")).searchParams.get("redirect_uri"), "https://new.example/auth/callback");
+    const overridden = await worker.fetch(new Request("https://old.example/auth/login"), {
+      ...env, STRAVA_REDIRECT_URI: "https://override.example/auth/callback"
+    });
+    assert.equal(new URL(overridden.headers.get("location")).searchParams.get("redirect_uri"), "https://override.example/auth/callback");
+  }
 });
 
 test("Worker prevents stale HTML while preserving static asset caching", async () => {
@@ -174,4 +190,26 @@ test("Worker retains refreshed session cookies if Strava rejects the subsequent 
   }), configuredEnv);
   assert.equal(response.status, 429);
   assert.match(response.headers.get("set-cookie"), /sv_refresh=rotated-refresh/);
+});
+
+test("Worker reports an expired refresh token as a reconnectable 401", async (t) => {
+  const worker = await workerPromise;
+  t.mock.method(globalThis, "fetch", async () => Response.json({ message: "Bad Request" }, { status: 400 }));
+  const response = await worker.fetch(new Request("https://example.test/api/activities", { headers: { cookie: "sv_refresh=revoked" } }), configuredEnv);
+  assert.equal(response.status, 401); assert.match((await response.json()).error, /session expired/);
+});
+
+test("Worker applies streamed input limits and shared analysis normalization", async (t) => {
+  const worker = await workerPromise;
+  let called = 0;
+  t.mock.method(globalThis, "fetch", async () => { called++; return Response.json({ message: { content: JSON.stringify({ summary: "A measured block.", observations: Array(3).fill({ detail: "Distance recorded.", tone: "neutral" }) }) } }); });
+  const request = (body, headers = {}) => new Request("https://example.test/api/insights", { method: "POST", body, headers });
+  assert.equal((await worker.fetch(request("x".repeat(64001)), configuredEnv)).status, 413);
+  assert.equal((await worker.fetch(request("{"), configuredEnv)).status, 400);
+  const input = JSON.stringify({ recentRuns: [{ distanceMiles: 5 }], summary: { runCount: 1 } });
+  assert.equal((await worker.fetch(request(input, { origin: "https://foreign.test" }), configuredEnv)).status, 403);
+  assert.equal(called, 0);
+  const valid = await worker.fetch(request(input), configuredEnv);
+  assert.equal(valid.status, 200); const result = await valid.json();
+  assert.equal(result.model, "qwen3.5:0.8b"); assert.match(result.insight.nextStep, /Plan view/);
 });

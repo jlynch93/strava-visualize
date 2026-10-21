@@ -120,7 +120,7 @@ function isolatedBackend() {
       if (name === "http") return { createServer: () => ({ listen() {} }) };
       if (name === "fs") return mockFs;
       if (name === "https") return mockHttps;
-      return require(name);
+      return require(name.startsWith("./shared/") ? path.resolve(repo, name) : name);
     }
   };
   vm.runInNewContext(`${fs.readFileSync(path.join(repo, "server.js"), "utf8")}\nglobalThis.testRoutes = { handleApi, requestJson };`, context);

@@ -115,6 +115,15 @@ Mineral paper, deep blue-black ink, fine rules, and electric lime give this runn
 
 This document describes the rendered implementation. `public/styles.css` supplies the base system; `public/dashboard.css` loads afterward and refines the dashboard cascade. `public/index.html` uses native controls and disclosures, while `public/script.js` renders data and SVG charts with vanilla JavaScript. The refinement adds no runtime dependency. Component examples and schema extensions live in `.impeccable/design.json`.
 
+The October workflow update adds `public/experience.js` for view navigation,
+preferences, import review, and saved weekly plans, with pure calculations in
+`public/training-core.js`. Overview, Runs, and Plan are separate views. The
+overview retains four primary signals; supporting metrics and charts live in
+one exploration disclosure. Preferences and backups have their own disclosure.
+The date toolbar remains visible while reviewing history; Plan uses current
+training independently of that historical window. Native dialogs handle import
+preview and first-use analysis disclosure.
+
 **Key Characteristics:**
 
 - Flat paper surfaces, fine dividers, and compact sans-serif typography.
@@ -162,7 +171,7 @@ Content panels, key-run cards, plan days, and source chips have square corners. 
 - **Fields and navigation:** Keep visible labels with native search inputs, date inputs, and selects. Section navigation uses text links with a paper-deep selected/hover surface; the active section is reflected through `aria-current`.
 - **Overview and charts:** Preserve the evidence strip and trend as a connected unit. Teal bars darken on interaction; empty periods remain visible. Metric and grouping selects belong beside the chart heading, and selectable periods open the relevant runs. Chart interactions support keyboard activation and descriptive labels.
 - **Key runs and source chips:** Flat, outlined cards use a teal category label, strong run name, and quieter supporting metrics. Source chips are small square buttons that open the cited run context.
-- **Disclosures and plan:** Goal and check-in inputs sit inside native disclosures, as do supporting analytics. Recommended days sit in a dark calendar region and cycle between planned, completed, and skipped while retaining keyboard focus. Context-save hover uses ink with light text; the plan copy action uses the darker lime hover token. Keep summary labels meaningful while the content is closed.
+- **Disclosures and plan:** Goal and check-in inputs sit inside native disclosures, as do supporting analytics. Draft days sit in a dark calendar region and show proposed distances. Saving preserves a week independently of later filters and goals. Saved sessions use explicitly labeled date, distance, status and activity-matching controls, reflowing to stacked rows on mobile. Rest days never complete automatically. Context-save hover uses ink with light text; the plan copy action uses the darker lime hover token.
 - **Run ledger:** Search by run name, four sort choices, 15 runs per page, explicit previous/next buttons, result counts, and a recoverable empty-search message. CSV export and a shareable view link remain adjacent to the controls. Long run names wrap. Mobile rows retain distance and pace labels without requiring horizontal table scrolling.
 - **Workout details and empty states:** Details open in a labeled modal with close and keyboard behavior. No-history onboarding exposes connection, import, and demo entry points; an empty selected date window offers a recovery action. Status messages stay near the current review controls.
 

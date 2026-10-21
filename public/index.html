@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#eef2ec">
     <title>Strava Run Trends</title>
-    <link rel="stylesheet" href="/styles.css?v=review-20260905">
-    <link rel="stylesheet" href="/dashboard.css?v=review-20260905">
+    <link rel="stylesheet" href="/styles.css">
+    <link rel="stylesheet" href="/dashboard.css">
   </head>
   <body>
     <!--
@@ -25,7 +25,6 @@
         </a>
         <nav class="app-nav" aria-label="Dashboard sections">
           <a href="#overview">Overview</a>
-          <a href="#signals">Signals</a>
           <a href="#planning">Plan</a>
           <a href="#runs">Runs</a>
         </nav>
@@ -139,9 +138,9 @@
               <option value="elevation">Elevation</option>
               <option value="elevationDensity">Elevation density</option>
               <option value="heartrate">Heart rate</option>
-              <option value="load">Training load</option>
-              <option value="loadPerMile">Load per mile</option>
-              <option value="efficiency">Aerobic efficiency</option>
+              <option value="load">Running time</option>
+              <option value="loadPerMile">Minutes per mile</option>
+              <option value="efficiency">Heart-rate coverage</option>
             </select>
           </div>          <div class="control">
             <label for="bucketSelect">Group by</label>
@@ -213,7 +212,7 @@
           <details class="context-disclosure"><summary>Goal &amp; availability<span>Personalize your week</span></summary><form id="goalForm" class="context-card">
 
             <label for="goalMode">Block intent</label><select id="goalMode"><option value="auto">Auto — use my context</option><option value="build">Build</option><option value="maintain">Maintain</option><option value="recover">Recover</option></select><p id="intentRecommendation" class="context-muted"></p>
-            <label for="goalMiles">Weekly mileage target</label><input id="goalMiles" type="number" min="0" step="1" placeholder="Optional">
+            <label for="goalMiles">Weekly distance target</label><input id="goalMiles" type="number" min="0" step="0.1" placeholder="Optional">
             <label for="goalRaceName">Race name</label><input id="goalRaceName" type="text" maxlength="48" placeholder="e.g. City Marathon">
             <div class="goal-race-fields"><div><label for="goalRaceDistance">Race distance</label><select id="goalRaceDistance"><option value="">Not set</option><option value="5K">5K</option><option value="10K">10K</option><option value="Half marathon">Half marathon</option><option value="Marathon">Marathon</option><option value="Other">Other</option></select></div><div><label for="goalRaceDate">Race date</label><input id="goalRaceDate" type="date"></div></div>
             <div class="goal-race-fields"><div><label for="goalRunDays">Max runs / week</label><select id="goalRunDays"><option value="">Use recent pattern</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option></select></div><div><label for="goalLongRunDay">Long-run day</label><select id="goalLongRunDay"><option value="Sat">Saturday</option><option value="Sun">Sunday</option><option value="Fri">Friday</option></select></div></div>
@@ -287,8 +286,8 @@
         </section>
         <section class="chart-panel" aria-labelledby="paceZoneTitle">
           <div class="panel-heading">
-            <h2 id="paceZoneTitle">Pace zones</h2>
-            <span>Distribution of run paces</span>
+            <h2 id="paceZoneTitle">Average pace distribution</h2>
+            <span>Run averages, not training zones</span>
           </div>
           <div id="paceZoneChart" class="chart"></div>
         </section>
@@ -332,13 +331,15 @@
         <p>Every run belongs to the larger block.</p>
       </footer>
     </main>
-    <div id="chartTooltip" class="chart-tooltip" role="tooltip"></div>
+    <div id="chartTooltip" class="chart-tooltip" role="tooltip" aria-label="Chart values"></div>
     <div id="workoutModal" class="modal-backdrop" hidden>
       <section class="workout-modal" role="dialog" aria-modal="true" aria-labelledby="workoutModalTitle" aria-describedby="workoutModalMeta">
         <button id="workoutModalClose" class="modal-close" type="button" aria-label="Close workout details">&times;</button>
         <div id="workoutModalContent"></div>
       </section>
     </div>
-    <script src="/script.js?v=review-20260905"></script>
+    <script src="/training-core.js"></script>
+    <script src="/experience.js"></script>
+    <script src="/script.js"></script>
   </body>
 </html>

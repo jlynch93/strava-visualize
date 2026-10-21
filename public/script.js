@@ -96,34 +96,36 @@ const CONTEXT_STORAGE_KEY = "run-trends-coaching-context-v1";
 let coachingContext = loadCoachingContext();
 
 function loadCoachingContext() {
-  const defaults = { goal: {}, checkin: {}, plan: {} };
   try {
-    const saved = JSON.parse(localStorage.getItem(CONTEXT_STORAGE_KEY));
-    if (!saved || typeof saved !== "object" || Array.isArray(saved)) return defaults;
-    const record = (value) => value && typeof value === "object" && !Array.isArray(value)
-      ? Object.fromEntries(Object.entries(value)
-        .filter(([, field]) => typeof field === "string" || typeof field === "number")
-        .map(([key, field]) => [key, String(field)]))
-      : {};
-    return { goal: record(saved.goal), checkin: record(saved.checkin), plan: record(saved.plan) };
-  } catch {
-    return defaults;
-  }
+    return sanitizeCoachingContext(JSON.parse(localStorage.getItem(CONTEXT_STORAGE_KEY)));
+  } catch { return { goal: {}, checkin: {}, plan: {} }; }
+}
+
+function sanitizeCoachingContext(saved) {
+  const defaults = { goal: {}, checkin: {}, plan: {} };
+  if (!saved || typeof saved !== "object" || Array.isArray(saved)) return defaults;
+  const record = (value) => value && typeof value === "object" && !Array.isArray(value)
+    ? Object.fromEntries(Object.entries(value)
+      .filter(([, field]) => typeof field === "string" || typeof field === "number")
+      .map(([key, field]) => [key, String(field)]))
+    : {};
+  return { goal: record(saved.goal), checkin: record(saved.checkin), plan: record(saved.plan) };
 }
 
 function saveCoachingContext() {
-  try { localStorage.setItem(CONTEXT_STORAGE_KEY, JSON.stringify(coachingContext)); } catch { /* Local context is optional. */ }
+  return persist(CONTEXT_STORAGE_KEY, coachingContext);
 }
 
 function syncCoachingInputs() {
   els.goalMode.value = coachingContext.goal.mode || "auto";
-  els.goalMiles.value = coachingContext.goal.miles || "";
+  els.goalMiles.value = coachingContext.goal.miles ? (preferences.units === "metric" ? (Number(coachingContext.goal.miles) * 1.609344).toFixed(1) : coachingContext.goal.miles) : "";
   els.goalRaceName.value = coachingContext.goal.raceName || coachingContext.goal.event || "";
   els.goalRaceDistance.value = coachingContext.goal.raceDistance || "";
   els.goalRaceDate.value = coachingContext.goal.raceDate || "";
   els.goalRunDays.value = coachingContext.goal.runDays || "";
   els.goalLongRunDay.value = coachingContext.goal.longRunDay || "Sat";
   els.goalAvailability.value = coachingContext.goal.availability || "";
+  document.querySelectorAll(".day-toggles input").forEach((input) => input.checked = els.goalAvailability.value.toLowerCase().includes(input.value.toLowerCase()));
   els.checkinFeel.value = coachingContext.checkin.feel || "";
   els.checkinLimiter.value = coachingContext.checkin.limiter || "none";
   els.checkinIntent.value = coachingContext.checkin.intent || "mixed";
@@ -131,17 +133,17 @@ function syncCoachingInputs() {
 }
 
 const METRICS = {
-  distance: { label: "Mileage", unit: "mi", value: (b) => b.distanceMiles, format: (v) => `${v.toFixed(1)} mi` },
+  distance: { label: "Mileage", unit: "mi", value: (b) => b.distanceMiles, format: (v) => `${displayDistance(v, 1)}` },
   runs: { label: "Run count", unit: "runs", value: (b) => b.runs, format: (v) => `${Math.round(v)} runs` },
-  avgRun: { label: "Average run", unit: "mi", value: (b) => b.runs ? b.distanceMiles / b.runs : 0, format: (v) => `${v.toFixed(1)} mi` },
-  longRun: { label: "Long run", unit: "mi", value: (b) => b.longRunMiles, format: (v) => `${v.toFixed(1)} mi` },
+  avgRun: { label: "Average run", unit: "mi", value: (b) => b.runs ? b.distanceMiles / b.runs : 0, format: (v) => `${displayDistance(v, 1)}` },
+  longRun: { label: "Long run", unit: "mi", value: (b) => b.longRunMiles, format: (v) => `${displayDistance(v, 1)}` },
   pace: { label: "Pace", unit: "/mi", value: (b) => b.averagePace, format: formatPace },
   elevation: { label: "Elevation", unit: "ft", value: (b) => b.elevationFeet, format: (v) => `${Math.round(v).toLocaleString()} ft` },
   elevationDensity: { label: "Elevation density", unit: "ft/mi", value: (b) => b.distanceMiles ? b.elevationFeet / b.distanceMiles : 0, format: (v) => `${Math.round(v)} ft/mi` },
   heartrate: { label: "Heart rate", unit: "bpm", value: (b) => b.averageHr, format: (v) => v ? `${Math.round(v)} bpm` : "-" },
-  load: { label: "Training load", unit: "score", value: (b) => b.trainingLoad, format: (v) => `${Math.round(v).toLocaleString()}` },
-  loadPerMile: { label: "Load per mile", unit: "score/mi", value: (b) => b.distanceMiles ? b.trainingLoad / b.distanceMiles : 0, format: (v) => `${v.toFixed(1)} /mi` },
-  efficiency: { label: "Aerobic efficiency", unit: "mi/bpm", value: (b) => b.averageHr ? b.distanceMiles / b.averageHr : 0, format: (v) => v ? `${v.toFixed(3)} mi/bpm` : "-" }
+  load: { label: "Running time", unit: "min", value: (b) => b.trainingLoad, format: (v) => `${Math.round(v).toLocaleString()} min` },
+  loadPerMile: { label: "Time per distance", unit: "min/mi", value: (b) => b.distanceMiles ? b.trainingLoad / b.distanceMiles : 0, format: (v) => `${v.toFixed(1)} min/mi` },
+  efficiency: { label: "HR coverage", unit: "%", value: (b) => b.movingSeconds ? b.hrSeconds / b.movingSeconds * 100 : 0, format: (v) => `${Math.round(v)}%` }
 };
 
 function setStatus(message, isError = false) {
@@ -165,10 +167,10 @@ function paceSeconds(activity) {
 
 function formatPace(seconds) {
   if (!Number.isFinite(seconds) || seconds <= 0) return "-";
-  const rounded = Math.round(seconds);
+  const rounded = Math.round(seconds / (preferences.units === "metric" ? 1.609344 : 1));
   const minutes = Math.floor(rounded / 60);
   const remainder = (rounded % 60).toString().padStart(2, "0");
-  return `${minutes}:${remainder}/mi`;
+  return `${minutes}:${remainder}/${preferences.units === "metric" ? "km" : "mi"}`;
 }
 
 function formatDuration(seconds) {
@@ -250,6 +252,7 @@ function normalizeActivity(activity) {
     moving_time: duration(activity.moving_time, activity["Moving Time"], activity.elapsed_time, activity["Elapsed Time__2"], activity["Elapsed Time"]),
     elapsed_time: duration(activity.elapsed_time, activity["Elapsed Time__2"], activity["Elapsed Time"], activity.moving_time, activity["Moving Time"]),
     total_elevation_gain: number(activity.total_elevation_gain, activity["Elevation Gain"]),
+    has_elevation: activity.has_elevation !== undefined ? activity.has_elevation === true || activity.has_elevation === "true" : first(activity.total_elevation_gain, activity["Elevation Gain"]) !== undefined,
     average_heartrate: number(activity.average_heartrate, activity["Average Heart Rate"]),
     max_heartrate: number(activity.max_heartrate, activity["Max Heart Rate__2"], activity["Max Heart Rate"]),
     average_cadence: number(activity.average_cadence, activity["Average Cadence"]),
@@ -262,6 +265,7 @@ function normalizeActivity(activity) {
     workout_type: number(activity.workout_type, activity["Workout Type"]),
     device_name: String(first(activity.device_name, activity["Device Name"]) || ""),
     description: String(first(activity.description, activity.Description, activity["Activity Description"]) || ""),
+    trainer: activity.trainer === true || activity.trainer === "true",
     start_latlng: startLatLng
   };
 }
@@ -379,7 +383,7 @@ function buildBuckets(runs) {
       bucket.hrWeighted += run.average_heartrate * runSeconds;
       bucket.hrSeconds += runSeconds;
     }
-    bucket.trainingLoad += run.suffer_score || (runMinutes(run) * effortMultiplier(run));
+    bucket.trainingLoad += runMinutes(run);
     buckets.set(key, bucket);
   });
   return [...buckets.values()]
@@ -397,11 +401,7 @@ function runMinutes(run) {
 }
 
 function effortMultiplier(run) {
-  const hr = Number(run.average_heartrate) || 0;
-  if (!hr) return 1;
-  if (hr >= 170) return 2;
-  if (hr >= 155) return 1.6;
-  if (hr >= 140) return 1.25;
+  // Duration is the consistent workload proxy; HR is context, not a universal zone.
   return 1;
 }
 
@@ -410,7 +410,7 @@ function summarize(runs, buckets, range = getRangeDates()) {
   const totalSeconds = runs.reduce((sum, run) => sum + (Number(run.moving_time) || 0), 0);
   const longRun = runs.reduce((max, run) => Math.max(max, miles(run.distance)), 0);
   const totalElevation = runs.reduce((sum, run) => sum + feet(run.total_elevation_gain), 0);
-  const totalLoad = runs.reduce((sum, run) => sum + (run.suffer_score || runMinutes(run) * effortMultiplier(run)), 0);
+  const totalLoad = runs.reduce((sum, run) => sum + (runMinutes(run)), 0);
   const hrRuns = runs.filter((run) => run.average_heartrate);
   const weightedHr = hrRuns.reduce((sum, run) => sum + run.average_heartrate * (Number(run.moving_time) || 0), 0);
   const hrSeconds = hrRuns.reduce((sum, run) => sum + (Number(run.moving_time) || 0), 0);
@@ -436,9 +436,8 @@ function summarize(runs, buckets, range = getRangeDates()) {
   const longRunShare = totalMiles ? longRun / totalMiles : 0;
   const averageLoadPerMile = totalMiles ? totalLoad / totalMiles : 0;
   const elevationPerMile = totalMiles ? totalElevation / totalMiles : 0;
-  const aerobicEfficiency = hrSeconds && totalMiles ? totalMiles / (weightedHr / hrSeconds) : 0;
   const streaks = getRunStreaks(runs);
-  const rampRate = getRampRate(buckets);
+  const rampRate = TrainingCore.rampRate(runs, range.start, range.end, parseActivityDate);
   return {
     totalMiles,
     averagePace: totalMiles ? totalSeconds / totalMiles : 0,
@@ -457,7 +456,6 @@ function summarize(runs, buckets, range = getRangeDates()) {
     totalLoad,
     averageLoadPerMile,
     elevationPerMile,
-    aerobicEfficiency,
     longestStreak: streaks.longestStreak,
     longestRestGap: streaks.longestRestGap,
     rampRate
@@ -493,16 +491,6 @@ function getRunStreaks(runs) {
   return { longestStreak: Math.max(longestStreak, currentStreak), longestRestGap };
 }
 
-function getRampRate(buckets) {
-  if (buckets.length < 4) return 0;
-  const midpoint = Math.floor(buckets.length / 2);
-  const early = buckets.slice(0, midpoint);
-  const late = buckets.slice(midpoint);
-  const earlyAvg = early.reduce((sum, bucket) => sum + bucket.distanceMiles, 0) / early.length;
-  const lateAvg = late.reduce((sum, bucket) => sum + bucket.distanceMiles, 0) / late.length;
-  return earlyAvg ? ((lateAvg - earlyAvg) / earlyAvg) * 100 : 0;
-}
-
 function render() {
   applyRangeInputs();
   const normalized = state.rawActivities.map(normalizeActivity);
@@ -518,14 +506,16 @@ function render() {
   state.insightFingerprint = JSON.stringify({
     range: [els.startDate.value, els.endDate.value],
     grouping: els.bucketSelect.value,
-    runs: state.filteredRuns.map((run) => [run.id, run.start_date_local || run.start_date])
+    runs: state.filteredRuns.map((run) => [run.id, run.start_date_local || run.start_date, run.distance, run.moving_time, run.total_elevation_gain, run.average_heartrate, run.workout_type])
   });
 
   const summary = summarize(state.filteredRuns, state.buckets);
   const previous = summarizePreviousPeriod(normalized, start, end);
+  previous.coverageKnown = hasHistoryCoverage(previous.rangeStart, previous.rangeEnd);
+  if (!previous.coverageKnown) { previous.totalMiles = 0; previous.averagePace = 0; previous.averageWeeklyMiles = 0; previous.averageRunMiles = 0; }
   renderHeroStatus(summary);
   renderBlockReview(summary, previous);
-  renderCoachingWorkspace(summary);
+  renderCoachingWorkspace(currentTrainingSummary());
   renderTrainingTexture();
   renderMilestones(summary);
   renderKeyRuns();
@@ -541,6 +531,7 @@ function render() {
   renderTable();
   updateWindowContext();
   saveViewState();
+  finishExperienceRender();
 }
 
 function fillEmptyPeriods(buckets, start, end) {
@@ -562,7 +553,7 @@ function updateWindowContext() {
   const { start, end } = getRangeDates();
   const dateFormat = { month: "short", day: "numeric", year: "numeric" };
   document.querySelector("#windowDates").textContent = `${start ? start.toLocaleDateString(undefined, dateFormat) : "Earliest run"} – ${end ? end.toLocaleDateString(undefined, dateFormat) : "Latest run"}`;
-  document.querySelector("#windowContext").textContent = "All analysis follows this review window.";
+  document.querySelector("#windowContext").textContent = "Overview and Runs follow this review window.";
   document.querySelector("#dataSource").textContent = state.dataSource === "demo" ? "Demo · sample running history" : state.dataSource === "import" ? "Imported activity history" : "Strava activity history";
   const noMatches = state.rawActivities.length > 0 && !state.filteredRuns.length;
   document.querySelector("#emptyWindow").hidden = !noMatches;
@@ -575,7 +566,7 @@ function updateWindowContext() {
 
 function saveViewState() {
   const url = new URL(window.location.href);
-  for (const [key, value] of Object.entries({ range: els.rangeSelect.value, start: els.rangeSelect.value === "custom" ? els.startDate.value : "", end: els.rangeSelect.value === "custom" ? els.endDate.value : "", group: els.bucketSelect.value, metric: els.metricSelect.value, search: els.runSearch.value, sort: els.runSort.value })) {
+  for (const [key, value] of Object.entries({ range: els.rangeSelect.value, start: els.rangeSelect.value === "custom" ? els.startDate.value : "", end: els.rangeSelect.value === "custom" ? els.endDate.value : "", group: els.bucketSelect.value, metric: els.metricSelect.value, search: els.runSearch.value, sort: els.runSort.value, type: document.querySelector("#runTypeFilter")?.value || "all" })) {
     if (value) url.searchParams.set(key, value);
     else url.searchParams.delete(key);
   }
@@ -584,7 +575,7 @@ function saveViewState() {
 
 function restoreViewState() {
   const params = new URLSearchParams(window.location.search);
-  for (const [key, element] of [["range", els.rangeSelect], ["group", els.bucketSelect], ["metric", els.metricSelect], ["sort", els.runSort]]) {
+  for (const [key, element] of [["range", els.rangeSelect], ["group", els.bucketSelect], ["metric", els.metricSelect], ["sort", els.runSort], ["type", document.querySelector("#runTypeFilter")]]) {
     const value = params.get(key);
     if ([...element.options].some((option) => option.value === value)) element.value = value;
   }
@@ -662,10 +653,10 @@ function renderTrainingTexture() {
     textureStat("Start temperature", temperature.value, temperature.detail, temperatures.length ? "weather-ready" : ""),
     textureStat("Typical start", start.value, start.detail),
     textureStat("Favorite day", day.value, day.detail),
-    textureStat("Long-run share", `${longRunShare}%`, "Miles from your longest fifth"),
-    textureStat("Climb per mile", totalMiles ? `${Math.round(elevation / totalMiles)} ft` : "—", "Across this selected window")
+    textureStat("Longest-fifth share", `${longRunShare}%`, "Mileage from the longest 20% of runs"),
+    textureStat("Elevation density", totalMiles ? `${Math.round(elevation / totalMiles)} ft/mi` : "—", "Across this selected window")
   ].join("");
-  if (!weatherRuns.length || state.textureWeatherFingerprint === state.insightFingerprint) return;
+  if (!preferences.weather || !weatherRuns.length || state.textureWeatherFingerprint === state.insightFingerprint) return;
   state.textureWeatherFingerprint = state.insightFingerprint;
   Promise.all(weatherRuns.map((run) => requestRunWeather(run).catch(() => null))).then(() => {
     if (state.textureWeatherFingerprint === state.insightFingerprint) renderTrainingTexture();
@@ -681,9 +672,9 @@ function renderMilestones(summary) {
   const threshold = summary.averageWeeklyMiles ? Math.round(summary.averageWeeklyMiles) : 0;
   els.milestoneStats.innerHTML = [
     textureStat("Consistency", `${Math.round(summary.consistency * 100)}%`, "Weeks with a run in this window"),
-    textureStat("Longest run", `${summary.longRun.toFixed(1)} mi`, "Your durable effort so far"),
+    textureStat("Longest run", `${displayDistance(summary.longRun, 1)}`, "Your durable effort so far"),
     textureStat("Active days", `${summary.activeDays}`, `${summary.runCount} runs logged`),
-    textureStat("Baseline", `${summary.averageWeeklyMiles.toFixed(1)} mi/wk`, threshold ? `A repeatable ${threshold}-mile rhythm` : "A starting point"),
+    textureStat("Baseline", `${displayDistance(summary.averageWeeklyMiles, 1)}/wk`, threshold ? `A repeatable ${threshold}-mile rhythm` : "A starting point"),
     textureStat("Recovery space", `${summary.longestRestGap} days`, "Longest gap in this block")
   ].join("");
 }
@@ -714,7 +705,7 @@ function buildInsightPayload() {
   const summary = summarize(state.filteredRuns, state.buckets);
   const recentRuns = state.filteredRuns.slice(-12).reverse().map((run) => ({
     date: localDateValue(parseActivityDate(run)),
-    name: String(run.name || "Run").slice(0, 80),
+    name: "Run",
     distanceMiles: Number(miles(run.distance).toFixed(2)),
     paceSecondsPerMile: Math.round(paceSeconds(run)),
     elevationFeet: Math.round(feet(run.total_elevation_gain)),
@@ -733,7 +724,7 @@ function buildInsightPayload() {
   return {
     focus: els.aiFocus.value,
     question: els.coachQuestion.value.trim(),
-    coachingContext,
+    coachingContext: { goal: coachingContext.goal, checkin: activeCheckin() },
     range: {
       start: els.startDate.value || null,
       end: els.endDate.value || null,
@@ -751,7 +742,7 @@ function buildInsightPayload() {
       longRunSharePercent: Math.round(summary.longRunShare * 100),
       peakWeekMiles: Number(summary.peakWeek.toFixed(1)),
       consistencyPercent: Math.round(summary.consistency * 100),
-      rampRatePercent: Math.round(summary.rampRate),
+      rampRatePercent: summary.rampRate === null ? null : Math.round(summary.rampRate),
       averageHr: summary.averageHr ? Math.round(summary.averageHr) : null,
       elevationFeetPerMile: Math.round(summary.elevationPerMile),
       trainingLoad: Math.round(summary.totalLoad),
@@ -808,6 +799,11 @@ function renderAiInsight(insight) {
   const summary = document.createElement("p");
   summary.textContent = insight.summary;
   header.append(label, headline, summary);
+  const coverage = document.createElement("p"); coverage.className = "ai-coverage";
+  const range = getRangeDates();
+  const prior = summarizePreviousPeriod(state.rawActivities, range.start, range.end);
+  coverage.textContent = `${els.startDate.value} to ${els.endDate.value} · ${state.filteredRuns.length} runs · latest ${Math.min(12, state.filteredRuns.length)} run summaries and ${Math.min(8, state.buckets.length)} periods supplied · ${state.filteredRuns.filter((run) => run.average_heartrate > 0).length} runs with HR · ${hasHistoryCoverage(prior.rangeStart, prior.rangeEnd) ? "preceding window covered" : "preceding history incomplete"}. Service: ${state.analysisService}; model: ${state.analysisModel}.`;
+  header.append(coverage);
 
   const observations = document.createElement("div");
   observations.className = "ai-observations";
@@ -838,12 +834,16 @@ function renderAiInsight(insight) {
   caution.textContent = insight.caution || "Treat this as a training pattern review, not medical advice.";
   const sources = document.createElement("div");
   sources.className = "ai-sources";
-  sources.innerHTML = `<span>Evidence considered</span>${state.filteredRuns.slice(-3).reverse().map((run) => `<button type="button" data-action="open-run" data-run-id="${escapeHtml(String(run.id))}">${escapeHtml(run.name)} · ${miles(run.distance).toFixed(1)} mi</button>`).join("")}`;
+  sources.innerHTML = `<span>Evidence considered</span>${state.filteredRuns.slice(-3).reverse().map((run) => `<button type="button" data-action="open-run" data-run-id="${escapeHtml(String(run.id))}">${escapeHtml(run.name)} · ${displayDistance(miles(run.distance), 1)}</button>`).join("")}`;
   els.aiInsightContent.replaceChildren(header, observations, nextStep, sources, caution);
 }
 
 async function analyzeWithOllama() {
   if (!state.filteredRuns.length) return;
+  if (!await ensureAnalysisConsent()) return;
+  state.analysisAbort?.abort();
+  state.analysisAbort = new AbortController();
+  const stopLoading = startAnalysisTimer(state.analysisAbort);
   const requestedFingerprint = state.insightFingerprint;
   els.aiAnalyzeButton.disabled = true;
   els.aiAnalyzeButton.textContent = "Analyzing…";
@@ -852,7 +852,8 @@ async function analyzeWithOllama() {
     const response = await fetch("/api/insights", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify(buildInsightPayload())
+      body: JSON.stringify(buildInsightPayload()),
+      signal: state.analysisAbort.signal
     });
     const data = await readApiJson(response);
     if (!response.ok) throw new Error(data.error || "Ollama could not analyze this training window.");
@@ -864,8 +865,9 @@ async function analyzeWithOllama() {
     renderAiInsight(data.insight);
   } catch (error) {
     state.renderedInsightFingerprint = "";
-    renderAiError(error.message || "Check that the Ollama URL is reachable and try again.");
+    renderAiError(error.name === "AbortError" ? "Analysis canceled. Your training summary remains available." : error.message || "The analysis service is unavailable. Try again.");
   } finally {
+    stopLoading();
     els.aiAnalyzeButton.disabled = !state.filteredRuns.length;
     els.aiAnalyzeButton.textContent = "Analyze this block";
   }
@@ -882,13 +884,13 @@ function renderIntel(summary, previous, start, end) {
   const cards = [
     {
       label: "Weekly volume",
-      value: `${summary.averageWeeklyMiles.toFixed(1)} mi/wk`,
-      detail: deltaText(summary.averageWeeklyMiles, previous.averageWeeklyMiles, "mi/wk", true)
+      value: `${displayDistance(summary.averageWeeklyMiles, 1)}/wk`,
+      detail: previous.coverageKnown ? previous.runCount ? deltaText(summary.averageWeeklyMiles, previous.averageWeeklyMiles, "mi/wk", true) : "No runs recorded in preceding window" : "Preceding history not covered"
     },
     {
       label: "Peak week",
-      value: `${summary.peakWeek.toFixed(1)} mi`,
-      detail: "Highest grouped volume in range"
+      value: `${displayDistance(summary.peakWeek, 1)}`,
+      detail: "Highest calendar-week distance in range"
     },
     {
       label: "Run frequency",
@@ -897,25 +899,25 @@ function renderIntel(summary, previous, start, end) {
     },
     {
       label: "Average run",
-      value: `${summary.averageRunMiles.toFixed(1)} mi`,
+      value: `${displayDistance(summary.averageRunMiles, 1)}`,
       detail: deltaText(summary.averageRunMiles, previous.averageRunMiles, "mi", true)
     },
     {
       label: "Ramp rate",
-      value: `${summary.rampRate >= 0 ? "+" : ""}${summary.rampRate.toFixed(0)}%`,
-      detail: "Late range vs early range volume",
+      value: summary.rampRate === null ? "—" : `${summary.rampRate >= 0 ? "+" : ""}${summary.rampRate.toFixed(0)}%`,
+      detail: "Last 2 complete weeks vs prior 2; needs 4 weeks",
       tone: rampClass
     },
     {
-      label: "Long-run share",
+      label: "Longest-run share",
       value: `${Math.round(summary.longRunShare * 100)}%`,
       detail: "Best when long run is not doing all the work",
       tone: longShareClass
     },
     {
-      label: "Training load",
+      label: "Running time",
       value: `${Math.round(summary.totalLoad).toLocaleString()}`,
-      detail: `${summary.averageLoadPerMile.toFixed(1)} load / mi`
+      detail: "Minutes of running; same measure for every run"
     },
     {
       label: "Elevation density",
@@ -923,9 +925,9 @@ function renderIntel(summary, previous, start, end) {
       detail: `${Math.round(summary.totalElevation).toLocaleString()} ft total`
     },
     {
-      label: "Aerobic efficiency",
-      value: summary.aerobicEfficiency ? `${summary.aerobicEfficiency.toFixed(3)} mi/bpm` : "-",
-      detail: summary.averageHr ? "Mileage normalized by average HR" : "Needs heart-rate data"
+      label: "Heart-rate coverage",
+      value: `${Math.round(state.filteredRuns.filter((run) => run.average_heartrate > 0).length / Math.max(summary.runCount, 1) * 100)}%`,
+      detail: "Share of runs with heart-rate data"
     },
     {
       label: "Recovery gaps",
@@ -934,7 +936,9 @@ function renderIntel(summary, previous, start, end) {
       tone: restClass
     }
   ];
-  els.intelGrid.replaceChildren(...cards.map(renderIntelCard));
+  els.intelGrid.replaceChildren(...cards.filter((card) => ["Weekly volume", "Run frequency", "Ramp rate", "Heart-rate coverage"].includes(card.label)).map(renderIntelCard));
+  const supporting = document.querySelector("#supportingSignals");
+  if (supporting) supporting.replaceChildren(...cards.filter((card) => !["Weekly volume", "Run frequency", "Ramp rate", "Heart-rate coverage"].includes(card.label)).map(renderIntelCard));
 }
 
 function renderIntelCard(card) {
@@ -974,7 +978,7 @@ function summarizePreviousPeriod(normalized, start, end) {
       const date = parseActivityDate(activity);
       return !Number.isNaN(date.valueOf()) && date >= previousStart && date <= previousEnd;
     });
-  return summarize(previousRuns, buildBuckets(previousRuns), { start: previousStart, end: previousEnd });
+  return { ...summarize(previousRuns, buildBuckets(previousRuns), { start: previousStart, end: previousEnd }), rangeStart: previousStart, rangeEnd: previousEnd };
 }
 
 function renderDelta(element, current, previous, unit, higherIsBetter, neutral = false) {
@@ -1069,8 +1073,12 @@ function renderBlockReview(summary, previous) {
   else if (paceDelta !== null && paceDelta <= -8) title = "Pace improved across a steady block";
   els.blockReviewTitle.textContent = title;
   els.blockReviewSummary.textContent = `This window contains ${summary.runCount} runs over ${summary.activeDays} active days: ${volumePhrase}${paceDelta === null ? "." : ` and ${paceChangeText(summary.averagePace, previous.averagePace)}.`}`;
+  if (!previous.coverageKnown) {
+    els.blockReviewTitle.textContent = "Your selected training block";
+    els.blockReviewSummary.textContent = `${summary.runCount} runs over ${summary.activeDays} active days. Insufficient comparison history: load the preceding window to compare changes.`;
+  }
   const evidence = [
-    { label: "Volume", value: `${summary.totalMiles.toFixed(1)} mi`, detail: volumeChange === null ? "First comparable window" : `${volumeChange >= 0 ? "+" : ""}${Math.round(volumeChange)}% vs prior window` },
+    { label: "Volume", value: `${displayDistance(summary.totalMiles, 1)}`, detail: volumeChange === null ? previous.coverageKnown ? "No distance recorded in prior window" : "Insufficient comparison history" : `${volumeChange >= 0 ? "+" : ""}${Math.round(volumeChange)}% vs prior window` },
     { label: "Pace", value: formatPace(summary.averagePace), detail: paceChangeText(summary.averagePace, previous.averagePace) },
     { label: "Runs / week", value: summary.averageRunsPerWeek.toFixed(1), detail: `${summary.activeDays} active days in this window` }
   ];
@@ -1091,7 +1099,7 @@ function renderKeyRuns() {
   const candidates = [
     { label: "Most recent", run: runs[runs.length - 1], reason: "Current context for the block" },
     { label: "Longest", run: [...runs].sort((a, b) => miles(b.distance) - miles(a.distance))[0], reason: "Longest distance in this window" },
-    { label: "Highest effort", run: [...runs].sort((a, b) => activityLoad(b) - activityLoad(a))[0], reason: "Highest estimated effort" },
+    { label: "Most time running", run: [...runs].sort((a, b) => activityLoad(b) - activityLoad(a))[0], reason: "Longest moving duration in this window" },
     { label: "Fastest comparable", run: [...runs].filter((run) => miles(run.distance) >= 4).sort((a, b) => paceSeconds(a) - paceSeconds(b))[0], reason: "Fastest run over four miles" }
   ].filter((item) => item.run);
   const unique = candidates.filter((item, index, list) => list.findIndex((candidate) => String(candidate.run.id) === String(item.run.id)) === index);
@@ -1100,13 +1108,14 @@ function renderKeyRuns() {
     button.type = "button";
     button.className = "key-run-card";
     button.dataset.activityId = item.run.id;
-    button.innerHTML = `<span>${escapeHtml(item.label)}</span><strong>${escapeHtml(item.run.name)}</strong><em>${escapeHtml(parseActivityDate(item.run).toLocaleDateString(undefined, { month: "short", day: "numeric" }))} · ${miles(item.run.distance).toFixed(2)} mi · ${escapeHtml(formatPace(paceSeconds(item.run)))}</em><small>${escapeHtml(item.reason)}</small>`;
+    button.innerHTML = `<span>${escapeHtml(item.label)}</span><strong>${escapeHtml(item.run.name)}</strong><em>${escapeHtml(parseActivityDate(item.run).toLocaleDateString(undefined, { month: "short", day: "numeric" }))} · ${displayDistance(miles(item.run.distance), 2)} · ${escapeHtml(formatPace(paceSeconds(item.run)))}</em><small>${escapeHtml(item.reason)}</small>`;
     return button;
   }));
 }
 
 function renderCoachingWorkspace(summary) {
   if (!summary.runCount) {
+    state.draftSessions = [];
     els.readinessContent.innerHTML = '<p class="context-muted">Add a training block to see the inputs behind this view.</p>';
     els.planDraftCopy.textContent = "Load a block to create a transparent draft.";
     els.recommendedCalendar.replaceChildren();
@@ -1114,27 +1123,26 @@ function renderCoachingWorkspace(summary) {
     els.planAdaptation.textContent = "";
     return;
   }
-  const newest = state.filteredRuns[state.filteredRuns.length - 1];
-  const sevenStart = new Date(parseActivityDate(newest)); sevenStart.setDate(sevenStart.getDate() - 6); sevenStart.setHours(0, 0, 0, 0);
-  const lastSeven = state.filteredRuns.filter((run) => parseActivityDate(run) >= sevenStart);
+  const sevenStart = new Date(); sevenStart.setDate(sevenStart.getDate() - 6); sevenStart.setHours(0, 0, 0, 0);
+  const lastSeven = state.rawActivities.map(normalizeActivity).filter(isRun).filter((run) => parseActivityDate(run) >= sevenStart && parseActivityDate(run) <= new Date());
   const sevenMiles = lastSeven.reduce((sum, run) => sum + miles(run.distance), 0);
   const baseline = summary.averageWeeklyMiles;
-  const hardRuns = lastSeven.filter((run) => Number(run.average_heartrate) >= 155 || activityLoad(run) / Math.max(miles(run.distance), 1) >= summary.averageLoadPerMile * 1.15).length;
-  const confidence = state.filteredRuns.length >= 12 ? "High" : state.filteredRuns.length >= 6 ? "Moderate" : "Early";
+  const hardRuns = lastSeven.filter((run) => [1, 3].includes(Number(run.workout_type))).length;
+  const confidence = summary.runCount >= 12 ? "Established" : "Limited";
   const race = raceContext();
-  els.readinessContent.innerHTML = `<div class="readiness-metric"><strong>${sevenMiles.toFixed(1)} mi</strong><span>last 7 days · ${baseline.toFixed(1)} mi baseline</span></div><ul><li>${lastSeven.length} runs in the last 7 days</li><li>${hardRuns} higher-effort run${hardRuns === 1 ? "" : "s"} by available data</li><li>${summary.longestRestGap} days longest rest gap</li><li>${confidence} confidence · ${summary.runCount} runs in this block${race ? `</li><li>${race.label} · ${race.weeks} weeks away · ${race.phase} phase` : ""}</li></ul><p class="context-muted">This is a transparent workload view, not a medical or readiness score.</p>`;
+  els.readinessContent.innerHTML = `<div class="readiness-metric"><strong>${displayDistance(sevenMiles, 1)}</strong><span>last 7 days · ${displayDistance(baseline, 1)} baseline</span></div><ul><li>${lastSeven.length} runs in the last 7 days</li><li>${hardRuns} runs labeled race/workout by the source</li><li>${summary.longestRestGap} days longest rest gap</li><li>${confidence} recent history · ${summary.runCount} runs in this block${race ? `</li><li>${escapeHtml(race.label)} · ${race.weeks} weeks away · ${race.phase} phase` : ""}</li></ul><p class="context-muted">This is a transparent workload view, not a medical or readiness score.</p>`;
   const goalMiles = Number(coachingContext.goal.miles) || baseline;
   const recommendation = recommendIntent(summary, race);
   const chosenIntent = coachingContext.goal.mode || "auto";
-  const outcome = coachingContext.checkin?.outcome;
-  const intent = outcome === "missed" ? "recover" : chosenIntent === "auto" ? recommendation.intent : chosenIntent;
+  const outcome = activeCheckin().outcome === "missed" && activeCheckin().missedReason === "schedule" ? "schedule" : activeCheckin().outcome;
+  const intent = outcome === "missed" && activeCheckin().missedReason !== "schedule" ? "recover" : chosenIntent === "auto" ? recommendation.intent : chosenIntent;
   els.planAdaptation.textContent = outcome === "missed"
     ? "Adapted from your missed session: protect recovery first; the quality option is replaced with easy/rest space."
     : outcome === "shortened"
       ? "Adapted from your shortened session: keep the quality option optional and do not chase missed work."
       : outcome === "completed"
         ? "Plan stays on course: your last planned session was completed."
-        : "Log your last planned session to let this draft adapt.";
+        : outcome === "schedule" ? "The session was missed because of scheduling. Keep the baseline; do not add make-up work." : "Log your last planned session to let this draft adapt.";
   els.intentRecommendation.textContent = outcome === "missed"
     ? "Recovery draft after a missed session; your saved block intent is unchanged."
     : chosenIntent === "auto"
@@ -1143,17 +1151,14 @@ function renderCoachingWorkspace(summary) {
   const range = intent === "build" ? `${goalMiles.toFixed(0)}–${(goalMiles * 1.08).toFixed(0)}` : intent === "recover" ? `${(goalMiles * 0.7).toFixed(0)}–${(goalMiles * 0.85).toFixed(0)}` : `${(goalMiles * 0.9).toFixed(0)}–${goalMiles.toFixed(0)}`;
   const raceLead = race ? `${race.label} is ${race.weeks} week${race.weeks === 1 ? "" : "s"} away (${race.phase} phase). ` : "";
   const calendar = renderRecommendedCalendar(intent, summary, goalMiles, race);
-  const longRunCopy = calendar.longRunDay ? ` ${calendar.longRunDay} long run: up to ${calendar.longRunMiles.toFixed(1)} mi.` : "";
+  const longRunCopy = calendar.longRunDay ? ` ${calendar.longRunDay} long run: up to ${displayDistance(calendar.longRunMiles, 1)}.` : "";
   const availabilityCopy = calendar.availabilityLimited ? " Your availability limits the number of runs; adjust mileage to match." : "";
-  els.planDraftCopy.textContent = `${raceLead}${intent[0].toUpperCase() + intent.slice(1)} week draft: ${range} mi across ${calendar.plannedRuns} planned run${calendar.plannedRuns === 1 ? "" : "s"}.${longRunCopy}${availabilityCopy} Review the draft against your schedule and how you feel.`;
+  els.planDraftCopy.textContent = `${raceLead}${intent[0].toUpperCase() + intent.slice(1)} week draft: ${range} mi across ${calendar.plannedRuns} planned run${calendar.plannedRuns === 1 ? "" : "s"}.${longRunCopy} Session distances total ${displayDistance(calendar.totalMiles)}.${availabilityCopy} Review the draft against your schedule and how you feel.`;
   els.copyPlanButton.disabled = false;
 }
 
 function renderRecommendedCalendar(intent, summary, targetMiles, race) {
-  const start = new Date();
-  const day = start.getDay();
-  start.setDate(start.getDate() + ((8 - day) % 7 || 7));
-  start.setHours(0, 0, 0, 0);
+  const start = selectedPlanStart();
   const requestedRuns = Number(coachingContext.goal.runDays) || Math.max(3, Math.round(summary.averageRunsPerWeek));
   const maxRuns = Math.min(7, Math.max(1, Math.round(requestedRuns)));
   const longRun = Math.min(summary.longRun, targetMiles * 0.35);
@@ -1168,7 +1173,7 @@ function renderRecommendedCalendar(intent, summary, targetMiles, race) {
   const available = String(coachingContext.goal.availability || "").toLowerCase().match(/mon|tue|wed|thu|fri|sat|sun/g);
   const isAvailable = (index) => !available?.length || available.includes(dayNames[index].toLowerCase());
   const raceIndex = race ? dates.findIndex((date) => localDateValue(date) === coachingContext.goal.raceDate) : -1;
-  const recovery = intent === "recover" || coachingContext.checkin?.outcome === "missed";
+  const recovery = intent === "recover" || (activeCheckin().outcome === "missed" && activeCheckin().missedReason !== "schedule");
   // A race replaces this week's long run. Reserve that date, or the runner's
   // available long-run day, before selecting the remaining sessions.
   const priority = [raceIndex, raceIndex < 0 ? longIndex : -1, 1, 3, 0, 6, 2, 4, 5];
@@ -1181,43 +1186,42 @@ function renderRecommendedCalendar(intent, summary, targetMiles, race) {
     if (index === raceIndex) return ["Race day", `${race.label}${isAvailable(index) ? "" : " · Race date takes priority over saved availability"}`];
     if (!isAvailable(index)) return ["Rest / unavailable", "Outside your saved availability"];
     if (!planned.has(index)) return ["Rest / mobility", "Leave room to recover"];
-    if (index === longIndex && raceIndex < 0) return [recovery ? "Easy long run" : "Long run", `At or below ${longRun.toFixed(1)} mi`];
+    if (index === longIndex && raceIndex < 0) return [recovery ? "Easy long run" : "Long run", `At or below ${displayDistance(longRun, 1)}`];
     if (recovery || raceIndex >= 0) return ["Easy run", "Keep it short and conversational"];
     if (index === 1) return ["Quality option", "Choose only if your check-in supports it"];
     if (index === 3) return ["Steady run", "Keep the weekly range in view"];
     return ["Easy run", "Conversational effort"];
   });
-  const planState = coachingContext.plan || {};
+  const hasLong = raceIndex < 0 && planned.has(longIndex);
+  const totalTarget = adjustedPlanMiles(intent, targetMiles);
+  const longMiles = hasLong ? Math.min(longRun, totalTarget) : 0;
+  state.draftSessions = schedule.map(([title, detail], index) => ({ date: localDateValue(dates[index]), title, detail, kind: planned.has(index) ? "run" : "rest", miles: planned.has(index) ? (hasLong && index === longIndex ? longMiles : Math.max(0, totalTarget - longMiles) / Math.max(1, planned.size - (hasLong ? 1 : 0))) : 0, status: "planned", matchedId: "" }));
+  state.draftSessions.forEach((session) => session.miles = Number(session.miles.toFixed(1)));
   els.recommendedCalendar.innerHTML = schedule.map(([title, detail], index) => {
     const date = dates[index];
     const isRace = index === raceIndex;
     const dateKey = localDateValue(date);
-    const completed = state.filteredRuns.some((run) => localDateValue(parseActivityDate(run)) === dateKey);
-    const status = completed ? "completed" : ["completed", "skipped"].includes(planState[dateKey]) ? planState[dateKey] : "planned";
-    return `<button type="button" class="recommended-day ${status}${isRace ? " race-day" : ""}" data-action="cycle-plan-status" data-plan-date="${dateKey}" data-plan-kind="${planned.has(index) ? "run" : "rest"}"><span>${date.toLocaleDateString(undefined, { weekday: "short" })}</span><time>${date.toLocaleDateString(undefined, { month: "short", day: "numeric" })}</time><strong>${escapeHtml(title)}</strong><small>${escapeHtml(detail)}</small><em>${status === "completed" ? completed ? "Completed from Strava" : "Marked completed" : status === "skipped" ? "Skipped" : "Planned · click to update"}</em></button>`;
+    const distance = state.draftSessions[index].miles;
+    return `<button type="button" class="recommended-day${isRace ? " race-day" : ""}" data-action="cycle-plan-status" data-plan-date="${dateKey}" data-plan-kind="${planned.has(index) ? "run" : "rest"}"><span>${date.toLocaleDateString(undefined, { weekday: "short" })}</span><time>${date.toLocaleDateString(undefined, { month: "short", day: "numeric" })}</time><strong>${escapeHtml(title)}</strong><small>${escapeHtml(detail)}</small><em>${distance ? `${displayDistance(distance)} · draft` : "Rest day"}</em></button>`;
   }).join("");
   const hasLongRun = raceIndex < 0 && planned.has(longIndex);
-  return { plannedRuns: planned.size, maxRuns, longRunMiles: hasLongRun ? longRun : 0, longRunDay: hasLongRun ? dayNames[longIndex] : null, hasRace: raceIndex >= 0, availabilityLimited: planned.size < sessionLimit };
+  return { plannedRuns: planned.size, maxRuns, totalMiles: state.draftSessions.reduce((sum, session) => sum + session.miles, 0), longRunMiles: hasLongRun ? longRun : 0, longRunDay: hasLongRun ? dayNames[longIndex] : null, hasRace: raceIndex >= 0, availabilityLimited: planned.size < sessionLimit };
 }
 
 function cyclePlanStatus(date) {
-  const current = coachingContext.plan?.[date] || "planned";
-  const next = current === "planned" ? "completed" : current === "completed" ? "skipped" : "planned";
-  coachingContext.plan = { ...(coachingContext.plan || {}), [date]: next };
-  saveCoachingContext();
-  render();
-  [...els.recommendedCalendar.querySelectorAll("[data-plan-date]")]
-    .find((day) => day.dataset.planDate === date)?.focus({ preventScroll: true });
-  setStatus(`Plan session marked ${next}.`);
+  if (!acceptedPlans[planKey()]) document.querySelector("#acceptPlanButton").click();
+  const row = [...document.querySelectorAll("#acceptedPlan .saved-session")].find((element) => element.querySelector('input[type="date"]').value === date);
+  if (row) { row.scrollIntoView({ block: "center", behavior: "instant" }); row.querySelector("select").focus({ preventScroll: true }); }
+  setStatus("Use the saved session's status, date, and activity matching controls to update this plan.");
 }
 
 function recommendIntent(summary, race) {
-  const checkin = coachingContext.checkin || {};
-  if (checkin.outcome === "missed") return { intent: "recover", reason: "a missed session is a cue to protect recovery, not make it up" };
+  const checkin = activeCheckin();
+  if (checkin.outcome === "missed" && checkin.missedReason !== "schedule") return { intent: "recover", reason: "a missed session is a cue to protect recovery, not make it up" };
   if (checkin.feel && Number(checkin.feel) <= 2) return { intent: "recover", reason: "your check-in reported a hard block" };
   if (checkin.limiter && checkin.limiter !== "none") return { intent: "maintain", reason: `${checkin.limiter} was marked as a limiting factor` };
   if (race && race.weeks <= 2) return { intent: "recover", reason: "the race is close enough to prioritize freshness" };
-  if (race && race.weeks <= 12 && summary.rampRate <= 15) return { intent: "build", reason: "you are in the race build window with a controlled recent ramp" };
+  if (race && race.weeks <= 12 && summary.rampRate !== null && summary.rampRate <= 15) return { intent: "build", reason: "you are in the race build window with a controlled recent ramp" };
   return { intent: "maintain", reason: "the available workload data does not support a stronger change" };
 }
 
@@ -1268,7 +1272,7 @@ function showRunCollectionModal(title, runs, trigger = document.activeElement) {
     <header class="workout-header collection-header">
       <p class="workout-kicker">Chart selection</p>
       <h2 id="workoutModalTitle">${escapeHtml(title)}</h2>
-      <div class="workout-header-meta"><span>${runs.length} run${runs.length === 1 ? "" : "s"}</span><span>${totalMiles.toFixed(1)} mi</span><span>${formatPace(totalSeconds / totalMiles)} average pace</span></div>
+      <div class="workout-header-meta"><span>${runs.length} run${runs.length === 1 ? "" : "s"}</span><span>${displayDistance(totalMiles, 1)}</span><span>${formatPace(totalSeconds / totalMiles)} average pace</span></div>
     </header>
     <div class="workout-body collection-body">
       <p>Select a run to open its full detail, conditions, and coach’s read.</p>
@@ -1276,7 +1280,7 @@ function showRunCollectionModal(title, runs, trigger = document.activeElement) {
         <button type="button" class="chart-run-option" data-action="open-run" data-run-id="${escapeHtml(String(run.id))}">
           <span>${escapeHtml(parseActivityDate(run).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" }))}</span>
           <strong>${escapeHtml(run.name)}</strong>
-          <em>${miles(run.distance).toFixed(2)} mi · ${escapeHtml(formatPace(paceSeconds(run)))}</em>
+          <em>${displayDistance(miles(run.distance), 2)} · ${escapeHtml(formatPace(paceSeconds(run)))}</em>
         </button>`).join("")}</div>
     </div>
   `;
@@ -1367,7 +1371,7 @@ function renderBarLineChart(container, buckets, metric) {
     const y = pad.top + (chartHeight / 4) * i;
     root.appendChild(svg("line", { class: "axis", x1: pad.left, y1: y, x2: width - pad.right, y2: y }));
     const tick = metricKey === "pace" ? min + (span / 4) * i : max - (span / 4) * i;
-    root.appendChild(svg("text", { class: "label", x: 8, y: y + 4 }, [document.createTextNode(metric.format(tick).replace("/mi", ""))]));
+    root.appendChild(svg("text", { class: "label", x: 8, y: y + 4 }, [document.createTextNode(metric.format(tick))]));
   }
   const points = buckets.map((bucket, index) => {
     const value = metric.value(bucket);
@@ -1388,10 +1392,10 @@ function renderBarLineChart(container, buckets, metric) {
     });
     attachTooltip(bar, `${bucket.label} ${metric.label}`, [
       { label: metric.label, value: metric.format(value) },
-      { label: "Miles", value: `${bucket.distanceMiles.toFixed(1)} mi` },
+      { label: "Miles", value: `${displayDistance(bucket.distanceMiles, 1)}` },
       { label: "Runs", value: bucket.runs },
       { label: "Avg pace", value: formatPace(bucket.averagePace) },
-      { label: "Long run", value: `${bucket.longRunMiles.toFixed(1)} mi` },
+      { label: "Long run", value: `${displayDistance(bucket.longRunMiles, 1)}` },
       { label: "Elevation", value: `${Math.round(bucket.elevationFeet).toLocaleString()} ft` },
       { label: "Avg HR", value: bucket.averageHr ? `${Math.round(bucket.averageHr)} bpm` : "-" },
       { label: "Load", value: Math.round(bucket.trainingLoad).toLocaleString() }
@@ -1451,13 +1455,13 @@ function renderScatter() {
     const x = pad.left + (bucket.distanceMiles / maxMiles) * (width - pad.left - pad.right);
     const y = pad.top + ((bucket.averagePace - minPace) / paceRange) * (height - pad.top - pad.bottom);
     const r = 4 + Math.min(bucket.runs, 8);
-    const color = bucket.averageHr >= 155 ? "#fc4c02" : bucket.averageHr >= 140 ? "#b77b15" : "#2867b2";
+    const color = "#2867b2";
     const dot = svg("circle", { class: "dot", cx: x, cy: y, r, style: `fill: ${color}` });
     attachTooltip(dot, `${bucket.label} volume vs pace`, [
-      { label: "Miles", value: `${bucket.distanceMiles.toFixed(1)} mi` },
+      { label: "Miles", value: `${displayDistance(bucket.distanceMiles, 1)}` },
       { label: "Avg pace", value: formatPace(bucket.averagePace) },
       { label: "Runs", value: bucket.runs },
-      { label: "Avg run", value: `${(bucket.distanceMiles / bucket.runs).toFixed(1)} mi` },
+      { label: "Avg run", value: `${displayDistance((bucket.distanceMiles / bucket.runs), 1)}` },
       { label: "Avg HR", value: bucket.averageHr ? `${Math.round(bucket.averageHr)} bpm` : "-" },
       { label: "Bubble size", value: `${bucket.runs} runs` },
       { label: "Open", value: "View runs in this period" }
@@ -1502,8 +1506,8 @@ function renderStructure() {
     });
     attachTooltip(runBar, `${bucket.label} run count`, [
       { label: "Runs", value: bucket.runs },
-      { label: "Miles", value: `${bucket.distanceMiles.toFixed(1)} mi` },
-      { label: "Avg run", value: `${(bucket.distanceMiles / bucket.runs).toFixed(1)} mi` },
+      { label: "Miles", value: `${displayDistance(bucket.distanceMiles, 1)}` },
+      { label: "Avg run", value: `${displayDistance((bucket.distanceMiles / bucket.runs), 1)}` },
       { label: "Avg pace", value: formatPace(bucket.averagePace) },
       { label: "Open", value: "View runs this week" }
     ]);
@@ -1513,9 +1517,9 @@ function renderStructure() {
     const pointY = height - pad.bottom - bucket.longRunShare * chartHeight;
     const longRunPoint = svg("circle", { class: "structure-point", cx: pointX, cy: pointY, r: 4 });
     attachTooltip(longRunPoint, `${bucket.label} long-run share`, [
-      { label: "Long run", value: `${bucket.longRunMiles.toFixed(1)} mi` },
+      { label: "Long run", value: `${displayDistance(bucket.longRunMiles, 1)}` },
       { label: "Share", value: `${Math.round(bucket.longRunShare * 100)}%` },
-      { label: "Week miles", value: `${bucket.distanceMiles.toFixed(1)} mi` },
+      { label: "Week miles", value: `${displayDistance(bucket.distanceMiles, 1)}` },
       { label: "Elevation", value: `${Math.round(bucket.elevationFeet).toLocaleString()} ft` },
       { label: "Open", value: "View runs this week" }
     ]);
@@ -1546,14 +1550,15 @@ function renderHeatmap() {
     day.miles += miles(run.distance);
     day.seconds += Number(run.moving_time) || 0;
     day.runs += 1;
-    day.load += run.suffer_score || runMinutes(run) * effortMultiplier(run);
+    day.load += runMinutes(run);
     dayMap.set(key, day);
   });
   const weeks = Math.max(1, Math.ceil((last - first) / (7 * 86400000)) + 1);
-  const width = Math.max(720, weeks * 16 + 70);
-  const height = 170;
-  const cell = 12;
+  const width = Math.max(320, els.heatmapChart.clientWidth || 720, weeks * 12 + 70);
+  const cell = 16;
+  const columnWidth = (width - 70) / weeks;
   const gap = 4;
+  const height = 190;
   const root = svg("svg", { viewBox: `0 0 ${width} ${height}`, role: "img", "aria-label": "Training calendar heatmap" });
   const maxMiles = Math.max(...[...dayMap.values()].map((day) => day.miles), 1);
   for (let week = 0; week < weeks; week += 1) {
@@ -1566,14 +1571,14 @@ function renderHeatmap() {
       const level = value === 0 ? 0 : Math.min(5, Math.ceil((value / maxMiles) * 5));
       const rect = svg("rect", {
         class: level ? `heat-${level}` : "heat-empty",
-        x: 52 + week * (cell + gap),
+        x: 52 + week * columnWidth,
         y: 24 + day * (cell + gap),
-        width: cell,
+        width: Math.max(6, columnWidth - gap),
         height: cell,
         rx: 3
       });
       attachTooltip(rect, new Date(`${key}T00:00:00`).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" }), [
-        { label: "Miles", value: `${stats.miles.toFixed(1)} mi` },
+        { label: "Miles", value: `${displayDistance(stats.miles, 1)}` },
         { label: "Runs", value: stats.runs },
         { label: "Moving time", value: formatDuration(stats.seconds) },
         { label: "Avg pace", value: stats.miles ? formatPace(stats.seconds / stats.miles) : "-" },
@@ -1587,7 +1592,7 @@ function renderHeatmap() {
     if (week % Math.max(1, Math.ceil(weeks / 8)) === 0) {
       const labelDate = new Date(first);
       labelDate.setDate(first.getDate() + week * 7);
-      root.appendChild(svg("text", { class: "label", x: 52 + week * (cell + gap), y: 15 }, [document.createTextNode(labelDate.toLocaleDateString(undefined, { month: "short" }))]));
+      root.appendChild(svg("text", { class: "label", x: 52 + week * columnWidth, y: 15 }, [document.createTextNode(labelDate.toLocaleDateString(undefined, { month: "short" }))]));
     }
   }
   ["Mon", "Wed", "Fri", "Sun"].forEach((label, index) => {
@@ -1613,7 +1618,7 @@ function renderDistanceMix() {
     bin.count += 1;
     bin.miles += distance;
   });
-  renderHorizontalBars(els.distanceMixChart, bins, "miles", (bin) => `${bin.miles.toFixed(1)} mi`, "#157f74");
+  renderHorizontalBars(els.distanceMixChart, bins, "miles", (bin) => `${displayDistance(bin.miles, 1)}`, "#157f74");
 }
 
 function renderRollingWorkload() {
@@ -1665,8 +1670,8 @@ function renderRollingWorkload() {
     });
     const ramp = point.twentyEight ? ((point.seven - point.twentyEight) / point.twentyEight) * 100 : 0;
     attachTooltip(hoverPoint, point.date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }), [
-      { label: "7-day miles", value: `${point.seven.toFixed(1)} mi` },
-      { label: "28-day baseline", value: `${point.twentyEight.toFixed(1)} mi/wk` },
+      { label: "7-day miles", value: `${displayDistance(point.seven, 1)}` },
+      { label: "28-day baseline", value: `${displayDistance(point.twentyEight, 1)}/wk` },
       { label: "Load balance", value: `${ramp >= 0 ? "+" : ""}${ramp.toFixed(0)}%` },
       { label: "Signal", value: ramp > 25 ? "Sharp build" : ramp < -20 ? "Taper / recovery" : "Steady" }
     ]);
@@ -1697,11 +1702,13 @@ function renderPaceZones() {
   ].map((bin) => ({ ...bin, count: 0, miles: 0 }));
   state.filteredRuns.forEach((run) => {
     const pace = paceSeconds(run);
+    if (!pace) return;
     const bin = bins.find((candidate) => pace >= candidate.min && pace < candidate.max);
     if (!bin) return;
     bin.count += 1;
     bin.miles += miles(run.distance);
   });
+  bins.forEach((bin) => bin.label = bin.min === 0 ? `<${formatPace(bin.max)}` : bin.max === Infinity ? `${formatPace(bin.min)}+` : `${formatPace(bin.min)}–${formatPace(bin.max)}`);
   renderHorizontalBars(els.paceZoneChart, bins, "count", (bin) => `${bin.count} runs`, "#2867b2");
 }
 
@@ -1731,8 +1738,8 @@ function renderHorizontalBars(container, bins, valueKey, formatter, color) {
     attachTooltip(rect, bin.label, [
       { label: "Primary", value: formatter(bin) },
       { label: "Runs", value: bin.count },
-      { label: "Miles", value: `${bin.miles.toFixed(1)} mi` },
-      { label: "Avg per run", value: bin.count ? `${(bin.miles / bin.count).toFixed(1)} mi` : "-" }
+      { label: "Miles", value: `${displayDistance(bin.miles, 1)}` },
+      { label: "Avg per run", value: bin.count ? `${displayDistance((bin.miles / bin.count), 1)}` : "-" }
     ]);
     root.appendChild(rect);
     root.appendChild(svg("text", { class: "label", x: pad.left + barWidth + 8, y: y + 16 }, [document.createTextNode(formatter(bin))]));
@@ -1754,7 +1761,7 @@ function formatOrdinal(value) {
 }
 
 function activityLoad(run) {
-  return Number(run.suffer_score) || runMinutes(run) * effortMultiplier(run);
+  return runMinutes(run);
 }
 
 function daysBetween(left, right) {
@@ -1775,11 +1782,9 @@ function percentileRank(values, value, higherIsBetter = true) {
 }
 
 function classifyRun(run, distanceMiles, pace, distanceRank, paceRank) {
-  const name = run.name.toLowerCase();
-  if (name.includes("race")) return "Race";
-  if (name.includes("tempo") || name.includes("interval") || name.includes("workout") || paceRank >= 75) return "Quality";
-  if (distanceRank >= 85 || distanceMiles >= 10) return "Long";
-  if (pace && pace >= 600) return "Easy";
+  if (Number(run.workout_type) === 1) return "Race";
+  if (Number(run.workout_type) === 3) return "Quality";
+  if (distanceRank >= 85) return "Long";
   return "Steady";
 }
 
@@ -1799,7 +1804,8 @@ function buildWorkoutDigest(run) {
   const stopped = Math.max(0, elapsed - moving);
   const similar = runs.filter((candidate) => {
     const candidateDistance = miles(candidate.distance);
-    return candidate.id !== run.id && candidateDistance >= distance * 0.8 && candidateDistance <= distance * 1.2;
+    const allowed = comparisonScope === "sport" ? candidate.sport_type === run.sport_type : comparisonScope === "recent" ? Math.abs(parseActivityDate(candidate) - parseActivityDate(run)) <= 90 * 86400000 : true;
+    return allowed && candidate.id !== run.id && candidateDistance >= distance * 0.8 && candidateDistance <= distance * 1.2;
   });
   const similarPace = average(similar.map(paceSeconds));
   const similarHr = average(similar.map((candidate) => Number(candidate.average_heartrate) || 0));
@@ -1823,9 +1829,9 @@ function buildWorkoutDigest(run) {
       detail: `${paceRank ? `Faster than ${paceRank}% of runs in range` : "Pace rank needs duration data"}`
     },
     {
-      label: loadPerMile > similarLoadPerMile * 1.2 && similarLoadPerMile ? "High strain" : "Load check",
-      value: `${Math.round(load).toLocaleString()} load`,
-      detail: similarLoadPerMile ? `${formatNumber(loadPerMile, 1)} /mi vs ${formatNumber(similarLoadPerMile, 1)} /mi for similar runs` : `${formatOrdinal(loadRank)} load pct. in range`
+      label: "Moving duration",
+      value: `${Math.round(load).toLocaleString()} min`,
+      detail: similarLoadPerMile ? `${formatNumber(loadPerMile, 1)} min/mi vs ${formatNumber(similarLoadPerMile, 1)} min/mi for similar runs` : `${formatOrdinal(loadRank)} duration pct. in range`
     },
     {
       label: previousGap !== null && previousGap <= 1 ? "Tight recovery" : "Recovery space",
@@ -1890,15 +1896,15 @@ function profileMarkup(label, percentile) {
 
 function workoutNarrative(digest) {
   const headlines = {
-    Race: "A performance-first effort with the needle pushed forward.",
-    Quality: "Speed was the defining signal in this session.",
-    Long: "Durability was the point, and the run delivered.",
-    Easy: "Aerobic work without forcing the pace.",
-    Steady: "Balanced volume in a controlled middle gear."
+    Race: "The source labels this run as a race.",
+    Quality: "The source labels this run as a workout.",
+    Long: "One of the longer runs in the selected window.",
+    Easy: "Review pace and duration against comparable runs.",
+    Steady: "A run in the context of your selected history."
   };
   const strain = digest.similarLoadPerMile
-    ? `${digest.loadPerMile > digest.similarLoadPerMile * 1.15 ? "More" : "Less"} load per mile than comparable runs.`
-    : `${formatOrdinal(digest.loadRank)} percentile for total load.`;
+    ? `Compared with ${digest.similarCount} similar-distance runs. Running time is a duration measure, not a strain score.`
+    : `No similar-distance comparison is available. ${formatOrdinal(digest.loadRank)} percentile for moving duration.`;
   return {
     headline: headlines[digest.runType] || headlines.Steady,
     detail: `${formatOrdinal(digest.distanceRank)} distance percentile, ${formatOrdinal(digest.paceRank)} pace percentile. ${strain}`
@@ -1934,6 +1940,7 @@ function runWeatherKey(run) {
 }
 
 function weatherCodeLabel(code) {
+  if (code === null || code === undefined || code === "") return "Conditions unavailable";
   const value = Number(code);
   if (value === 0) return "Clear";
   if ([1, 2].includes(value)) return "Partly cloudy";
@@ -1947,6 +1954,7 @@ function weatherCodeLabel(code) {
 }
 
 function weatherGlyph(code, isDay) {
+  if (code === null || code === undefined || code === "") return "—";
   const value = Number(code);
   if ([61, 63, 65, 66, 67, 80, 81, 82, 95, 96, 99].includes(value)) return "☂";
   if ([71, 73, 75, 77, 85, 86].includes(value)) return "❄";
@@ -1963,7 +1971,7 @@ function weatherNumber(value) {
 
 function formatWeatherTemperature(value) {
   const numeric = weatherNumber(value);
-  return numeric === null ? "—" : `${Math.round(numeric)}°`;
+  return numeric === null ? "—" : preferences.units === "metric" ? `${Math.round((numeric - 32) * 5 / 9)}°C` : `${Math.round(numeric)}°F`;
 }
 
 function formatWeatherValue(value, unit) {
@@ -2019,6 +2027,7 @@ function setWorkoutWeatherContent(markup) {
 }
 
 async function requestRunWeather(run) {
+  if (!preferences.weather) return null;
   const details = weatherRequestDetails(run);
   const key = runWeatherKey(run);
   if (!details || !key) return null;
@@ -2048,6 +2057,10 @@ async function requestRunWeather(run) {
 }
 
 async function hydrateWorkoutWeather(run, session) {
+  if (!preferences.weather) {
+    setWorkoutWeatherContent(weatherUnavailableMarkup("Modeled weather is off. Enable it in preferences to share a rounded start location with Open-Meteo."));
+    return null;
+  }
   const details = weatherRequestDetails(run);
   if (!details) {
     setWorkoutWeatherContent(weatherUnavailableMarkup("This activity does not include a usable start location and local start time."));
@@ -2114,7 +2127,7 @@ function buildRunDigestPayload(digest, weather) {
     coverage: {
       hasWeather: Boolean(weather),
       hasHeartRate: Boolean(Number(run.average_heartrate)),
-      directLoad: Boolean(Number(run.suffer_score)),
+      directLoad: false,
       similarRunCount: digest.similarCount
     }
   };
@@ -2192,11 +2205,13 @@ function setRunDigestContent(markup) {
 async function generateRunDigest(runId) {
   const run = state.filteredRuns.find((candidate) => String(candidate.id) === String(runId));
   if (!run || String(run.id) !== state.activeRunId) return;
+  if (!await ensureAnalysisConsent()) return;
+  if (String(run.id) !== state.activeRunId) return;
   const session = state.modalSession;
   const digest = buildWorkoutDigest(run);
   setRunDigestContent(runDigestLoadingMarkup());
-  let weather = state.runWeatherCache.get(runWeatherKey(run)) || null;
-  if (!weather && weatherRequestDetails(run)) {
+  let weather = preferences.weather ? state.runWeatherCache.get(runWeatherKey(run)) || null : null;
+  if (preferences.weather && !weather && weatherRequestDetails(run)) {
     try {
       weather = await requestRunWeather(run);
       if (session !== state.modalSession || state.activeRunId !== String(run.id)) return;
@@ -2217,6 +2232,7 @@ async function generateRunDigest(runId) {
   state.runDigestAbort?.abort();
   const controller = new AbortController();
   state.runDigestAbort = controller;
+  const stopLoading = startAnalysisTimer(controller, document.querySelector("#workoutRunDigest"));
   try {
     const response = await fetch("/api/insights", {
       method: "POST",
@@ -2230,9 +2246,10 @@ async function generateRunDigest(runId) {
     state.runDigestCache.set(cacheKey, data);
     setRunDigestContent(runDigestResultMarkup(data.insight, data.model, digest));
   } catch (error) {
-    if (error.name === "AbortError" || session !== state.modalSession || state.activeRunId !== String(run.id)) return;
-    setRunDigestContent(runDigestErrorMarkup(run.id, error.message || "Check that the Ollama endpoint is reachable and try again."));
+    if (session !== state.modalSession || state.activeRunId !== String(run.id)) return;
+    setRunDigestContent(runDigestErrorMarkup(run.id, error.name === "AbortError" ? "Analysis canceled." : error.message || "The analysis service is unavailable."));
   } finally {
+    stopLoading();
     if (state.runDigestAbort === controller) state.runDigestAbort = null;
   }
 }
@@ -2257,7 +2274,7 @@ function neighboringRunsChart(digest) {
     return `
       <g aria-label="${escapeHtml(`${date}: ${distance.toFixed(1)} miles at ${formatPace(paceSeconds(item))}`)}">
         <rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barWidth.toFixed(1)}" height="${barHeight.toFixed(1)}" rx="3" fill="${selected ? "var(--orange)" : "var(--teal)"}" opacity="${selected ? "1" : "0.5"}"></rect>
-        <text x="${(x + barWidth / 2).toFixed(1)}" y="${Math.max(14, y - 7).toFixed(1)}" text-anchor="middle" fill="var(--ink)" font-size="11" font-weight="${selected ? "800" : "600"}">${distance.toFixed(1)}</text>
+        <text x="${(x + barWidth / 2).toFixed(1)}" y="${Math.max(14, y - 7).toFixed(1)}" text-anchor="middle" fill="var(--ink)" font-size="11" font-weight="${selected ? "800" : "600"}">${displayDistance(distance)}</text>
         <text x="${(x + barWidth / 2).toFixed(1)}" y="${height - 10}" text-anchor="middle" fill="var(--muted)" font-size="11">${escapeHtml(date)}</text>
       </g>
     `;
@@ -2279,7 +2296,7 @@ function showWorkoutModal(runId, trigger = document.activeElement) {
   state.runDigestAbort?.abort();
   state.runDigestAbort = null;
   state.activeRunId = String(run.id);
-  state.activeRunWeather = state.runWeatherCache.get(runWeatherKey(run)) || null;
+  state.activeRunWeather = preferences.weather ? state.runWeatherCache.get(runWeatherKey(run)) || null : null;
   const digest = buildWorkoutDigest(run);
   const narrative = workoutNarrative(digest);
   const averageHr = Number(run.average_heartrate) || 0;
@@ -2288,12 +2305,14 @@ function showWorkoutModal(runId, trigger = document.activeElement) {
   const cadence = rawCadence && rawCadence < 120 ? rawCadence * 2 : rawCadence;
   const watts = Number(run.average_watts) || 0;
   const maxSpeedPace = run.max_speed ? formatPace(1609.344 / run.max_speed) : "-";
-  const bucketLabelText = digest.bucket ? `${digest.bucket.label}: ${digest.bucket.distanceMiles.toFixed(1)} mi, ${digest.bucket.runs} runs` : "No group context";
+  const bucketLabelText = digest.bucket ? `${digest.bucket.label}: ${displayDistance(digest.bucket.distanceMiles, 1)}, ${digest.bucket.runs} runs` : "No group context";
   const similarPaceText = digest.similarPace ? `${formatPace(digest.similarPace)} across ${digest.similarCount} similar` : "Needs more similar runs";
   const hrCompare = averageHr && digest.similarHr ? `${Math.round(averageHr - digest.similarHr) >= 0 ? "+" : ""}${Math.round(averageHr - digest.similarHr)} bpm vs similar` : "HR comparison unavailable";
   const socialText = `${run.kudos_count || 0} kudos · ${run.achievement_count || 0} achievements · ${run.pr_count || 0} PRs`;
 
   els.workoutModalContent.innerHTML = `
+    <div class="workout-toolbar"><button type="button" data-action="previous-run">Previous run</button><button type="button" data-action="next-run">Next run</button>${state.dataSource === "strava" && /^\d+$/.test(String(run.id)) ? `<a target="_blank" rel="noopener noreferrer" href="https://www.strava.com/activities/${run.id}">Open in Strava</a>` : ""}<label>Compare with <select id="comparisonScope"><option value="distance">Similar distance</option><option value="sport">Same sport and distance</option><option value="recent">Recent 90 days and distance</option></select></label></div>
+    <section id="enrichedRun" aria-live="polite"></section>
     <header class="workout-header">
       <p class="workout-kicker">${escapeHtml(digest.date.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric", year: "numeric" }))}</p>
       <h2 id="workoutModalTitle">${escapeHtml(run.name)}</h2>
@@ -2306,7 +2325,7 @@ function showWorkoutModal(runId, trigger = document.activeElement) {
     <div class="workout-body">
       <section class="workout-lead" aria-label="Workout summary">
         <div class="workout-lead-metrics">
-          <article class="workout-lead-metric"><span>Distance</span><strong>${digest.distance.toFixed(2)} mi</strong><small>${formatOrdinal(digest.distanceRank)} percentile</small></article>
+          <article class="workout-lead-metric"><span>Distance</span><strong>${displayDistance(digest.distance, 2)}</strong><small>${formatOrdinal(digest.distanceRank)} percentile</small></article>
           <article class="workout-lead-metric"><span>Average pace</span><strong>${escapeHtml(formatPace(digest.pace))}</strong><small>${escapeHtml(similarPaceText)}</small></article>
           <article class="workout-lead-metric"><span>Moving time</span><strong>${escapeHtml(formatDuration(digest.moving))}</strong><small>${digest.stopped ? `${escapeHtml(formatDuration(digest.stopped))} stopped` : "Continuous effort"}</small></article>
         </div>
@@ -2349,7 +2368,8 @@ function showWorkoutModal(runId, trigger = document.activeElement) {
             <div class="workout-stats">
               ${statMarkup("Elevation", `${Math.round(digest.elevation).toLocaleString()} ft`, `${Math.round(digest.elevationDensity)} ft/mi`)}
               ${statMarkup("Heart rate", averageHr ? `${Math.round(averageHr)} bpm` : "-", maxHr ? `Max ${Math.round(maxHr)} bpm` : hrCompare)}
-              ${statMarkup("Training load", `${Math.round(digest.load).toLocaleString()}`, `${formatNumber(digest.loadPerMile, 1)} per mile`)}
+              ${statMarkup("Running time", `${Math.round(digest.load).toLocaleString()} min`, `${formatNumber(digest.loadPerMile, 1)} min/mi`)}
+              ${statMarkup("Strava Relative Effort", run.suffer_score ? String(run.suffer_score) : "Unavailable", "Source value; separate from running time")}
               ${statMarkup("Cadence", cadence ? `${Math.round(cadence)} spm` : "-", watts ? `${Math.round(watts)} avg watts` : "From activity data")}
               ${statMarkup("Top speed", maxSpeedPace, run.pr_count ? `${run.pr_count} personal record${run.pr_count === 1 ? "" : "s"}` : "No PR recorded")}
               ${statMarkup("Elapsed time", formatDuration(digest.elapsed), digest.stopped ? `${formatDuration(digest.stopped)} not moving` : "Matches moving time")}
@@ -2371,6 +2391,8 @@ function showWorkoutModal(runId, trigger = document.activeElement) {
   `;
   state.modalTrigger = trigger instanceof Element ? trigger : null;
   els.workoutModal.hidden = false;
+  hydrateRunDetail(run, session);
+  finishModalRender(run);
   document.body.classList.add("modal-open");
   els.workoutModalClose.focus();
   if (state.activeRunWeather) {
@@ -2401,7 +2423,7 @@ function renderTable() {
     distance: (a, b) => b.distance - a.distance,
     pace: (a, b) => (paceSeconds(a) || Infinity) - (paceSeconds(b) || Infinity)
   };
-  const matching = state.filteredRuns.filter((run) => String(run.name).toLocaleLowerCase().includes(query)).sort(sorters[els.runSort.value] || sorters.newest);
+  const matching = state.filteredRuns.filter(matchesRunFilter).filter((run) => String(run.name).toLocaleLowerCase().includes(query)).sort(sorters[els.runSort.value] || sorters.newest);
   const pageSize = 15;
   state.ledgerPage = Math.min(state.ledgerPage, Math.max(0, Math.ceil(matching.length / pageSize) - 1));
   const offset = state.ledgerPage * pageSize;
@@ -2428,16 +2450,17 @@ function renderTable() {
     const values = [
       parseActivityDate(run).toLocaleDateString(),
       run.name,
-      `${miles(run.distance).toFixed(2)} mi`,
+      `${displayDistance(miles(run.distance), 2)}`,
       formatPace(paceSeconds(run)),
-      `${Math.round(feet(run.total_elevation_gain)).toLocaleString()} ft`,
+      run.has_elevation ? `${Math.round(feet(run.total_elevation_gain)).toLocaleString()} ft` : "Unavailable",
       run.average_heartrate ? `${Math.round(run.average_heartrate)} bpm` : "-",
-      `${Math.round(run.suffer_score || runMinutes(run) * effortMultiplier(run))}`
+      `${Math.round(runMinutes(run))}`
     ];
     const labels = ["Date", "Name", "Distance", "Pace", "Elevation", "Heart rate", "Load"];
     values.forEach((value, index) => {
       const cell = document.createElement("td");
       cell.textContent = value;
+      if (index === 1) cell.dataset.unitSkip = "";
       cell.dataset.label = labels[index];
       row.appendChild(cell);
     });
@@ -2449,7 +2472,7 @@ function renderTable() {
   }));
 }
 
-async function fetchActivities() {
+async function fetchActivities(mode = "recent") {
   if (state.syncing) return;
   state.syncing = true;
   els.connectButton.disabled = true;
@@ -2457,18 +2480,44 @@ async function fetchActivities() {
   setStatus("Pulling activities from Strava...");
   try {
   const params = new URLSearchParams({ pages: "8", per_page: "100" });
+  const previous = state.dataSource === "strava" ? state.rawActivities : [];
+  if (previous.length) {
+    if (mode === "older") params.set("before", String(Math.floor(Math.min(...previous.map((run) => new Date(run.start_date || run.start_date_local).valueOf())) / 1000)));
+    else if (mode === "full") params.set("after", String(Math.floor(Math.min(...previous.map((run) => new Date(run.start_date || run.start_date_local).valueOf())) / 1000) - 1));
+    else params.set("after", String(Math.floor((new Date(state.lastSync || Date.now()).valueOf() - 7 * 86400000) / 1000)));
+  }
   const response = await fetch(`/api/activities?${params}`);
   const data = await readApiJson(response);
-  if (!response.ok) throw new Error(data.error || "Unable to fetch Strava activities.");
+  if (!response.ok) {
+    if (response.status === 401) {
+      state.stravaConnected = false;
+      sessionStorage.removeItem("run-trends-strava-session");
+      throw new Error("Your Strava session expired. Connect Strava again to refresh your history.");
+    }
+    throw new Error(data.error || "Unable to fetch Strava activities.");
+  }
   if (!Array.isArray(data.activities)) throw new Error("Strava returned an unreadable activity list. Try syncing again.");
-  state.rawActivities = data.activities.map(normalizeActivity);
+  const incoming = data.activities.map(normalizeActivity);
+  incoming.forEach((run) => state.activityDetails?.delete(String(run.id)));
+  // A completed refresh replaces its queried interval, reflecting deletions and edits.
+  const after = Number(params.get("after") || 0) * 1000;
+  const kept = mode !== "older" && !data.truncated ? previous.filter((run) => new Date(run.start_date || run.start_date_local).valueOf() <= after) : previous;
+  state.rawActivities = TrainingCore.mergeActivities(kept, incoming);
   state.dataSource = "strava";
+  state.lastSync = new Date().toISOString();
+  if (mode === "older" || !previous.length) state.historyTruncated = Boolean(data.truncated);
+  else if (data.truncated) state.historyTruncated = true;
+  const oldest = state.rawActivities.length ? Math.min(...state.rawActivities.map((run) => parseActivityDate(run).valueOf())) : Date.now();
+  historyCoverage = { start: state.historyTruncated ? new Date(oldest).toISOString() : "1970-01-01T00:00:00.000Z", end: new Date().toISOString() };
+  try { sessionStorage.setItem("run-trends-strava-session", JSON.stringify({ activities: state.rawActivities, lastSync: state.lastSync, truncated: state.historyTruncated, coverage: historyCoverage })); } catch { /* A full sync remains available without a cache. */ }
   state.ledgerPage = 0;
   syncRangeInputs();
-  setStatus(`Loaded ${data.activities.length} activities from Strava.${data.truncated ? " This is a partial history; import an export to include older runs." : ""}`);
+  setStatus(`Loaded ${incoming.length} activities from Strava; ${state.rawActivities.length} in history.${state.historyTruncated ? " Load older activities to extend the history." : ""}`);
   render();
   } finally {
     state.syncing = false;
+    document.querySelector("#disconnectButton").hidden = !state.stravaConnected;
+    renderSyncInfo();
     els.connectButton.disabled = false;
     els.connectButton.textContent = state.stravaConnected ? "Refresh Strava" : "Connect Strava";
   }
@@ -2492,6 +2541,8 @@ async function readApiJson(response) {
 async function checkStatus() {
   const response = await fetch("/api/status");
   const data = await readApiJson(response);
+  state.analysisService = data.analysisService || "Configured Ollama service";
+  state.analysisModel = data.analysisModel || "Configured model";
   if (!response.ok) {
     state.stravaReady = false;
     state.stravaConnected = false;
@@ -2518,10 +2569,19 @@ async function checkStatus() {
   els.connectButton.title = "";
   if (data.connected) {
     els.connectButton.textContent = "Refresh Strava";
-    await fetchActivities();
+    let cached;
+    try { cached = JSON.parse(sessionStorage.getItem("run-trends-strava-session")); } catch { /* Ignore an unreadable cache. */ }
+    if (Array.isArray(cached?.activities) && cached.activities.every((run) => run && typeof run === "object" && Number.isFinite(parseActivityDate(run).valueOf())) && !new URLSearchParams(location.search).has("connected") && state.dataSource !== "import") {
+      state.rawActivities = cached.activities.map(normalizeActivity); state.dataSource = "strava"; state.lastSync = cached.lastSync; state.historyTruncated = cached.truncated; historyCoverage = cached.coverage;
+      syncRangeInputs(); render();
+      const age = Date.now() - new Date(cached.lastSync).valueOf();
+      if (!Number.isFinite(age) || age < 0 || age > 5 * 60 * 1000) await fetchActivities();
+    } else if (state.dataSource !== "import") await fetchActivities();
   } else {
+    sessionStorage.removeItem("run-trends-strava-session");
     setStatus("");
   }
+  const cleanUrl = new URL(location.href); cleanUrl.searchParams.delete("connected"); cleanUrl.searchParams.delete("disconnected"); history.replaceState(null, "", cleanUrl);
 }
 
 function parseCsv(text) {
@@ -2587,6 +2647,7 @@ function parseCsv(text) {
 }
 
 async function importFile(file) {
+  if (file.size > 25_000_000) throw new Error("Choose an activity export smaller than 25 MB.");
   const text = await file.text();
   if (!text.trim()) throw new Error("This file is empty. Choose a Strava CSV or JSON export.");
   let data;
@@ -2603,13 +2664,19 @@ async function importFile(file) {
     .map(normalizeActivity)
     .filter((activity) => !Number.isNaN(parseActivityDate(activity).valueOf()));
   if (!activities.some(isRun)) throw new Error("No running activities with valid dates were found. Choose a Strava running export.");
-  state.rawActivities = activities;
+  const decision = await requestImportReview(activities, rows.length - activities.length);
+  if (!decision) { setStatus("Import canceled. Your current history is unchanged."); return; }
+  state.rawActivities = decision.mode === "merge" && state.dataSource !== "demo" ? TrainingCore.mergeActivities(state.rawActivities, activities) : TrainingCore.mergeActivities([], activities);
   state.dataSource = "import";
+  state.lastSync = null; state.historyTruncated = false;
+  const bounds = getActivityBounds();
+  historyCoverage = decision.complete ? { start: bounds.start.toISOString(), end: bounds.end.toISOString() } : null;
+  const remembered = rememberHistory();
   state.ledgerPage = 0;
   syncRangeInputs();
   render();
   const skipped = rows.length - activities.length;
-  setStatus(`Imported ${activities.length} activities.${skipped ? ` Skipped ${skipped} invalid ${skipped === 1 ? "row" : "rows"}.` : ""}`);
+  setStatus(`Imported ${activities.length} activities.${skipped ? ` Skipped ${skipped} invalid ${skipped === 1 ? "row" : "rows"}.` : ""}${remembered ? "" : " Browser storage is full or unavailable. This import will not survive closing the tab; export a backup."}`, !remembered);
 }
 
 function makeDemoData() {
@@ -2667,6 +2734,10 @@ function loadDemoData() {
   if (state.syncing) return;
   state.rawActivities = makeDemoData();
   state.dataSource = "demo";
+  state.lastSync = null; state.historyTruncated = false;
+  const demoStart = new Date(); demoStart.setDate(demoStart.getDate() - 389); demoStart.setHours(0, 0, 0, 0);
+  const demoEnd = new Date(); demoEnd.setHours(23, 59, 59, 999);
+  historyCoverage = { start: demoStart.toISOString(), end: demoEnd.toISOString() };
   state.ledgerPage = 0;
   syncRangeInputs();
   setStatus("");
@@ -2717,22 +2788,22 @@ els.workoutModal.addEventListener("click", (event) => {
 
 els.goalForm.addEventListener("submit", (event) => {
   event.preventDefault();
-  coachingContext.goal = { mode: els.goalMode.value, miles: els.goalMiles.value, raceName: els.goalRaceName.value.trim(), raceDistance: els.goalRaceDistance.value, raceDate: els.goalRaceDate.value, runDays: els.goalRunDays.value, longRunDay: els.goalLongRunDay.value, availability: els.goalAvailability.value.trim() };
-  saveCoachingContext();
+  coachingContext.goal = { mode: els.goalMode.value, miles: els.goalMiles.value ? String(Number(els.goalMiles.value) / (preferences.units === "metric" ? 1.609344 : 1)) : "", raceName: els.goalRaceName.value.trim(), raceDistance: els.goalRaceDistance.value, raceDate: els.goalRaceDate.value, runDays: els.goalRunDays.value, longRunDay: els.goalLongRunDay.value, availability: els.goalAvailability.value.trim() };
+  const saved = saveCoachingContext();
   state.renderedInsightFingerprint = "";
   render();
-  setStatus("Training goal saved in this browser.");
-  buttonFeedback(els.goalForm.querySelector("button[type='submit']"), "Goal saved");
+  setStatus(saved ? "Training goal saved in this browser." : "Goal updated in this tab. Browser storage failed; back up your goals before closing.", !saved);
+  if (saved) buttonFeedback(els.goalForm.querySelector("button[type='submit']"), "Goal saved");
 });
 
 els.checkinForm.addEventListener("submit", (event) => {
   event.preventDefault();
-  coachingContext.checkin = { feel: els.checkinFeel.value, limiter: els.checkinLimiter.value, intent: els.checkinIntent.value, outcome: els.checkinOutcome.value };
-  saveCoachingContext();
+  coachingContext.checkin = { feel: els.checkinFeel.value, limiter: els.checkinLimiter.value, intent: els.checkinIntent.value, outcome: els.checkinOutcome.value, savedAt: new Date().toISOString(), missedReason: document.querySelector("#missedReason").value };
+  const saved = saveCoachingContext();
   state.renderedInsightFingerprint = "";
   render();
-  setStatus("Weekly check-in saved in this browser.");
-  buttonFeedback(els.checkinForm.querySelector("button[type='submit']"), "Check-in saved");
+  setStatus(saved ? "Weekly check-in saved in this browser." : "Check-in updated in this tab. Browser storage failed; back up your context before closing.", !saved);
+  if (saved) buttonFeedback(els.checkinForm.querySelector("button[type='submit']"), "Check-in saved");
 });
 
 els.copyPlanButton.addEventListener("click", async () => {
@@ -2779,7 +2850,7 @@ document.querySelector("#copyViewButton").addEventListener("click", async (event
   } catch { setStatus("Copy is unavailable. You can copy the address from your browser.", true); }
 });
 document.querySelector("#exportButton").addEventListener("click", () => {
-  const columns = ["id", "name", "sport_type", "start_date", "start_date_local", "distance", "moving_time", "elapsed_time", "total_elevation_gain", "average_heartrate", "suffer_score"];
+  const columns = ["id", "name", "sport_type", "start_date", "start_date_local", "distance", "moving_time", "elapsed_time", "total_elevation_gain", "has_elevation", "average_heartrate", "suffer_score", "workout_type", "trainer"];
   const csvCell = (value) => `"${String(value ?? "").replace(/^[=+@-]/, "'$&").replace(/"/g, '""')}"`;
   const content = [columns.join(","), ...state.filteredRuns.map((run) => columns.map((column) => csvCell(run[column])).join(","))].join("\r\n");
   const url = URL.createObjectURL(new Blob([content], { type: "text/csv;charset=utf-8" }));
@@ -2791,6 +2862,7 @@ document.querySelector("#exportButton").addEventListener("click", () => {
   setStatus(`Exported ${state.filteredRuns.length} runs from the selected window. Distances and elevation use meters in the CSV.`);
 });
 document.querySelector("#disconnectButton").addEventListener("click", () => {
+  sessionStorage.removeItem("run-trends-strava-session");
   window.location.href = "/auth/logout";
 });
 
@@ -2846,6 +2918,7 @@ els.rangeSelect.addEventListener("change", () => {
   element.addEventListener("change", render);
 });
 
+initializeExperience();
 restoreViewState();
 syncRangeInputs();
 syncCoachingInputs();
@@ -2858,14 +2931,3 @@ new ResizeObserver(() => {
   clearTimeout(chartResizeTimer);
   chartResizeTimer = setTimeout(() => { if (state.filteredRuns.length) renderMainChart(); }, 120);
 }).observe(els.mainChart);
-
-const sectionObserver = new IntersectionObserver((entries) => {
-  for (const entry of entries) {
-    if (!entry.isIntersecting) continue;
-    document.querySelectorAll(".app-nav a").forEach((link) => {
-      if (link.hash === `#${entry.target.id}`) link.setAttribute("aria-current", "location");
-      else link.removeAttribute("aria-current");
-    });
-  }
-}, { rootMargin: "-5% 0px -65% 0px" });
-["overview", "signals", "planning", "runs"].forEach((id) => sectionObserver.observe(document.getElementById(id)));

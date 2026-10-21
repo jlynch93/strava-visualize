@@ -1,6 +1,60 @@
 /* The review flow: read the block, inspect a run, then plan the next week.
    Extends the existing paper, ink and lime design system. */
 :root { --ink-faint: oklch(43% 0.024 226); }
+/* Task views share the same data, selected range, and visual language. */
+.settings-bar { margin-bottom: 12px; padding: 10px 0; border-bottom: 1px solid var(--rule); font-size: .85rem; }
+.settings-bar > summary { font-weight: 700; }
+.preferences-disclosure > summary { font-size: .85rem; color: var(--ink-soft); padding: 8px 0; }
+.metric-explanations { margin-top: 16px; font-size: .88rem; line-height: 1.6; }
+.metric-explanations dt { font-weight: 700; margin-top: 12px; }
+.metric-explanations dd { margin: 0; color: var(--ink-soft); }
+body.has-history #planning:not([hidden]) { display: block; }
+.settings-bar label { display: inline-flex; align-items: center; gap: 8px; margin: 8px 16px 8px 0; }
+.settings-bar input[type="checkbox"], .day-toggles input { min-height: 20px; width: 20px; accent-color: var(--teal); }
+.sync-bar, .plan-controls, .workout-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin: 12px 0 20px; }
+.sync-bar { font-size: .85rem; color: var(--ink-soft); }
+.sync-bar span { flex: 1 1 300px; }
+.toolbar { position: sticky; top: 0; z-index: 8; background: var(--paper); box-shadow: 0 1px 0 var(--rule); }
+body[data-view="planning"] .toolbar { display: none; }
+.exploration { margin-top: 24px; }
+.exploration > summary { padding: 16px; font-weight: 700; }
+.exploration > .dashboard { grid-template-columns: 1fr; }
+.exploration .chart-panel { width: 100%; }
+.exploration #heatmapChart { overflow-x: auto; }
+.day-toggles { display: flex; flex-wrap: wrap; gap: 10px; border: 0; padding: 8px 0; }
+.day-toggles label { display: inline-flex; align-items: center; gap: 6px; }
+.day-toggles legend { font-size: .85rem; }
+#planningHistoryNote, #checkinAge { padding: 12px; background: var(--surface-muted); color: var(--ink-soft); font-size: .9rem; }
+#acceptedPlan:not(:empty) { border: 1px solid var(--rule); padding: 16px; margin: 16px 0 24px; }
+.saved-session { display: grid; grid-template-columns: 1fr 145px 85px 30px 130px minmax(180px, 1.5fr); gap: 8px; padding: 12px 0; align-items: center; border-top: 1px solid var(--rule); }
+.saved-session input, .saved-session select { min-width: 0; width: 100%; }
+.analysis-progress { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; font-size: .85rem; margin-top: 12px; }
+dialog { max-width: min(560px, calc(100vw - 32px)); max-height: 85vh; overflow: auto; padding: 24px; color: var(--ink); background: var(--surface); border: 1px solid var(--rule-strong); border-radius: 8px; }
+dialog::backdrop { background: rgb(15 30 35 / .55); }
+dialog p { margin: 16px 0; line-height: 1.6; }
+dialog button { margin: 12px 8px 0 0; }
+#enrichedRun:not(:empty) { margin: 16px 0; padding: 16px; border: 1px solid var(--rule); overflow-x: auto; }
+.workout-toolbar { padding-right: 35px; }
+.workout-toolbar a { text-decoration: underline; }
+.workout-toolbar label { display: grid; gap: 5px; }
+body:not(.has-history) .exploration { display: none; }
+.metric-help { cursor: help; }
+#planDraftReview > summary { padding: 16px 0; font-weight: 700; font-size: .9rem; }
+.plan-controls .context-save { margin: 0; }
+@media (max-width: 1100px) { .saved-session { grid-template-columns: 1fr 145px 85px 30px; } .saved-session select { grid-column: span 2; } }
+@media (max-width: 700px) {
+  .app-nav { width: 100%; justify-content: space-between; }
+  .app-nav a { flex: 1; text-align: center; min-height: 44px; }
+  .settings-bar label { display: flex; }
+  .toolbar { padding: 10px 0; }
+  .toolbar-intro { display: none; }
+  .toolbar-controls { width: 100%; }
+  .saved-session { grid-template-columns: minmax(0, 1fr) 80px 30px; }
+  .saved-session strong { grid-column: 1 / -1; }
+  .saved-session select { grid-column: 1 / -1; }
+  .plan-controls strong { order: -1; width: 100%; }
+  .plan-controls button { flex: 1; }
+}
 [hidden] { display: none !important; }
 html { scroll-padding-top: 90px; }
 body { caret-color: var(--teal); }
@@ -205,3 +259,8 @@ body.has-history .onboarding { display: none; }
   .onboarding-copy h1 { font-size: 2.1rem; }
   .onboarding-field { display: none; }
 }
+
+.recommended-day, .recommended-day small, .recommended-day strong, .recommended-day em { white-space: normal; overflow-wrap: anywhere; min-width: 0; }
+.key-runs-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); }
+#signals .intel-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@media (max-width: 700px) { #signals .intel-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

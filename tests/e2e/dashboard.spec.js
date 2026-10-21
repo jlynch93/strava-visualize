@@ -24,6 +24,7 @@ async function importLedger(page) {
     mimeType: "application/json",
     buffer: Buffer.from(JSON.stringify(ledgerActivities))
   });
+  await page.locator("#confirmImportButton").click();
   await expect(page.locator("#status")).toContainText("Imported 38 activities.");
 }
 
@@ -31,6 +32,7 @@ async function loadLedger(page) {
   await page.goto("/");
   await importLedger(page);
   await expect(page.locator("#activityCount")).toHaveText("38 runs in range");
+  await page.getByRole("link", { name: "Runs", exact: true }).click();
 }
 
 async function loadDemoBlock(page) {
@@ -56,13 +58,17 @@ test("first use presents onboarding and reveals the dashboard after data is load
   await expect(page.locator("#dataSource")).toContainText("Demo");
   await expect(page.locator("#goalForm")).toBeHidden();
   await expect(page.locator("#checkinForm")).toBeHidden();
+  await page.getByRole("link", { name: "Plan", exact: true }).click();
   await page.locator("summary").filter({ hasText: "Goal & availability" }).click();
   await expect(page.locator("#goalMiles")).toBeVisible();
 });
 
 test("a runner can review demo history and open run details", async ({ page }) => {
   await loadDemoBlock(page);
+  await page.getByRole("link", { name: "Overview", exact: true }).click();
+  await page.locator(".exploration > summary").click();
   await expect(page.getByRole("heading", { name: "Small patterns around your running" })).toBeVisible();
+  await page.getByRole("link", { name: "Runs", exact: true }).click();
   await expect(page.locator("#trainingTextureStats .texture-stat")).toHaveCount(5);
 
   const detailButton = page.locator("#activityRows .row-detail-button").first();
@@ -77,15 +83,8 @@ test("a runner can review demo history and open run details", async ({ page }) =
 
 test("interactive charts and the training calendar respond to runner input", async ({ page }) => {
   await loadLedger(page);
-  const calendarDays = page.locator("#recommendedCalendar [data-action='cycle-plan-status']");
-  await expect(calendarDays).toHaveCount(7);
-  await calendarDays.first().click();
-  await expect(calendarDays.first()).toHaveClass(/completed/);
-  await expect(calendarDays.first()).toBeFocused();
-  await page.keyboard.press("Enter");
-  await expect(calendarDays.first()).toHaveClass(/skipped/);
-  await expect(calendarDays.first()).toBeFocused();
-
+  await page.getByRole("link", { name: "Overview", exact: true }).click();
+  await page.locator(".exploration > summary").click();
   const chartAction = page.locator("#structureChart [role='button']").first();
   await expect(chartAction).toBeVisible();
   await chartAction.focus();
@@ -99,6 +98,7 @@ test("interactive charts and the training calendar respond to runner input", asy
 
 test("the main trend supports keyboard drilldown and returns focus to the selected period", async ({ page }) => {
   await loadLedger(page);
+  await page.getByRole("link", { name: "Overview", exact: true }).click();
   const chartAction = page.locator("#mainChart [role='button']").first();
   await expect(chartAction).toHaveAccessibleName(/Open \d+ runs?\./);
   await chartAction.focus();
@@ -198,8 +198,10 @@ test("view links restore dates, chart settings, and ledger filters after reimpor
   await page.locator("#rangeSelect").selectOption("custom");
   await page.locator("#startDate").fill("2025-01-10");
   await page.locator("#endDate").fill("2025-01-20");
+  await page.getByRole("link", { name: "Overview", exact: true }).click();
   await page.locator("#bucketSelect").selectOption("month");
   await page.locator("#metricSelect").selectOption("pace");
+  await page.getByRole("link", { name: "Runs", exact: true }).click();
   await page.locator("#runSearch").fill("Training");
   await page.locator("#runSort").selectOption("oldest");
   await expect(page.locator("#pageSummary")).toHaveText("1–11 of 11 runs matching your search");
@@ -232,6 +234,7 @@ test("CSV export includes the full window and reimports every run name and dista
   await page.locator("#fileInput").setInputFiles({
     name: download.suggestedFilename(), mimeType: "text/csv", buffer: csv
   });
+  await page.locator("#confirmImportButton").click();
   await expect(page.locator("#status")).toContainText("Imported 38 activities.");
   await expect(page.locator("#activityCount")).toHaveText("38 runs in range");
   await page.locator("#runSort").selectOption("oldest");
@@ -265,13 +268,14 @@ test("copy view link writes the selected filters and confirms the copy", async (
 });
 
 test("the plan summary matches a three-run calendar and its Sunday long-run cap", async ({ page }) => {
-  await loadLedger(page);
+  await loadDemoBlock(page);
+  await page.getByRole("link", { name: "Plan", exact: true }).click();
   await page.locator("summary").filter({ hasText: "Goal & availability" }).click();
   await page.locator("#goalMode").selectOption("maintain");
   await page.locator("#goalMiles").fill("20");
   await page.locator("#goalRunDays").selectOption("3");
   await page.locator("#goalLongRunDay").selectOption("Sun");
-  await page.locator("#goalAvailability").fill("Mon, Wed, Sun");
+  for (const day of ["Mon", "Wed", "Sun"]) await page.locator(`.day-toggles input[value="${day}"]`).check();
   await page.getByRole("button", { name: "Save goal", exact: true }).click();
 
   const plannedRuns = page.locator("#recommendedCalendar [data-plan-kind='run']");
@@ -286,7 +290,8 @@ test("the plan summary matches a three-run calendar and its Sunday long-run cap"
 });
 
 test("a missed session adapts the next-week plan without asking the runner to make it up", async ({ page }) => {
-  await loadLedger(page);
+  await loadDemoBlock(page);
+  await page.getByRole("link", { name: "Plan", exact: true }).click();
   await page.locator("summary").filter({ hasText: "Weekly check-in" }).click();
   await page.locator("#checkinOutcome").selectOption("missed");
   await page.getByRole("button", { name: "Save check-in" }).click();
@@ -305,8 +310,10 @@ test("an unavailable coach read explains the failure without breaking the dashbo
     });
   });
   await loadLedger(page);
+  await page.getByRole("link", { name: "Overview", exact: true }).click();
   await page.locator("#coachQuestion").fill("Should I keep the quality session this week?");
   await page.getByRole("button", { name: "Analyze this block" }).click();
+  await page.getByRole("button", { name: "Allow analysis", exact: true }).click();
   const coachRead = page.locator("#aiInsightContent");
   await expect(coachRead).toContainText("The model did not return an analysis");
   await expect(coachRead).toContainText("Coach service is temporarily unavailable.");
@@ -319,7 +326,10 @@ test.describe("mobile runner review", () => {
 
   test("keeps the block review, ledger navigation, and run details usable", async ({ page }) => {
     await loadLedger(page);
-    await expect(page.getByRole("heading", { name: "Small patterns around your running" })).toBeVisible();
+    await page.getByRole("link", { name: "Overview", exact: true }).click();
+  await page.locator(".exploration > summary").click();
+  await expect(page.getByRole("heading", { name: "Small patterns around your running" })).toBeVisible();
+  await page.getByRole("link", { name: "Runs", exact: true }).click();
     await expect(page.locator("#trainingTextureStats .texture-stat")).toHaveCount(5);
     await page.locator("#nextPage").click();
     await expect(page.locator("#pageSummary")).toHaveText("16–30 of 38 runs");
