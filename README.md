@@ -183,9 +183,10 @@ npm run deploy
 ```
 
 `npm run build` creates `.build/public` with content-hashed JS/CSS, an asset
-manifest, and cache headers. `npm run deploy` builds automatically. Direct
-`npx wrangler deploy` requires a fresh `npm run build` first. For local bundle
-validation use `npx wrangler deploy --dry-run`.
+manifest, and cache headers. Wrangler's custom build command runs this step
+automatically, including when Cloudflare invokes `npx wrangler deploy` directly.
+No separate Cloudflare build command is required. For local bundle validation
+use `npx wrangler deploy --dry-run`.
 
 Analysis bodies are capped at 64 KB while streaming, even without Content-Length.
 The Worker rate-limit binding allows five requests per client IP per minute per
