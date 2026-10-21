@@ -20,6 +20,42 @@ async function importHistory(page, activities = history()) {
 async function preferences(page) { await page.locator(".preferences-disclosure").evaluate((element) => element.open = true); }
 async function view(page, name) { await page.getByRole("link", { name, exact: true }).click(); }
 
+test("secondary controls stay collapsed and the data menu supports keyboard dismissal", async ({ page }) => {
+  await page.goto("/"); await importHistory(page);
+  await expect(page.locator("#sourceStatus")).toHaveText("Imported history");
+  await expect(page.locator("#demoButton")).toBeHidden();
+  await expect(page.locator("#unitPreference")).toBeHidden();
+  await expect(page.locator("#signalsDisclosure")).not.toHaveAttribute("open", "");
+  await expect(page.locator("#aiAnalyzeButton")).toBeHidden();
+  await page.locator("#dataMenu > summary").click();
+  await expect(page.locator("#unitPreference")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.locator("#unitPreference")).toBeHidden();
+  await expect(page.locator("#dataMenu > summary")).toBeFocused();
+});
+
+test("session edits are explicit, cancellable, and confirmed beside the saved session", async ({ page }) => {
+  await page.goto("/"); await importHistory(page); await view(page, "Plan");
+  await page.locator("#setupPlanButton").click(); await expect(page.locator("#goalMiles")).toBeFocused();
+  await page.locator("#previousPlanWeek").click(); await page.locator("#acceptPlanButton").click();
+  await expect(page.locator("#planStart")).toBeHidden();
+  await expect(page.locator("#planProgress")).toContainText("Your saved week");
+  const row = page.locator(".saved-session").filter({ has: page.getByText("Long run", { exact: true }) });
+  await expect(row.locator("input[type=number]")).toBeHidden();
+  const saved = await page.evaluate(() => JSON.stringify(acceptedPlans));
+  await row.locator("summary").click(); await row.locator("input[type=number]").fill("4");
+  await row.getByRole("button", { name: "Cancel", exact: true }).click();
+  expect(await page.evaluate(() => JSON.stringify(acceptedPlans))).toBe(saved);
+  await row.locator("summary").click(); await row.locator("input[type=number]").fill("4");
+  await row.getByRole("button", { name: "Save session" }).click();
+  await expect(row.locator("summary")).toContainText("4.0 mi");
+  await expect(page.locator("#acceptedPlan .action-feedback").filter({ hasText: "Session saved." })).toBeVisible();
+  await expect(page.locator("#status")).toBeHidden();
+  await page.reload(); await importHistory(page); await view(page, "Plan");
+  await expect(page.locator("#planWeekLabel")).toContainText("Saved plan");
+  await expect(row.locator("summary")).toContainText("4.0 mi");
+});
+
 test("import preview supports cancel, deduplicated merge, and explicit replacement", async ({ page }) => {
   await page.goto("/"); await importHistory(page);
   const updated = { ...history()[0], name: "Updated run", distance: 6000 };
@@ -75,13 +111,16 @@ test("accepted plans retain editable distances and explicit statuses across relo
   await page.goto("/"); await importHistory(page); await view(page, "Plan");
   await page.locator("#acceptPlanButton").click(); await expect(page.locator("#acceptedPlan .saved-session")).toHaveCount(7);
   const row = page.locator("#acceptedPlan .saved-session").filter({ has: page.getByText("Long run", { exact: true }) });
+  await row.locator("summary").click();
   await row.locator('input[type="number"]').fill("4"); await row.locator('input[type="number"]').press("Tab");
   await row.locator("select").first().selectOption("skipped");
+  await row.getByRole("button", { name: "Save session" }).click();
   const saved = await page.evaluate(() => JSON.stringify(acceptedPlans));
   await view(page, "Overview"); await page.locator("#bucketSelect").selectOption("month");
   expect(await page.evaluate(() => JSON.stringify(acceptedPlans))).toBe(saved);
   await page.reload(); await importHistory(page); await view(page, "Plan");
   const restored = page.locator("#acceptedPlan .saved-session").filter({ has: page.getByText("Long run", { exact: true }) });
+  await restored.locator("summary").click();
   await expect(restored.locator('input[type="number"]')).toHaveValue("4.0");
   await expect(restored.locator("select").first()).toHaveValue("skipped");
   await page.locator("#previousPlanWeek").click(); await expect(page.locator("#acceptedPlan .saved-session")).toHaveCount(0);
@@ -93,10 +132,12 @@ test("saved sessions can be rescheduled and explicitly matched, never completing
   const rows = page.locator("#acceptedPlan .saved-session");
   expect(await page.evaluate(() => acceptedPlans[planKey()].sessions.every((session) => session.status === "planned"))).toBe(true);
   const firstRun = rows.filter({ has: page.getByText("Quality option", { exact: true }) });
+  await firstRun.locator("summary").click();
   const date = history()[0].start_date_local.slice(0, 10);
   await firstRun.locator('input[type="date"]').fill(date); await firstRun.locator('input[type="date"]').press("Tab");
   await firstRun.locator("select").last().selectOption("100");
   await expect(firstRun.locator("select").first()).toHaveValue("completed");
+  await firstRun.getByRole("button", { name: "Save session" }).click();
   expect(await page.evaluate(() => acceptedPlans[planKey()].sessions.filter((session) => session.matchedId === "100").length)).toBe(1);
 });
 test("unknown comparison coverage is not reported as improvement", async ({ page }) => {
@@ -116,6 +157,7 @@ test("Strava sync merges recent changes, loads older history, caches the session
   await page.goto("/"); await expect(page.locator("#syncInfo")).toContainText("2 activities");
   await page.locator("#connectButton").click(); await expect(page.locator("#status")).toContainText("Loaded 1 activities");
   expect(urls[1].searchParams.has("after")).toBe(true);
+  await page.locator("#dataMenu > summary").click();
   await page.locator("#loadOlderButton").click(); await expect(page.locator("#syncInfo")).toContainText("3 activities");
   expect(urls[2].searchParams.has("before")).toBe(true);
   await page.reload(); await expect(page.locator("#syncInfo")).toContainText("3 activities"); expect(urls).toHaveLength(3);
@@ -128,8 +170,13 @@ test("run details fetch and cache splits, support comparisons and previous/next 
   await page.route(/\/api\/activities\/\d+$/, (route) => { details++; return route.fulfill({ json: { activity: { splits_metric: [{ distance: 1000, moving_time: 300, average_heartrate: 145 }] } } }); });
   await page.goto("/"); await expect(page.locator("#syncInfo")).toContainText("16 activities"); await view(page, "Runs");
   await page.locator(".row-detail-button").first().click(); await expect(page.locator("#enrichedRun")).toContainText("Recorded kilometer splits");
+  await expect(page.locator(".workout-lead-metrics")).toBeVisible();
+  await expect(page.locator("#comparisonScope")).toBeHidden();
+  await expect(page.locator("#runMeasurements")).not.toHaveAttribute("open", "");
   await expect(page.getByRole("link", { name: "Open in Strava" })).toHaveAttribute("href", /strava.com\/activities\/100$/);
+  await page.locator("#runComparisons > summary").click();
   await page.locator("#comparisonScope").selectOption("sport"); expect(details).toBe(1);
+  await expect(page.locator("#runComparisons")).toHaveAttribute("open", "");
   await page.getByRole("button", { name: "Previous run", exact: true }).click(); await expect(page.locator("#workoutModalTitle")).toHaveText("Run 2");
   await page.keyboard.press("Escape"); await page.locator(".row-detail-button").first().click(); expect(details).toBe(2);
 });
@@ -144,7 +191,7 @@ test("weather stays off until enabled and converts modeled temperature with unit
 test("coach analysis requires disclosure, can be canceled, and sends no route or run names", async ({ page }) => {
   let payload;
   await page.route("**/api/insights", async (route) => { payload = route.request().postDataJSON(); await new Promise((resolve) => setTimeout(resolve, 1200)); try { await route.fulfill({ status: 503, json: { error: "test" } }); } catch { /* Request was canceled. */ } });
-  await page.goto("/"); await importHistory(page); await page.locator("#aiAnalyzeButton").click();
+  await page.goto("/"); await importHistory(page); await page.locator("#coachDisclosure > summary").click(); await page.locator("#aiAnalyzeButton").click();
   await expect(page.locator("#analysisConsent")).toBeVisible(); await page.locator("#allowAnalysisButton").click();
   await expect(page.getByRole("button", { name: "Cancel analysis" })).toBeVisible();
   await expect.poll(() => Boolean(payload)).toBe(true); await page.getByRole("button", { name: "Cancel analysis" }).click();
@@ -183,6 +230,7 @@ test("goals and saved plans export, reject malformed restores, and restore expli
 test("mobile saved plans and preferences remain within the viewport", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/"); await importHistory(page); await view(page, "Plan"); await page.locator("#acceptPlanButton").click();
+  await page.locator(".saved-session summary").first().click();
   await preferences(page);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   const report = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();

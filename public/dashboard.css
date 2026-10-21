@@ -264,3 +264,78 @@ body.has-history .onboarding { display: none; }
 .key-runs-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); }
 #signals .intel-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 @media (max-width: 700px) { #signals .intel-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* Progressive disclosure: keep the review and saved week in front. */
+.header-actions { display: grid; justify-items: end; position: relative; }
+.source-status { font-size: .78rem; color: var(--ink-soft); }
+.data-menu { position: relative; }
+.data-menu > summary { list-style: none; border: 1px solid var(--rule-strong); border-radius: 6px; padding: 9px 12px; min-height: 40px; color: var(--ink); background: var(--surface); font-size: .85rem; font-weight: 650; }
+.data-menu > summary::-webkit-details-marker { display: none; }
+.data-menu[open] > summary { background: var(--paper-deep); }
+.data-menu-panel { position: absolute; z-index: 30; top: calc(100% + 10px); right: 0; width: min(400px, calc(100vw - 32px)); max-height: min(75vh, 650px); overflow-y: auto; padding: 20px; border: 1px solid var(--rule-strong); border-radius: 8px; background: var(--surface); box-shadow: var(--shadow-sheet); text-align: left; }
+.data-menu-panel h2 { font-size: 1rem; margin: 0 0 8px; }
+.data-menu-actions { display: grid; gap: 10px; }
+.data-menu-actions > p { margin: 0; font-size: .8rem; line-height: 1.5; color: var(--ink-soft); }
+.data-menu-panel .settings-bar { display: grid; gap: 12px; border: 0; border-top: 1px solid var(--rule); margin: 18px 0 0; padding-top: 18px; }
+.data-menu-panel .settings-bar label { display: flex; gap: 10px; margin: 0; line-height: 1.5; }
+.data-menu-panel .settings-bar label:has(select) { justify-content: space-between; }
+.data-menu-panel input[type="checkbox"] { flex: 0 0 20px; }
+.data-menu-panel .file-button { display: flex; align-items: center; justify-content: center; }
+.action-feedback { font-size: .85rem; line-height: 1.5; color: var(--teal); margin: 10px 0 0; }
+.action-feedback.error { color: var(--red); }
+.header-actions > .action-feedback { max-width: 420px; text-align: right; }
+.analysis-row { gap: 12px; }
+.secondary-disclosure { border: 1px solid var(--rule); background: var(--surface); margin-top: 12px; }
+.secondary-disclosure > summary { padding: 16px 20px; display: flex; align-items: center; justify-content: space-between; gap: 16px; font-weight: 700; font-size: .95rem; }
+.secondary-disclosure > summary::before { content: "+"; font-size: 1.1rem; color: var(--teal); }
+.secondary-disclosure[open] > summary::before { content: "−"; }
+.secondary-disclosure > summary span { margin-left: auto; font-size: .8rem; font-weight: 400; color: var(--ink-soft); }
+.secondary-disclosure > .data-panel { margin: 0; border: 0; border-top: 1px solid var(--rule); }
+.secondary-disclosure .ai-insights { margin: 0; }
+.plan-progress { color: var(--ink-soft); font-size: .9rem; margin: 0 0 16px; }
+.plan-start { padding: 20px; margin-bottom: 20px; background: var(--teal-soft); border-left: 3px solid var(--teal); }
+.plan-start p { margin: 6px 0 12px; font-size: .9rem; }
+.plan-history-warning { padding: 12px; font-size: .85rem; background: var(--surface-muted); color: var(--ink-soft); }
+.coaching-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+#planningContext { margin-top: 24px; }
+#planningContext .readiness-card { padding: 20px; }
+#planningContext #planningHistoryNote { margin: 0; }
+#acceptedPlan { margin-bottom: 20px; }
+.saved-session { display: block; padding: 0; }
+.saved-session > summary { display: grid; grid-template-columns: 135px minmax(120px, 1fr) 100px 95px 40px; align-items: center; gap: 12px; min-height: 65px; padding: 12px 0; list-style: none; font-size: .9rem; }
+.saved-session > summary::-webkit-details-marker { display: none; }
+.saved-session > summary time { color: var(--ink-soft); font-size: .85rem; }
+.saved-session > summary strong { grid-column: auto; }
+.session-status { font-size: .78rem; color: var(--ink-soft); }
+.session-status.completed { color: var(--teal); }
+.session-edit-label { color: var(--teal); text-decoration: underline; font-size: .8rem; }
+.session-editor { display: grid; grid-template-columns: 145px 110px 125px minmax(180px, 1fr); gap: 12px; padding: 8px 0 20px; }
+.session-editor > label { display: grid; gap: 6px; font-size: .8rem; color: var(--ink-soft); }
+.session-editor select { grid-column: auto; }
+.session-editor > button { justify-self: start; }
+.workout-lead { display: block; }
+.workout-lead-metrics { width: 100%; }
+.workout-more { margin-top: 20px; display: grid; gap: 10px; }
+.workout-disclosure { border: 1px solid var(--rule); }
+.workout-disclosure > summary { padding: 16px; font-weight: 650; font-size: .92rem; }
+.workout-disclosure > .workout-section, .workout-disclosure > .workout-read { margin: 0; padding: 18px; border: 0; border-top: 1px solid var(--rule); }
+.workout-disclosure > label { display: grid; gap: 6px; margin: 0 18px 18px; font-size: .85rem; }
+#enrichedRun:not(:empty) { margin: 20px 0 0; }
+@media (max-width: 1100px) { .session-editor { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 700px) {
+  .header-actions { justify-items: start; width: 100%; }
+  .header-actions > .action-feedback { text-align: left; }
+  .data-menu-panel { position: fixed; top: 110px; right: 16px; }
+  .secondary-disclosure > summary { padding: 16px; flex-wrap: wrap; gap: 8px; }
+  .secondary-disclosure > summary span { display: none; }
+  .coaching-grid { grid-template-columns: 1fr; }
+  .saved-session > summary { grid-template-columns: minmax(0, 1fr) auto auto; gap: 5px 12px; }
+  .saved-session > summary time { grid-column: 1; grid-row: 2; }
+  .saved-session > summary strong { grid-column: 1; grid-row: 1; }
+  .saved-session .session-distance { grid-column: 2; grid-row: 1; }
+  .saved-session .session-status { grid-column: 2; grid-row: 2; }
+  .saved-session .session-edit-label { grid-column: 3; grid-row: 1 / 3; }
+  .session-editor { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .session-editor > label:last-of-type { grid-column: 1 / -1; }
+  .session-editor select { grid-column: auto; }
+}

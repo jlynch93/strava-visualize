@@ -322,6 +322,7 @@ test("an unavailable coach read explains the failure without breaking the dashbo
   });
   await loadLedger(page);
   await page.getByRole("link", { name: "Overview", exact: true }).click();
+  await page.locator("#coachDisclosure > summary").click();
   await page.locator("#coachQuestion").fill("Should I keep the quality session this week?");
   await page.getByRole("button", { name: "Analyze this block" }).click();
   await page.getByRole("button", { name: "Allow analysis", exact: true }).click();

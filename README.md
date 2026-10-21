@@ -38,6 +38,9 @@ stay independent of the chart's grouping.
 
 **Plan** brings together goals, availability, the weekly check-in, and a draft
 calendar. Overview, Runs and Plan are separate views sharing the same history.
+Overview keeps the summary, three key metrics, and trend chart in view; training
+signals, coach analysis, and supporting data expand when needed. **Data & settings**
+holds imports, sync history, units, weather preferences, and backups.
 Plan uses the current 28 days, independently of the historical review window.
 Open the goal or check-in disclosure to edit it. Check-ins expire after seven
 days; an undated legacy check-in must be refreshed. Scheduling misses preserve
@@ -46,13 +49,18 @@ an available long-run day, respects the weekly run limit, and gives a race
 priority during race week. Session distances reconcile to the draft total.
 Save a draft to preserve that week's sessions, then edit distances, reschedule,
 choose explicit statuses, and match recorded runs. Rest days never complete
-automatically. Previous/next week controls reopen saved plans. Copy uses the
+automatically. Select a saved session to open its editor, then **Save session**
+or **Cancel**. Returning to Plan opens the current week's saved plan when one exists.
+Previous/next week controls reopen saved plans. Copy uses the
 saved plan when present. Replacing a saved week requires confirmation.
 
 **Runs** searches the entire selected history, with sorting and 15-row pages.
 On mobile, each row emphasizes the run name, date, distance, and pace; open the
 run for the remaining metrics. **Export CSV** downloads the entire selected
-window, using meters for distance and elevation and seconds for duration.
+window. Run details show distance, moving pace, moving time, and available splits
+first; comparisons, additional measurements, weather, and coach analysis expand
+separately. **Export CSV** uses
+meters for distance and elevation and seconds for duration.
 **Copy view link** preserves range, grouping, trend, search, and sort settings.
 The link contains no activity history; load the data separately when reopening.
 
@@ -60,7 +68,7 @@ Imports show a preview before merging or replacing history; duplicate IDs are
 updated. Mark a file complete for its date range only if it includes all activity
 history in that range. Comparison changes are withheld when preceding history
 is incomplete. Imported activities stay in the current tab unless **Remember
-imported history** is enabled. Remove saved history in Preferences. Goals,
+imported history** is enabled. Remove saved history in **Data & settings**. Goals,
 check-ins, and accepted plans are saved in this browser, with backup/restore in
 Preferences. There is no account or cloud sync for that coaching context.
 

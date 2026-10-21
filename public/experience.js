@@ -17,6 +17,19 @@ let activeView = "overview";
 let selectedPlanOffset = 1;
 let comparisonScope = "distance";
 let pendingImport = null;
+let feedbackScopeId = null;
+
+function actionFeedback(message, isError, scopeId = feedbackScopeId) {
+  const host = scopeId ? document.getElementById(scopeId) : null;
+  if (!host || (host.matches(".action-feedback") ? host.parentElement.offsetParent === null : host.offsetParent === null)) return false;
+  let note = host.matches(".action-feedback") ? host : host.querySelector(":scope > .action-feedback");
+  if (!note) { note = document.createElement("p"); note.className = "action-feedback"; host.append(note); }
+  note.setAttribute("role", isError ? "alert" : "status");
+  note.classList.toggle("error", isError);
+  note.textContent = message;
+  note.hidden = !message;
+  return Boolean(message);
+}
 
 function persist(key, value) {
   try { localStorage.setItem(key, JSON.stringify(value)); return true; }
@@ -105,9 +118,17 @@ function renderSyncInfo() {
   document.querySelector("#loadOlderButton").hidden = state.dataSource !== "strava" || !state.historyTruncated;
   document.querySelector("#fullSyncButton").hidden = !state.stravaConnected;
   document.querySelector("#removeSavedButton").hidden = !preferences.rememberImports;
+  const source = state.dataSource === "strava" ? "Strava" : state.dataSource === "import" ? "Imported history" : state.dataSource === "demo" ? "Demo history" : "No history loaded";
+  document.querySelector("#sourceStatus").textContent = `${source}${state.lastSync ? ` · Synced ${new Date(state.lastSync).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : ""}`;
+  const demoParent = state.dataSource === "strava" || state.dataSource === "import" ? document.querySelector("#dataMenuActions") : document.querySelector(".header-actions .actions");
+  if (els.demoButton.parentElement !== demoParent) demoParent.append(els.demoButton);
+  const connectParent = state.dataSource === "import" ? document.querySelector("#dataMenuActions") : document.querySelector(".header-actions .actions");
+  if (els.connectButton.parentElement !== connectParent) connectParent.prepend(els.connectButton);
 }
 function renderAcceptedPlan() {
   const plan = acceptedPlans[planKey()];
+  document.querySelector("#planStart").hidden = Boolean(Object.keys(coachingContext.goal).length || plan);
+  document.querySelector("#planProgress").textContent = plan ? "Your saved week. Select a session to edit it." : Object.keys(coachingContext.goal).length ? "Review the draft, then save the week when it fits your schedule." : "Start with availability and a weekly goal, then review your draft.";
   const root = document.querySelector("#acceptedPlan"); root.replaceChildren();
   document.querySelector("#acceptPlanButton").disabled = !state.draftSessions?.length || Boolean(plan);
   document.querySelector("#acceptPlanButton").textContent = plan ? "Draft saved" : "Save this draft";
@@ -127,25 +148,54 @@ function renderAcceptedPlan() {
   const summary = document.createElement("p"); summary.textContent = `Saved ${new Date(plan.savedAt).toLocaleDateString()} · ${displayDistance(total)} across ${plan.sessions.filter((session) => session.kind === "run").length} sessions. Edits stay with this week.`;
   root.append(summary);
   for (const [index, session] of plan.sessions.entries()) {
-    const row = document.createElement("div"); row.className = "saved-session";
+    const row = document.createElement("details"); row.className = "saved-session"; row.dataset.sessionIndex = index;
+    const summary = document.createElement("summary"); summary.setAttribute("aria-label", `Edit ${session.title} on ${session.date}`);
     const label = document.createElement("strong"); label.textContent = session.title;
+    const day = document.createElement("time"); day.dateTime = session.date; day.textContent = new Date(`${session.date}T12:00:00`).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+    const plannedDistance = document.createElement("span"); plannedDistance.className = "session-distance"; plannedDistance.textContent = session.kind === "run" ? displayDistance(session.miles) : "Rest day";
+    const badge = document.createElement("span"); badge.className = `session-status ${session.status}`; badge.textContent = session.status[0].toUpperCase() + session.status.slice(1);
+    const editLabel = document.createElement("span"); editLabel.className = "session-edit-label"; editLabel.textContent = "Edit";
+    summary.append(day, label, plannedDistance, badge, editLabel); row.append(summary);
+    const editor = document.createElement("form"); editor.className = "session-editor"; editor.id = `sessionEditor-${index}`; editor.dataset.feedbackScope = "";
     const date = document.createElement("input"); date.type = "date"; date.value = session.date; date.setAttribute("aria-label", `Reschedule ${session.title}`);
-    date.addEventListener("change", () => { if (!date.value) return; session.date = date.value; session.matchedId = ""; savePlans(); renderAcceptedPlan(); });
+    date.required = true;
     const distance = document.createElement("input"); distance.type = "number"; distance.min = "0"; distance.max = "500"; distance.step = ".1"; distance.value = (session.miles * (preferences.units === "metric" ? 1.609344 : 1)).toFixed(1); distance.disabled = session.kind !== "run";
     distance.setAttribute("aria-label", `${session.title} distance in ${preferences.units === "metric" ? "kilometers" : "miles"}`);
-    distance.addEventListener("change", () => { if (!distance.checkValidity()) return; session.miles = Number(distance.value) / (preferences.units === "metric" ? 1.609344 : 1); savePlans(); renderAcceptedPlan(); });
+    distance.required = true;
     const unit = document.createElement("span"); unit.textContent = preferences.units === "metric" ? "km" : "mi";
     const status = document.createElement("select"); status.setAttribute("aria-label", `${session.title} status`);
     for (const value of ["planned", "completed", "skipped"]) status.add(new Option(value[0].toUpperCase() + value.slice(1), value));
     status.value = session.status;
-    status.addEventListener("change", () => { session.status = status.value; if (status.value !== "completed") session.matchedId = ""; savePlans(); });
     const match = document.createElement("select"); match.setAttribute("aria-label", `Match activity to ${session.title}`); match.disabled = session.kind !== "run";
     match.add(new Option("Match a run (optional)", ""));
     const used = new Set(plan.sessions.filter((other) => other !== session).map((other) => other.matchedId).filter(Boolean));
-    state.rawActivities.filter(isRun).filter((run) => !used.has(String(run.id)) && Math.abs(parseActivityDate(run) - new Date(`${session.date}T12:00:00`)) < 2 * 86400000).forEach((run) => match.add(new Option(`${localDateValue(parseActivityDate(run))} · ${run.name} · ${displayDistance(miles(run.distance))}`, String(run.id))));
+    const populateMatches = (selectedId = "") => {
+      match.replaceChildren(new Option("Match a run (optional)", ""));
+      state.rawActivities.filter(isRun).filter((run) => !used.has(String(run.id)) && Math.abs(parseActivityDate(run) - new Date(`${date.value}T12:00:00`)) < 2 * 86400000).forEach((run) => match.add(new Option(`${localDateValue(parseActivityDate(run))} · ${run.name} · ${displayDistance(miles(run.distance))}`, String(run.id))));
+      match.value = selectedId;
+    };
+    populateMatches(session.matchedId);
     match.value = session.matchedId || "";
-    match.addEventListener("change", () => { session.matchedId = match.value; if (match.value) session.status = "completed"; savePlans(); renderAcceptedPlan(); });
-    row.append(label, date, distance, unit, status, match); root.append(row);
+    date.addEventListener("change", () => populateMatches());
+    match.addEventListener("change", () => { if (match.value) status.value = "completed"; });
+    status.addEventListener("change", () => { if (status.value !== "completed") match.value = ""; });
+    const field = (title, control) => { const wrap = document.createElement("label"); wrap.textContent = title; wrap.append(control); return wrap; };
+    const distanceField = field(`Distance (${unit.textContent})`, distance);
+    const save = document.createElement("button"); save.type = "submit"; save.textContent = "Save session";
+    const cancel = document.createElement("button"); cancel.type = "button"; cancel.textContent = "Cancel";
+    cancel.addEventListener("click", () => { renderAcceptedPlan(); root.querySelector(`[data-session-index="${index}"] > summary`)?.focus(); });
+    editor.append(field("Date", date), distanceField, field("Status", status), field("Recorded activity", match), save, cancel);
+    editor.addEventListener("submit", (event) => {
+      event.preventDefault();
+      session.date = date.value; session.miles = session.kind === "run" ? Number(distance.value) / (preferences.units === "metric" ? 1.609344 : 1) : 0;
+      session.status = status.value; session.matchedId = match.value || "";
+      const saved = savePlans(); renderAcceptedPlan();
+      const updatedRow = root.querySelector(`[data-session-index="${index}"]`);
+      setStatus(saved ? "Session saved." : "Updated in this tab. Browser storage failed; back up the plan before closing.", !saved, `sessionFeedback-${index}`);
+      updatedRow.querySelector("summary").focus({ preventScroll: true });
+    });
+    const feedback = document.createElement("p"); feedback.id = `sessionFeedback-${index}`; feedback.className = "action-feedback"; feedback.hidden = true;
+    row.append(editor); root.append(row, feedback);
   }
 }
 function finishExperienceRender() {
@@ -155,6 +205,9 @@ function finishExperienceRender() {
   const newest = state.rawActivities.filter(isRun).map(parseActivityDate).sort((a, b) => b - a)[0];
   const currentStart = new Date(); currentStart.setDate(currentStart.getDate() - 27); currentStart.setHours(0, 0, 0, 0);
   document.querySelector("#planningHistoryNote").textContent = !newest || new Date() - newest > 7 * 86400000 || !hasHistoryCoverage(currentStart, new Date()) ? "Your recent history is incomplete or over a week old. Sync or import recent runs before accepting a draft. Planning uses the current 28 days, independently of the review window." : "Planning uses the current 28 days, independently of the review window. Review the draft against your schedule.";
+  const warning = document.querySelector("#planHistoryWarning");
+  warning.hidden = Boolean(newest && new Date() - newest <= 7 * 86400000 && hasHistoryCoverage(currentStart, new Date()));
+  warning.textContent = "Recent history is incomplete. Refresh your data before relying on this draft.";
   setView(activeView); applyDisplayUnits();
 }
 let analysisConsentResolve = null;
@@ -174,10 +227,31 @@ function startAnalysisTimer(controller, root = document.querySelector(".ai-insig
   update(); const timer = setInterval(update, 1000);
   return () => { clearInterval(timer); progress.remove(); };
 }
-function finishModalRender(run) {
+function streamlineRunDetails(openPanels) {
+  const body = els.workoutModalContent.querySelector(".workout-body");
+  const grid = body.querySelector(".workout-grid");
+  const more = document.createElement("div"); more.className = "workout-more";
+  const panel = (id, title, content) => {
+    const details = document.createElement("details"); details.id = id; details.className = "workout-disclosure";
+    const summary = document.createElement("summary"); summary.textContent = title; details.append(summary, ...content.filter(Boolean));
+    details.open = openPanels.includes(id); more.append(details); return details;
+  };
+  const section = (heading) => [...grid.querySelectorAll(".workout-section")].find((element) => element.querySelector("h3")?.textContent === heading);
+  const comparisons = panel("runComparisons", "Comparisons and training context", [section("Context"), section("Effort profile"), section("Neighboring runs"), section("Signals"), body.querySelector(".workout-read")]);
+  const comparisonControl = document.querySelector("#comparisonScope").closest("label"); comparisons.querySelector("summary").after(comparisonControl);
+  panel("runMeasurements", "More run measurements", [section("Run details")]);
+  panel("runWeather", "Weather at the start", [grid.querySelector(".workout-weather")]);
+  panel("runCoach", "Ask for a coach’s read", [grid.querySelector(".workout-ai-digest")]);
+  body.querySelector(".workout-lead").after(document.querySelector("#enrichedRun"));
+  body.querySelectorAll(".workout-lead-metric small")[0].textContent = "Recorded distance";
+  body.querySelectorAll(".workout-lead-metric small")[1].textContent = "Moving pace";
+  grid.remove(); body.append(more);
+}
+function finishModalRender(run, openPanels = []) {
+  streamlineRunDetails(openPanels);
   document.querySelector("#workoutModalTitle").dataset.unitSkip = "";
   const select = document.querySelector("#comparisonScope");
-  if (select) { select.value = comparisonScope; select.addEventListener("change", () => { comparisonScope = select.value; showWorkoutModal(run.id, state.modalTrigger); }); }
+  if (select) { select.value = comparisonScope; select.addEventListener("change", () => { comparisonScope = select.value; showWorkoutModal(run.id, state.modalTrigger); document.querySelector("#comparisonScope").focus(); }); }
   const index = state.filteredRuns.findIndex((candidate) => String(candidate.id) === String(run.id));
   els.workoutModalContent.querySelector('[data-action="previous-run"]').disabled = index <= 0;
   els.workoutModalContent.querySelector('[data-action="next-run"]').disabled = index >= state.filteredRuns.length - 1;
@@ -226,16 +300,34 @@ function initializeExperience() {
   const app = document.querySelector("#app");
   app.insertAdjacentHTML("afterbegin", `<section class="settings-bar" aria-label="Preferences"><label>Units <select id="unitPreference"><option value="imperial">Miles / °F</option><option value="metric">Kilometers / °C</option></select></label><label><input id="weatherPreference" type="checkbox"> Modeled weather (shares rounded start location with Open-Meteo)</label><label><input id="rememberPreference" type="checkbox"> Remember imported history on this device</label><button id="removeSavedButton" type="button">Remove saved history</button><button id="backupContextButton" type="button">Back up goals and plans</button><label class="file-button">Restore goals and plans<input id="restoreContextInput" type="file" accept="application/json,.json"></label></section>`);
   const settings = document.querySelector(".settings-bar");
-  const disclosure = document.createElement("details"); disclosure.className = "preferences-disclosure";
-  disclosure.innerHTML = "<summary>Preferences and backups</summary>";
-  document.querySelector(".app-header").after(disclosure); disclosure.append(settings);
-  disclosure.insertAdjacentHTML("afterend", `<div class="sync-bar"><span id="syncInfo" role="status"></span><button id="loadOlderButton" type="button" hidden>Load older activities</button><button id="fullSyncButton" type="button" hidden>Refresh loaded history</button></div>`);
+  const disclosure = document.createElement("details"); disclosure.className = "preferences-disclosure data-menu"; disclosure.id = "dataMenu";
+  disclosure.innerHTML = '<summary>Data &amp; settings</summary><div class="data-menu-panel"><div id="dataMenuActions" class="data-menu-actions"><h2>Your history</h2><p id="syncInfo"></p><button id="loadOlderButton" type="button" hidden>Load older activities</button><button id="fullSyncButton" type="button" hidden>Refresh loaded history</button></div></div>';
+  document.querySelector(".header-actions .actions").append(disclosure);
+  document.querySelector(".header-actions").id = "connectionActions";
+  document.querySelector(".header-actions").dataset.feedbackScope = "";
+  document.querySelector("#heroStatus").hidden = true;
+  const sourceStatus = document.createElement("span"); sourceStatus.id = "sourceStatus"; sourceStatus.className = "source-status";
+  document.querySelector(".header-actions").prepend(sourceStatus);
+  document.querySelector("#dataMenuActions").append(els.fileInput.closest("label"), document.querySelector("#disconnectButton"));
+  disclosure.querySelector(".data-menu-panel").append(settings);
+  for (const type of ["click", "submit", "change"]) document.addEventListener(type, (event) => {
+    const target = event.target instanceof Element ? event.target : null;
+    feedbackScopeId = target?.closest("[data-feedback-scope]")?.id || null;
+  }, true);
+  document.addEventListener("pointerdown", (event) => { if (disclosure.open && !disclosure.contains(event.target)) disclosure.open = false; });
+  disclosure.addEventListener("keydown", (event) => { if (event.key === "Escape") { disclosure.open = false; disclosure.querySelector("summary").focus(); event.stopPropagation(); } });
   const exploration = document.createElement("details"); exploration.className = "exploration data-panel"; exploration.dataset.viewSection = "overview"; exploration.innerHTML = "<summary>Explore patterns and supporting data</summary>";
   document.querySelector("#runs").before(exploration);
   document.querySelectorAll(".training-texture, .advanced-exploration, main > .dashboard").forEach((section) => exploration.append(section));
   exploration.addEventListener("toggle", () => { if (exploration.open && state.filteredRuns.length) { renderStructure(); renderHeatmap(); renderScatter(); renderRollingWorkload(); applyDisplayUnits(exploration); } });
   exploration.insertAdjacentHTML("afterbegin", '<section class="data-panel" aria-label="Additional training signals"><h2>Supporting metrics</h2><div id="supportingSignals" class="intel-grid"></div></section>');
   document.querySelectorAll("#overview, .key-runs, .analysis-row").forEach((section) => section.dataset.viewSection = "overview");
+  const signals = document.querySelector("#signals"); const coach = document.querySelector(".ai-insights");
+  const signalDisclosure = document.createElement("details"); signalDisclosure.id = "signalsDisclosure"; signalDisclosure.className = "secondary-disclosure";
+  signalDisclosure.innerHTML = '<summary>Training signals<span>Workload, coverage and definitions</span></summary>'; signalDisclosure.append(signals);
+  const coachDisclosure = document.createElement("details"); coachDisclosure.id = "coachDisclosure"; coachDisclosure.className = "secondary-disclosure";
+  coachDisclosure.innerHTML = '<summary>Ask for a coach’s read<span>Optional analysis of this training window</span></summary>'; coachDisclosure.append(coach);
+  document.querySelector(".analysis-row").replaceChildren(signalDisclosure, coachDisclosure);
   document.querySelector("#planning").dataset.viewSection = "planning"; document.querySelector("#runs").dataset.viewSection = "runs";
   document.querySelector(".brand-lockup").addEventListener("click", () => setView("overview", true));
   document.querySelectorAll(".app-nav a").forEach((link) => link.addEventListener("click", (event) => { event.preventDefault(); history.replaceState(null, "", `${location.pathname}${location.search}${link.hash}`); setView(link.hash.slice(1), true); }));
@@ -243,10 +335,19 @@ function initializeExperience() {
   window.addEventListener("hashchange", () => setView(location.hash.slice(1), true));
   document.querySelector("#planning .panel-heading").insertAdjacentHTML("afterend", `<p id="planningHistoryNote" role="status"></p><div class="plan-controls"><button id="previousPlanWeek" type="button">Previous week</button><strong id="planWeekLabel"></strong><button id="nextPlanWeek" type="button">Next week</button><button id="acceptPlanButton" type="button">Save this draft</button><button id="replacePlanButton" type="button">Replace saved plan with draft</button></div><section id="acceptedPlan" data-native-units aria-label="Saved weekly plan"></section>`);
   document.querySelector("#coachingWorkspaceTitle").textContent = "Your training plan";
+  document.querySelector("#planning .panel-heading").insertAdjacentHTML("afterend", '<p id="planProgress" class="plan-progress"></p><div id="planStart" class="plan-start"><strong>Make this week yours</strong><p>Choose your running days and a weekly goal to shape the draft.</p><button id="setupPlanButton" type="button">Set availability and goal</button></div>');
+  document.querySelector("#setupPlanButton").addEventListener("click", () => { els.goalForm.closest("details").open = true; els.goalMiles.focus(); });
+  els.goalForm.dataset.feedbackScope = ""; els.checkinForm.dataset.feedbackScope = "";
+  document.querySelector(".plan-controls").id = "planActions"; document.querySelector(".plan-controls").dataset.feedbackScope = "";
   document.querySelector(".plan-controls").append(els.copyPlanButton);
   const draftReview = document.createElement("details"); draftReview.id = "planDraftReview"; draftReview.open = true;
   draftReview.innerHTML = "<summary>Review a replacement draft</summary>";
   const draft = document.querySelector(".plan-draft"); draft.before(draftReview); draftReview.append(draft);
+  const planningContext = document.createElement("details"); planningContext.id = "planningContext"; planningContext.className = "secondary-disclosure";
+  planningContext.innerHTML = '<summary>Current training context<span>Recent history and the inputs behind your draft</span></summary>';
+  planningContext.append(document.querySelector("#planningHistoryNote"), document.querySelector(".readiness-card"));
+  document.querySelector("#planning").append(planningContext);
+  document.querySelector(".plan-controls").insertAdjacentHTML("beforebegin", '<p id="planHistoryWarning" class="plan-history-warning" role="status" hidden></p>');
   document.querySelector("#checkinForm").insertAdjacentHTML("afterbegin", '<p id="checkinAge" role="status"></p>');
   document.querySelector("#checkinOutcome").insertAdjacentHTML("afterend", '<label for="missedReason">If missed, why?</label><select id="missedReason"><option value="fatigue">Fatigue / recovery</option><option value="schedule">Schedule / life</option><option value="other">Other / unsure</option></select>');
   document.querySelector("#readinessTitle").textContent = "Current training context";
@@ -319,6 +420,7 @@ function initializeExperience() {
     event.target.value = "";
   });
   if (!validPlans(acceptedPlans)) acceptedPlans = {};
+  if (acceptedPlans[localDateValue(TrainingCore.weekStart(new Date()))]) selectedPlanOffset = 0;
   if (preferences.rememberImports) {
     const saved = readSaved("run-trends-import-v1", null);
     if (Array.isArray(saved?.activities)) {

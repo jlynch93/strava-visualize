@@ -146,9 +146,10 @@ const METRICS = {
   efficiency: { label: "HR coverage", unit: "%", value: (b) => b.movingSeconds ? b.hrSeconds / b.movingSeconds * 100 : 0, format: (v) => `${Math.round(v)}%` }
 };
 
-function setStatus(message, isError = false) {
+function setStatus(message, isError = false, scopeId) {
   els.status.textContent = message || "";
   els.status.classList.toggle("error", isError);
+  els.status.hidden = actionFeedback(message || "", isError, scopeId);
 }
 
 function miles(meters) {
@@ -1213,7 +1214,7 @@ function renderRecommendedCalendar(intent, summary, targetMiles, race) {
 function cyclePlanStatus(date) {
   if (!acceptedPlans[planKey()]) document.querySelector("#acceptPlanButton").click();
   const row = [...document.querySelectorAll("#acceptedPlan .saved-session")].find((element) => element.querySelector('input[type="date"]').value === date);
-  if (row) { row.scrollIntoView({ block: "center", behavior: "instant" }); row.querySelector("select").focus({ preventScroll: true }); }
+  if (row) { row.open = true; row.scrollIntoView({ block: "center", behavior: "instant" }); row.querySelector("select").focus({ preventScroll: true }); }
   setStatus("Use the saved session's status, date, and activity matching controls to update this plan.");
 }
 
@@ -2306,6 +2307,7 @@ function nearbyRunText(run, gap) {
 function showWorkoutModal(runId, trigger = document.activeElement) {
   const run = state.filteredRuns.find((candidate) => String(candidate.id) === String(runId));
   if (!run) return;
+  const openPanels = String(runId) === state.activeRunId ? [...els.workoutModalContent.querySelectorAll("details[open]")].map((element) => element.id) : [];
   rememberModalTrigger(trigger);
   state.modalSession += 1;
   const session = state.modalSession;
@@ -2407,7 +2409,7 @@ function showWorkoutModal(runId, trigger = document.activeElement) {
   `;
   els.workoutModal.hidden = false;
   hydrateRunDetail(run, session);
-  finishModalRender(run);
+  finishModalRender(run, openPanels);
   document.body.classList.add("modal-open");
   els.workoutModalClose.focus();
   if (state.activeRunWeather) {
