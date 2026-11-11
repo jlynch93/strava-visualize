@@ -922,9 +922,7 @@ function renderIntel(summary, previous, start, end) {
       tone: restClass
     }
   ];
-  els.intelGrid.replaceChildren(...cards.filter((card) => ["Weekly volume", "Run frequency", "Ramp rate", "Heart-rate coverage"].includes(card.label)).map(renderIntelCard));
-  const supporting = document.querySelector("#supportingSignals");
-  if (supporting) supporting.replaceChildren(...cards.filter((card) => !["Weekly volume", "Run frequency", "Ramp rate", "Heart-rate coverage"].includes(card.label)).map(renderIntelCard));
+  els.intelGrid.replaceChildren(...cards.map(renderIntelCard));
 }
 
 function renderIntelCard(card) {
@@ -1131,6 +1129,12 @@ function renderCoachingWorkspace(summary) {
       : outcome === "completed"
         ? "Plan stays on course: your last planned session was completed."
         : outcome === "schedule" ? "The session was missed because of scheduling. Keep the baseline; do not add make-up work." : "Log your last planned session to let this draft adapt.";
+  const readinessNow = planReadiness();
+  if (readinessNow && readinessNow.score < 55 && chosenIntent === "auto") {
+    els.planAdaptation.textContent += readinessNow.score < 35
+      ? ` Readiness is ${readinessNow.score}/100, so this is a recovery week.`
+      : ` Readiness is ${readinessNow.score}/100, so the quality session is swapped for an easy run.`;
+  }
   els.intentRecommendation.textContent = outcome === "missed"
     ? "Recovery draft after a missed session; your saved block intent is unchanged."
     : chosenIntent === "auto"
@@ -1162,6 +1166,9 @@ function renderRecommendedCalendar(intent, summary, targetMiles, race) {
   const isAvailable = (index) => !available?.length || available.includes(dayNames[index].toLowerCase());
   const raceIndex = race ? dates.findIndex((date) => localDateValue(date) === coachingContext.goal.raceDate) : -1;
   const recovery = intent === "recover" || (activeCheckin().outcome === "missed" && activeCheckin().missedReason !== "schedule");
+  // Readiness in the "hold steady" band keeps the week but drops its hard session.
+  const readinessToday = planReadiness();
+  const holdQuality = Boolean(readinessToday && readinessToday.score < 55 && (coachingContext.goal.mode || "auto") === "auto");
   // A race replaces this week's long run. Reserve that date, or the runner's
   // available long-run day, before selecting the remaining sessions.
   const priority = [raceIndex, raceIndex < 0 ? longIndex : -1, 1, 3, 0, 6, 2, 4, 5];
@@ -1176,7 +1183,7 @@ function renderRecommendedCalendar(intent, summary, targetMiles, race) {
     if (!planned.has(index)) return ["Rest / mobility", "Leave room to recover"];
     if (index === longIndex && raceIndex < 0) return [recovery ? "Easy long run" : "Long run", `At or below ${displayDistance(longRun, 1)}`];
     if (recovery || raceIndex >= 0) return ["Easy run", "Keep it short and conversational"];
-    if (index === 1) return ["Quality option", "Choose only if your check-in supports it"];
+    if (index === 1) return holdQuality ? ["Easy run", `Readiness ${readinessToday.score}/100: quality moved out this week`] : ["Quality option", "Choose only if your check-in supports it"];
     if (index === 3) return ["Steady run", "Keep the weekly range in view"];
     return ["Easy run", "Conversational effort"];
   });
@@ -1208,6 +1215,8 @@ function recommendIntent(summary, race) {
   if (checkin.outcome === "missed" && checkin.missedReason !== "schedule") return { intent: "recover", reason: "a missed session is a cue to protect recovery, not make it up" };
   if (checkin.feel && Number(checkin.feel) <= 2) return { intent: "recover", reason: "your check-in reported a hard block" };
   if (checkin.limiter && checkin.limiter !== "none") return { intent: "maintain", reason: `${checkin.limiter} was marked as a limiting factor` };
+  const readiness = planReadiness();
+  if (readiness && readiness.score < 35) return { intent: "recover", reason: `readiness today is ${readiness.score}/100 (${readiness.label.toLowerCase()})` };
   if (race && race.weeks <= 2) return { intent: "recover", reason: "the race is close enough to prioritize freshness" };
   if (race && race.weeks <= 12 && summary.rampRate !== null && summary.rampRate <= 15) return { intent: "build", reason: "you are in the race build window with a controlled recent ramp" };
   return { intent: "maintain", reason: "the available workload data does not support a stronger change" };
@@ -1497,6 +1506,7 @@ const unitName = () => preferences.units === "metric" ? "km" : "mi";
 // Per run: distance across, pace up (faster is higher). Each dot opens its run.
 function renderScatter() {
   const runs = state.filteredRuns.filter((run) => miles(run.distance) > 0 && paceSeconds(run) > 0);
+  setLegend(els.scatterChart, [{ key: "type-easy", label: "Easy & recovery" }, { key: "type-long", label: "Long" }, { key: "type-quality", label: "Quality & race" }]);
   scatterChart(els.scatterChart, {
     ariaLabel: "Pace against distance for each run. Faster runs sit higher.",
     xTitle: `Distance (${unitName()}) →`, yTitle: "↑ Faster pace", invertY: true,
@@ -1504,9 +1514,10 @@ function renderScatter() {
     xFormat: (value) => `${Math.round(value * unitFactor())}`,
     yFormat: (value) => formatPace(value).replace(/\/(mi|km)$/, ""),
     points: runs.map((run) => ({
-      x: miles(run.distance), y: paceSeconds(run),
-      title: `${run.name} · ${parseActivityDate(run).toLocaleDateString(undefined, { month: "short", day: "numeric" })}`,
+      x: miles(run.distance), y: paceSeconds(run), className: `type-${runType(run).group}`,
+      title: `${runType(run).label} · ${run.name} · ${parseActivityDate(run).toLocaleDateString(undefined, { month: "short", day: "numeric" })}`,
       rows: [
+        { label: "Type", value: runType(run).label },
         { label: "Distance", value: displayDistance(miles(run.distance), 2) },
         { label: "Pace", value: formatPace(paceSeconds(run)) },
         { label: "Heart rate", value: run.average_heartrate ? `${Math.round(run.average_heartrate)} bpm` : "-" }
@@ -1713,11 +1724,8 @@ function percentileRank(values, value, higherIsBetter = true) {
   return Math.round((count / clean.length) * 100);
 }
 
-function classifyRun(run, distanceMiles, pace, distanceRank, paceRank) {
-  if (Number(run.workout_type) === 1) return "Race";
-  if (Number(run.workout_type) === 3) return "Quality";
-  if (distanceRank >= 85) return "Long";
-  return "Steady";
+function classifyRun(run) {
+  return runType(run).label;
 }
 
 function buildWorkoutDigest(run) {
@@ -1753,10 +1761,10 @@ function buildWorkoutDigest(run) {
   const nextGap = daysBetween(run, nextRun);
   const contextStart = Math.max(0, Math.min(index - 3, runs.length - 7));
   const neighboringRuns = runs.slice(contextStart, contextStart + 7);
-  const runType = classifyRun(run, distance, pace, distanceRank, paceRank);
+  const typeLabel = classifyRun(run);
   const signals = [
     {
-      label: runType,
+      label: typeLabel,
       value: `${formatOrdinal(distanceRank)} distance pct.`,
       detail: `${paceRank ? `Faster than ${paceRank}% of runs in range` : "Pace rank needs duration data"}`
     },
@@ -1801,7 +1809,7 @@ function buildWorkoutDigest(run) {
     nextRun,
     previousGap,
     nextGap,
-    runType,
+    runType: typeLabel,
     neighboringRuns,
     signals
   };
@@ -1829,9 +1837,10 @@ function profileMarkup(label, percentile) {
 function workoutNarrative(digest) {
   const headlines = {
     Race: "The source labels this run as a race.",
-    Quality: "The source labels this run as a workout.",
-    Long: "One of the longer runs in the selected window.",
-    Easy: "Review pace and duration against comparable runs.",
+    Quality: "A hard effort: heart rate or pace near your threshold.",
+    Long: "A long run relative to your usual distance.",
+    Easy: "An easy, aerobic effort.",
+    Recovery: "A gentle recovery effort, shorter and slower than usual.",
     Steady: "A run in the context of your selected history."
   };
   const strain = digest.similarLoadPerMile
@@ -2395,6 +2404,7 @@ function renderTable() {
     values.forEach((value, index) => {
       const cell = document.createElement("td");
       cell.textContent = value;
+      if (index === 0) cell.insertAdjacentHTML("beforeend", ` ${runTypeChip(run)}`);
       if (index === 1) cell.dataset.unitSkip = "";
       cell.dataset.label = labels[index];
       row.appendChild(cell);

@@ -42,7 +42,25 @@ current, unfinished week or month lighter and labelled "so far", so a partial
 period never looks like a drop. Additive metrics also show a rolling 4-week
 (or 3-month) average, and the latest complete period is labelled.
 
-**Charts & patterns** (on Overview) holds the secondary charts. Each one fills
+Below the readiness strip, **This week** shows distance and runs completed
+against this week's saved plan (or your 4-week average when there is no plan),
+with a Monday–Sunday strip of what you ran and what is still planned.
+
+Every run gets an **effort-based type** (Easy, Recovery, Long, Quality, Race)
+from heart rate (or pace relative to threshold) and distance, not from its name.
+Types appear as chips in the Runs table, in run details, and as dot colours in
+Pace vs distance. The Runs filter can select them.
+
+On Plan, with the block intent on **Auto**, today's readiness steers the current
+and next week. Below 35 the draft becomes a recovery week. Between 35 and 54 the
+quality session becomes an easy run, and the draft says why. Your check-in and a
+manual intent still take priority.
+
+**Data & settings → Theme** offers Match system, Light, or Dark. Dark mode has
+its own colour steps, and the chart colours are validated against the dark
+surface.
+
+**Charts & metrics** (on Overview) holds the secondary charts. Each one fills
 its panel, uses round axis ticks in the units you have chosen, and has a legend
 built from the same series as its marks:
 

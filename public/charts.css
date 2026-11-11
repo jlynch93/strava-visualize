@@ -55,8 +55,21 @@
 .column-hit { cursor: pointer; }
 .column-hit:focus-visible { outline: none; stroke: var(--ink-strong); stroke-width: 2; }
 
+/* Run types: easy & recovery / long / quality & race */
+.key.type-easy, .key.type-long, .key.type-quality { width: 9px; height: 9px; border-radius: 50%; }
+.key.type-easy { background: var(--series-a); }
+.key.type-long { background: var(--series-b); }
+.key.type-quality { background: var(--series-c); }
+.type-chip { display: inline-block; margin-left: 6px; padding: 1px 7px 1px 15px; position: relative; border: 1px solid var(--rule); border-radius: 999px; color: var(--ink-soft); font-size: .68rem; font-weight: 700; line-height: 1.5; letter-spacing: .02em; vertical-align: 1px; white-space: nowrap; }
+.type-chip::before { position: absolute; top: 50%; left: 6px; width: 6px; height: 6px; margin-top: -3px; border-radius: 50%; content: ""; }
+.type-chip.type-easy::before { background: var(--series-a); }
+.type-chip.type-long::before { background: var(--series-b); }
+.type-chip.type-quality::before { background: var(--series-c); }
+
 /* Scatter */
-.scatter-dot { fill: var(--series-a); fill-opacity: .75; stroke: var(--surface); stroke-width: 2; cursor: pointer; }
+.scatter-dot { fill: var(--series-a); fill-opacity: .8; stroke: var(--surface); stroke-width: 2; cursor: pointer; }
+.scatter-dot.type-long { fill: var(--series-b); }
+.scatter-dot.type-quality { fill: var(--series-c); }
 .scatter-dot:hover, .scatter-dot:focus-visible { fill: var(--ink-strong); fill-opacity: 1; outline: none; }
 
 /* Bar list (HTML horizontal bars) */

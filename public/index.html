@@ -3,12 +3,14 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="theme-color" content="#eef2ec">
+    <meta name="theme-color" content="#eef2ec" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#0d181c" media="(prefers-color-scheme: dark)">
     <title>Strava Run Trends</title>
     <link rel="stylesheet" href="/styles.css">
     <link rel="stylesheet" href="/dashboard.css">
     <link rel="stylesheet" href="/charts.css">
     <link rel="stylesheet" href="/fitness.css">
+    <link rel="stylesheet" href="/theme.css">
   </head>
   <body>
     <!--
@@ -120,6 +122,7 @@
         </div>
 
         <section id="todayStrip" class="today-strip" aria-label="Readiness today" data-native-units hidden></section>
+        <section id="thisWeek" class="this-week" aria-label="This week" data-native-units hidden></section>
 
         <section class="block-review" aria-labelledby="blockReviewTitle">
           <div class="block-review-lead">

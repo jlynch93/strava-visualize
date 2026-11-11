@@ -273,10 +273,43 @@
     return { score, ...band, factors };
   }
 
+  /* ---------- Run type ---------- */
+
+  const RUN_TYPES = {
+    race: { key: "race", label: "Race", group: "quality" },
+    quality: { key: "quality", label: "Quality", group: "quality" },
+    long: { key: "long", label: "Long", group: "long" },
+    easy: { key: "easy", label: "Easy", group: "easy" },
+    recovery: { key: "recovery", label: "Recovery", group: "easy" }
+  };
+
+  /*
+   * Classify a run from what was recorded, not from its name.
+   * context: { profile, thresholdSpeed (m/min), typicalMeters (median run distance) }.
+   * Order matters: a source-tagged race wins, then long, then intensity.
+   */
+  function classifyRunType(run, context = {}) {
+    const meters = Number(run.distance) || 0;
+    const seconds = Number(run.moving_time) || 0;
+    const workout = Number(run.workout_type);
+    if (workout === 1) return RUN_TYPES.race;
+    const typical = context.typicalMeters || 0;
+    if (workout === 2 || (typical && meters >= Math.max(typical * 1.5, 14000)) || meters >= 25000) return RUN_TYPES.long;
+    const hrr = heartRateReserve(Number(run.average_heartrate), context.profile);
+    const speedRatio = context.thresholdSpeed > 0 && meters && seconds ? meters / (seconds / 60) / context.thresholdSpeed : null;
+    // Prefer heart rate; fall back to pace relative to threshold.
+    const hard = hrr !== null ? hrr >= 0.8 : speedRatio !== null && speedRatio >= 0.92;
+    if (workout === 3 || hard) return RUN_TYPES.quality;
+    const gentle = hrr !== null ? hrr < 0.62 : speedRatio !== null && speedRatio < 0.72;
+    if (gentle && (!typical || meters <= typical)) return RUN_TYPES.recovery;
+    return RUN_TYPES.easy;
+  }
+
   const api = {
     oxygenCost, sustainableFraction, vdotFromPerformance, speedForOxygen, predictRaceSeconds, trainingPaces,
     estimateMaxHr, heartRateReserve, runVo2Estimate, runVdot, percentile, vo2Series,
-    runLoad, dailyLoads, loadSeries, workloadRatios, formZone, readiness, dayKey, finite
+    runLoad, dailyLoads, loadSeries, workloadRatios, formZone, readiness, dayKey, finite,
+    RUN_TYPES, classifyRunType
   };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.FitnessCore = api;

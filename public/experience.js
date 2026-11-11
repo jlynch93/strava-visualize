@@ -7,8 +7,14 @@ const preferences = {
   units: savedPreferences?.units === "metric" ? "metric" : "imperial",
   weather: savedPreferences?.weather === true,
   rememberImports: savedPreferences?.rememberImports === true,
-  analysisService: typeof savedPreferences?.analysisService === "string" ? savedPreferences.analysisService : ""
+  analysisService: typeof savedPreferences?.analysisService === "string" ? savedPreferences.analysisService : "",
+  theme: ["light", "dark"].includes(savedPreferences?.theme) ? savedPreferences.theme : "system"
 };
+function applyTheme() {
+  if (preferences.theme === "system") delete document.documentElement.dataset.theme;
+  else document.documentElement.dataset.theme = preferences.theme;
+}
+applyTheme();
 let acceptedPlans = readSaved("run-trends-plans-v1", {});
 if (!acceptedPlans || typeof acceptedPlans !== "object" || Array.isArray(acceptedPlans)) acceptedPlans = {};
 let historyCoverage = null;
@@ -71,6 +77,7 @@ function setView(view, focus = false) {
     window.scrollTo({ top: 0, behavior: "instant" });
   }
   if (activeView === "overview" && state.filteredRuns.length) renderMainChart();
+  if (activeView === "overview" && state.rawActivities.length) renderThisWeek(fitnessModel());
   if (activeView === "fitness") renderFitness();
 }
 function matchesRunFilter(run) {
@@ -80,7 +87,8 @@ function matchesRunFilter(run) {
     || (filter === "treadmill" && (run.trainer || sport.includes("virtual")))
     || (filter === "road" && !run.trainer && !sport.includes("trail") && !sport.includes("virtual"))
     || (filter === "race" && Number(run.workout_type) === 1)
-    || (filter === "workout" && Number(run.workout_type) === 3);
+    || (filter === "workout" && Number(run.workout_type) === 3)
+    || (["easy", "long", "quality"].includes(filter) && runType(run).group === filter);
 }
 function applyDisplayUnits(root = document.querySelector("#app")) {
   if (!root) return;
@@ -299,7 +307,7 @@ function rememberHistory() {
 }
 function initializeExperience() {
   const app = document.querySelector("#app");
-  app.insertAdjacentHTML("afterbegin", `<section class="settings-bar" aria-label="Preferences"><label>Units <select id="unitPreference"><option value="imperial">Miles / °F</option><option value="metric">Kilometers / °C</option></select></label><label><input id="weatherPreference" type="checkbox"> Modeled weather (shares rounded start location with Open-Meteo)</label><label><input id="rememberPreference" type="checkbox"> Remember imported history on this device</label><button id="removeSavedButton" type="button">Remove saved history</button><button id="backupContextButton" type="button">Back up goals and plans</button><label class="file-button">Restore goals and plans<input id="restoreContextInput" type="file" accept="application/json,.json"></label></section>`);
+  app.insertAdjacentHTML("afterbegin", `<section class="settings-bar" aria-label="Preferences"><label>Theme <select id="themePreference"><option value="system">Match system</option><option value="light">Light</option><option value="dark">Dark</option></select></label><label>Units <select id="unitPreference"><option value="imperial">Miles / °F</option><option value="metric">Kilometers / °C</option></select></label><label><input id="weatherPreference" type="checkbox"> Modeled weather (shares rounded start location with Open-Meteo)</label><label><input id="rememberPreference" type="checkbox"> Remember imported history on this device</label><button id="removeSavedButton" type="button">Remove saved history</button><button id="backupContextButton" type="button">Back up goals and plans</button><label class="file-button">Restore goals and plans<input id="restoreContextInput" type="file" accept="application/json,.json"></label></section>`);
   const settings = document.querySelector(".settings-bar");
   const disclosure = document.createElement("details"); disclosure.className = "preferences-disclosure data-menu"; disclosure.id = "dataMenu";
   disclosure.innerHTML = '<summary>Data &amp; settings</summary><div class="data-menu-panel"><div id="dataMenuActions" class="data-menu-actions"><h2>Your history</h2><p id="syncInfo"></p><button id="loadOlderButton" type="button" hidden>Load older activities</button><button id="fullSyncButton" type="button" hidden>Refresh loaded history</button></div></div>';
@@ -317,18 +325,20 @@ function initializeExperience() {
   }, true);
   document.addEventListener("pointerdown", (event) => { if (disclosure.open && !disclosure.contains(event.target)) disclosure.open = false; });
   disclosure.addEventListener("keydown", (event) => { if (event.key === "Escape") { disclosure.open = false; disclosure.querySelector("summary").focus(); event.stopPropagation(); } });
-  const exploration = document.createElement("details"); exploration.className = "exploration data-panel"; exploration.dataset.viewSection = "overview"; exploration.innerHTML = "<summary>Charts &amp; patterns<span>Volume mix, calendar, pace and distance distributions</span></summary>";
+  const exploration = document.createElement("details"); exploration.className = "exploration data-panel"; exploration.dataset.viewSection = "overview"; exploration.innerHTML = "<summary>Charts &amp; metrics<span>Volume mix, calendar, distributions and every block metric</span></summary>";
   document.querySelector("#runs").before(exploration);
   document.querySelectorAll("main > .dashboard, .training-texture").forEach((section) => exploration.append(section));
   exploration.addEventListener("toggle", () => { if (exploration.open && state.filteredRuns.length) { renderSecondaryCharts(); applyDisplayUnits(exploration); } });
-  document.querySelector(".training-texture").insertAdjacentHTML("beforebegin", '<section class="data-panel supporting-panel" aria-label="Additional training signals"><h2>Supporting metrics</h2><div id="supportingSignals" class="intel-grid"></div></section>');
+
   document.querySelectorAll("#overview, .key-runs, .analysis-row").forEach((section) => section.dataset.viewSection = "overview");
   const signals = document.querySelector("#signals"); const coach = document.querySelector(".ai-insights");
-  const signalDisclosure = document.createElement("details"); signalDisclosure.id = "signalsDisclosure"; signalDisclosure.className = "secondary-disclosure";
-  signalDisclosure.innerHTML = '<summary>Training signals<span>Workload, coverage and definitions</span></summary>'; signalDisclosure.append(signals);
+  // One metrics panel inside "Charts & metrics" instead of a separate disclosure.
+  signals.classList.add("supporting-panel"); document.querySelector(".training-texture").before(signals);
+  document.querySelector("#signalsTitle").textContent = "Block metrics";
   const coachDisclosure = document.createElement("details"); coachDisclosure.id = "coachDisclosure"; coachDisclosure.className = "secondary-disclosure";
   coachDisclosure.innerHTML = '<summary>Ask for a coach’s read<span>Optional analysis of this training window</span></summary>'; coachDisclosure.append(coach);
-  document.querySelector(".analysis-row").replaceChildren(signalDisclosure, coachDisclosure);
+  document.querySelector(".analysis-row").replaceChildren(coachDisclosure);
+  exploration.after(document.querySelector(".analysis-row")); // Charts first, then the optional coach.
   document.querySelector("#planning").dataset.viewSection = "planning"; document.querySelector("#runs").dataset.viewSection = "runs";
   document.querySelector(".brand-lockup").addEventListener("click", () => setView("overview", true));
   document.querySelectorAll(".app-nav a").forEach((link) => link.addEventListener("click", (event) => { event.preventDefault(); history.replaceState(null, "", `${location.pathname}${location.search}${link.hash}`); setView(link.hash.slice(1), true); }));
@@ -357,7 +367,7 @@ function initializeExperience() {
   for (const day of ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]) availability.insertAdjacentHTML("beforeend", `<label><input type="checkbox" value="${day}" ${String(coachingContext.goal.availability || "").toLowerCase().includes(day.toLowerCase()) ? "checked" : ""}>${day}</label>`);
   els.goalAvailability.after(availability); document.querySelector('label[for="goalAvailability"]').hidden = true;
   availability.addEventListener("change", () => els.goalAvailability.value = [...availability.querySelectorAll("input:checked")].map((input) => input.value).join(" "));
-  document.querySelector(".ledger-controls").insertAdjacentHTML("beforeend", '<label class="control">Run type<select id="runTypeFilter"><option value="all">All runs</option><option value="road">Road / unspecified</option><option value="trail">Trail</option><option value="treadmill">Treadmill / virtual</option><option value="race">Race</option><option value="workout">Workout</option></select></label>');
+  document.querySelector(".ledger-controls").insertAdjacentHTML("beforeend", '<label class="control">Run type<select id="runTypeFilter"><option value="all">All runs</option><optgroup label="By effort"><option value="easy">Easy &amp; recovery</option><option value="long">Long</option><option value="quality">Quality &amp; race</option></optgroup><optgroup label="Surface"><option value="road">Road / unspecified</option><option value="trail">Trail</option><option value="treadmill">Treadmill / virtual</option></optgroup><optgroup label="Source label"><option value="race">Race</option><option value="workout">Workout</option></optgroup></select></label>');
   document.querySelector("#runTypeFilter").addEventListener("change", () => { state.ledgerPage = 0; renderTable(); saveViewState(); applyDisplayUnits(); });
   const help = document.createElement("details"); help.className = "metric-explanations";
   help.innerHTML = "<summary>How these metrics are calculated</summary><dl><dt>Weekly volume</dt><dd>Total distance divided by the selected number of calendar days, multiplied by seven. Quiet days count.</dd><dt>Ramp rate</dt><dd>Distance in the latest two complete Monday–Sunday weeks compared with the preceding two. Requires four complete weeks and does not change with chart grouping.</dd><dt>Running time</dt><dd>Total moving minutes, used consistently across all sources. Strava Relative Effort is a separate source field, not combined with this measure.</dd><dt>Longest-run share</dt><dd>The longest single run divided by the selected window's distance. Longest-fifth share uses the longest 20% of runs instead.</dd><dt>Heart-rate coverage</dt><dd>Percentage of runs with a recorded heart rate. Missing measurements are not zero.</dd><dt>Pace distribution</dt><dd>Distribution of each run's average pace, not time in physiological training zones.</dd><dt>Comparison history</dt><dd>Changes are shown only when the loaded history covers the complete preceding window. Mark an import complete only if its date range includes all activities.</dd></dl>";
@@ -372,6 +382,8 @@ function initializeExperience() {
   document.querySelector("#cancelAnalysisConsent").addEventListener("click", cancelAnalysis);
   document.querySelector("#analysisConsent").addEventListener("cancel", cancelAnalysis);
   document.querySelector("#unitPreference").value = preferences.units;
+  document.querySelector("#themePreference").value = preferences.theme;
+  document.querySelector("#themePreference").addEventListener("change", (event) => { preferences.theme = event.target.value; persist("run-trends-preferences", preferences); applyTheme(); });
   document.querySelector("#weatherPreference").checked = preferences.weather;
   document.querySelector("#rememberPreference").checked = preferences.rememberImports;
   document.querySelector("#unitPreference").addEventListener("change", (event) => { preferences.units = event.target.value; persist("run-trends-preferences", preferences); syncCoachingInputs(); render(); if (state.activeRunId) showWorkoutModal(state.activeRunId, state.modalTrigger); });

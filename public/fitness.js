@@ -66,6 +66,9 @@ function buildFitnessModel(runs) {
   const fitnessVdot = currentVdot && currentVo2 ? Math.min(currentVo2.vo2max, Math.max(currentVdot.vdot, currentVo2.vo2max * 0.9)) : vo2?.value ?? null;
   const thresholdSpeed = fitnessVdot ? FitnessCore.speedForOxygen(fitnessVdot * 0.88) : 0;
   const loads = FitnessCore.dailyLoads(runs, hrProfile, thresholdSpeed, parseActivityDate);
+  const typicalMeters = FitnessCore.percentile(runs.slice(-60).map((run) => Number(run.distance) || 0), 0.5) || 0;
+  const typeContext = { profile: hrProfile, thresholdSpeed, typicalMeters };
+  const types = new Map(runs.map((run) => [String(run.id), FitnessCore.classifyRunType(run, typeContext)]));
   const firstDay = parseActivityDate(runs[0]);
   const loadSeries = FitnessCore.loadSeries(loads, firstDay, today);
   const latest = loadSeries.at(-1);
@@ -84,7 +87,7 @@ function buildFitnessModel(runs) {
   });
   const loadSources = runLoads.filter((item) => item.date >= recentCutoff).reduce((counts, item) => ({ ...counts, [item.source]: (counts[item.source] || 0) + 1 }), {});
   return {
-    runs, runLoads, profile, vo2Points, vo2, fitnessVdot, thresholdSpeed, loads, loadSeries, latest, ratios, readiness,
+    runs, runLoads, profile, vo2Points, types, typeContext, vo2, fitnessVdot, thresholdSpeed, loads, loadSeries, latest, ratios, readiness,
     lastHard, historyDays, stale, newestRun, loadSources,
     hrCoverage: runs.filter((run) => run.average_heartrate).length / runs.length
   };
@@ -419,11 +422,58 @@ function renderTodayStrip(model) {
     <a class="today-link" href="#fitness">Open fitness <span aria-hidden="true">→</span></a>`;
 }
 
+// Overview: the current calendar week against the saved plan (or recent average).
+function renderThisWeek(model) {
+  const host = document.querySelector("#thisWeek");
+  if (!host) return;
+  if (!model) { host.hidden = true; return; }
+  host.hidden = false;
+  const start = TrainingCore.weekStart(new Date());
+  const today = localDateValue(new Date());
+  const plan = acceptedPlans[localDateValue(start)];
+  const days = Array.from({ length: 7 }, (_, index) => new Date(start.getFullYear(), start.getMonth(), start.getDate() + index));
+  const byDay = new Map();
+  model.runs.forEach((run) => {
+    const key = localDateValue(parseActivityDate(run));
+    if (key >= localDateValue(days[0]) && key <= localDateValue(days[6])) byDay.set(key, [...(byDay.get(key) || []), run]);
+  });
+  const doneMiles = [...byDay.values()].flat().reduce((sum, run) => sum + miles(run.distance), 0);
+  const doneRuns = [...byDay.values()].flat().length;
+  const planned = plan?.sessions?.filter((session) => session.kind === "run") || [];
+  const fourWeekStart = new Date(start); fourWeekStart.setDate(fourWeekStart.getDate() - 28);
+  const recent = model.runs.filter((run) => { const date = parseActivityDate(run); return date >= fourWeekStart && date < start; });
+  const average = recent.reduce((sum, run) => sum + miles(run.distance), 0) / 4;
+  const target = planned.length ? planned.reduce((sum, session) => sum + (Number(session.miles) || 0), 0) : average;
+  const targetRuns = planned.length || Math.round(recent.length / 4);
+  const progress = target ? Math.min(1, doneMiles / target) : 0;
+  const end = days[6];
+  const range = `${start.toLocaleDateString(undefined, { month: "short", day: "numeric" })}–${end.toLocaleDateString(undefined, start.getMonth() === end.getMonth() ? { day: "numeric" } : { month: "short", day: "numeric" })}`;
+  host.innerHTML = `
+    <div class="week-head">
+      <div><h2>This week <span>${range}</span></h2>
+      <p>${target ? `${displayDistance(doneMiles, 1)} of ${displayDistance(target, 0)} ${planned.length ? "planned" : "(your 4-week average)"} · ${doneRuns} of ${targetRuns} run${targetRuns === 1 ? "" : "s"}` : `${displayDistance(doneMiles, 1)} · ${doneRuns} run${doneRuns === 1 ? "" : "s"}`}</p></div>
+      <a class="today-link" href="#planning">${plan ? "Open plan" : "Plan this week"} <span aria-hidden="true">→</span></a>
+    </div>
+    <div class="week-meter" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(progress * 100)}" aria-label="Weekly distance ${Math.round(progress * 100)}% of target"><span style="width:${progress * 100}%"></span></div>
+    <ol class="week-days">${days.map((day) => {
+      const key = localDateValue(day);
+      const runs = byDay.get(key) || [];
+      const session = plan?.sessions?.find((item) => item.date === key);
+      const future = key > today;
+      const runText = runs.map((run) => `${runTypeChip(run)}<strong>${displayDistance(miles(run.distance), 1)}</strong>`).join("");
+      const planText = session ? (session.kind === "run" ? `<small>${escapeHtml(session.title)}${session.miles ? ` · ${displayDistance(session.miles, 1)}` : ""}</small>` : "<small>Rest</small>") : "";
+      const state = runs.length ? "done" : future ? (session?.kind === "run" ? "planned" : "upcoming") : session?.kind === "run" ? "missed" : "rest";
+      const label = { done: "", planned: "", upcoming: "", missed: "<small>Not run</small>", rest: "<small>Rest</small>" }[state];
+      return `<li class="week-day day-${state}${key === today ? " is-today" : ""}"><span class="week-day-name">${day.toLocaleDateString(undefined, { weekday: "short" })}${key === today ? " · today" : ""}</span>${runText}${!runs.length ? planText || label : planText}</li>`;
+    }).join("")}</ol>`;
+}
+
 function renderFitness() {
   const section = document.querySelector("#fitness");
   if (!section) return;
   const model = fitnessModel();
   renderTodayStrip(model);
+  renderThisWeek(model);
   renderProfileForm(model);
   const body = document.querySelector("#fitnessBody");
   const empty = document.querySelector("#fitnessEmpty");
@@ -438,6 +488,23 @@ function renderFitness() {
   renderVo2Chart(model, days);
   renderLoadCharts(model, days);
   renderRunningMetrics(model, days);
+}
+
+// Effort-based type for any run; falls back to the source label before a model exists.
+function runType(run) {
+  const model = fitnessModel();
+  return model?.types.get(String(run.id)) || FitnessCore.classifyRunType(run, model?.typeContext || {});
+}
+
+function runTypeChip(run) {
+  const type = runType(run);
+  return `<span class="type-chip type-${type.group}" title="Classified from effort and distance">${type.label}</span>`;
+}
+
+// Readiness only steers the current and next week; further out it says nothing.
+function planReadiness() {
+  if (typeof selectedPlanOffset !== "undefined" && (selectedPlanOffset < 0 || selectedPlanOffset > 1)) return null;
+  return fitnessModel()?.readiness || null;
 }
 
 function readinessSummaryText() {
