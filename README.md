@@ -36,6 +36,33 @@ an interactive trend. Select a chart period to open its runs. Empty calendar
 periods remain visible; weekly metrics use the selected calendar window and
 stay independent of the chart's grouping.
 
+**Overview** opens with a readiness strip (today's readiness score, estimated
+VO2 max, fitness and form) that links to **Fitness**. The trend chart draws the
+current, unfinished week or month lighter and labelled "so far", so a partial
+period never looks like a drop. Additive metrics also show a rolling 4-week
+(or 3-month) average, and the latest complete period is labelled.
+
+**Fitness** collects the physiological view of your training:
+
+- **Readiness to train** (0–100) combines form (40%), the 7-day vs 28-day load
+  ramp (25%), time since your last hard run (20%) and your weekly check-in (15%).
+  Each factor is shown with its own score, together with what to do today.
+- **Estimated VO2 max** per run comes from the oxygen cost of your pace
+  (Daniels' equation, with a hill correction) divided by the share of your
+  heart-rate reserve used. The trend is the upper quartile of the last six
+  weeks. **VDOT** from your best recent effort is plotted alongside it.
+- **Fitness, fatigue and form** are the 42-day and 7-day weighted training load
+  and the gap between them. Load uses heart rate (TRIMP) where available and
+  pace otherwise; one hour at threshold is about 100 points.
+- **Race predictions** and **training paces** come from current fitness.
+- **Running metrics** show weekly aerobic efficiency (metres per heartbeat on
+  easy runs), cadence, load, and easy pace.
+
+Max heart rate is estimated from your runs. Resting heart rate defaults to 55 bpm.
+Set both under **Heart-rate profile & method**; they are saved in this browser.
+Readiness and today's numbers use your full history, and the charts follow the
+review window. All of these figures are models for planning, not medical measurements.
+
 **Plan** brings together goals, availability, the weekly check-in, and a draft
 calendar. Overview, Runs and Plan are separate views sharing the same history.
 Overview keeps the summary, three key metrics, and trend chart in view; training

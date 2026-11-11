@@ -530,6 +530,7 @@ function render() {
   renderDistanceMix();
   renderPaceZones();
   renderTable();
+  if (activeView !== "fitness") renderFitness(); // setView draws the visible Fitness view.
   updateWindowContext();
   saveViewState();
   finishExperienceRender();
@@ -554,7 +555,7 @@ function updateWindowContext() {
   const { start, end } = getRangeDates();
   const dateFormat = { month: "short", day: "numeric", year: "numeric" };
   document.querySelector("#windowDates").textContent = `${start ? start.toLocaleDateString(undefined, dateFormat) : "Earliest run"} – ${end ? end.toLocaleDateString(undefined, dateFormat) : "Latest run"}`;
-  document.querySelector("#windowContext").textContent = "Overview and Runs follow this review window.";
+  document.querySelector("#windowContext").textContent = "Overview, Runs and the Fitness charts follow this review window.";
   document.querySelector("#dataSource").textContent = state.dataSource === "demo" ? "Demo · sample running history" : state.dataSource === "import" ? "Imported activity history" : "Strava activity history";
   const noMatches = state.rawActivities.length > 0 && !state.filteredRuns.length;
   document.querySelector("#emptyWindow").hidden = !noMatches;
@@ -1133,7 +1134,7 @@ function renderCoachingWorkspace(summary) {
   const hardRuns = lastSeven.filter((run) => [1, 3].includes(Number(run.workout_type))).length;
   const confidence = summary.runCount >= 12 ? "Established" : "Limited";
   const race = raceContext();
-  els.readinessContent.innerHTML = `<div class="readiness-metric"><strong>${displayDistance(sevenMiles, 1)}</strong><span>last 7 days · ${displayDistance(baseline, 1)} baseline</span></div><ul><li>${lastSeven.length} runs in the last 7 days</li><li>${hardRuns} runs labeled race/workout by the source</li><li>${summary.longestRestGap} days longest rest gap</li><li>${confidence} recent history · ${summary.runCount} runs in this block${race ? `</li><li>${escapeHtml(race.label)} · ${race.weeks} weeks away · ${race.phase} phase` : ""}</li></ul><p class="context-muted">This is a transparent workload view, not a medical or readiness score.</p>`;
+  els.readinessContent.innerHTML = `<div class="readiness-metric"><strong>${displayDistance(sevenMiles, 1)}</strong><span>last 7 days · ${displayDistance(baseline, 1)} baseline</span></div><ul><li>${lastSeven.length} runs in the last 7 days</li><li>${hardRuns} runs labeled race/workout by the source</li><li>${summary.longestRestGap} days longest rest gap</li><li>${confidence} recent history · ${summary.runCount} runs in this block${race ? `</li><li>${escapeHtml(race.label)} · ${race.weeks} weeks away · ${race.phase} phase` : ""}</li></ul><p class="context-muted">${escapeHtml(readinessSummaryText() || "Readiness appears on the Fitness tab once recent runs are loaded.")} <a href="#fitness">See what's driving it</a>.</p>`;
   const goalMiles = Number(coachingContext.goal.miles) || baseline;
   const recommendation = recommendIntent(summary, race);
   const chosenIntent = coachingContext.goal.mode || "auto";
@@ -1365,6 +1366,8 @@ function bindTooltips() {
   });
 }
 
+const ADDITIVE_METRICS = new Set(["distance", "runs", "load", "elevation", "longRun", "avgRun"]);
+
 function renderBarLineChart(container, buckets, metric) {
   if (!buckets.length) {
     renderEmpty(container);
@@ -1375,54 +1378,74 @@ function renderBarLineChart(container, buckets, metric) {
   const pad = { top: 25, right: 12, bottom: 30, left: 62 };
   const values = buckets.map(metric.value);
   const metricKey = els.metricSelect.value;
+  const mode = els.bucketSelect.value;
+  // The period containing today is still filling up; draw it lighter so a
+  // half-finished week never reads as a drop in training.
+  const currentKey = bucketKey(new Date(), mode);
+  const inProgress = buckets.map((bucket) => bucket.key === currentKey);
+  const averageWindow = mode === "week" ? 4 : 3;
+  const showAverage = ADDITIVE_METRICS.has(metricKey) && buckets.length > averageWindow;
+  const averages = showAverage ? buckets.map((_, index) => {
+    if (inProgress[index]) return null;
+    const slice = values.slice(Math.max(0, index - averageWindow + 1), index + 1).filter((_, offset) => !inProgress[Math.max(0, index - averageWindow + 1) + offset]);
+    return index >= averageWindow - 1 ? slice.reduce((sum, value) => sum + value, 0) / slice.length : null;
+  }) : [];
   const paceValues = values.filter((value) => Number.isFinite(value) && value > 0);
   const min = metricKey === "pace" && paceValues.length ? Math.min(...paceValues) : 0;
   const max = Math.max(...values, 1);
   const span = Math.max(max - min, 1);
   const chartWidth = width - pad.left - pad.right;
   const chartHeight = height - pad.top - pad.bottom;
-  const barWidth = Math.max(1, chartWidth / buckets.length * 0.68);
-  const root = svg("svg", { viewBox: `0 0 ${width} ${height}`, role: "group", "aria-label": `${metric.label} by ${els.bucketSelect.value}. Select a period to view runs.` });
+  const slot = chartWidth / buckets.length;
+  const barWidth = Math.max(2, Math.min(slot - 2, Math.max(slot * 0.55, 6), 28));
+  const root = svg("svg", { viewBox: `0 0 ${width} ${height}`, role: "group", "aria-label": `${metric.label} by ${mode}. Select a period to view runs.` });
   for (let i = 0; i <= 4; i += 1) {
     const y = pad.top + (chartHeight / 4) * i;
     root.appendChild(svg("line", { class: "axis", x1: pad.left, y1: y, x2: width - pad.right, y2: y }));
     const tick = metricKey === "pace" ? min + (span / 4) * i : max - (span / 4) * i;
     root.appendChild(svg("text", { class: "label", x: 8, y: y + 4 }, [document.createTextNode(metric.format(tick))]));
   }
+  const yFor = (value) => metricKey === "pace" ? pad.top + (value - min) / span * chartHeight : pad.top + chartHeight - (value - min) / span * chartHeight;
+  const xFor = (index) => pad.left + index * slot + slot / 2;
+  const lastComplete = inProgress.lastIndexOf(false);
   const points = buckets.map((bucket, index) => {
-    const value = metric.value(bucket);
+    const value = values[index];
     const missing = !bucket.runs || (["pace", "heartrate", "efficiency"].includes(metricKey) && !value);
-    const x = pad.left + index * (chartWidth / buckets.length) + (chartWidth / buckets.length) / 2;
-    const normalizedValue = (value - min) / span;
-    const y = missing ? pad.top + chartHeight : metricKey === "pace"
-      ? pad.top + normalizedValue * chartHeight
-      : pad.top + chartHeight - normalizedValue * chartHeight;
-    const barHeight = chartHeight - (y - pad.top);
-    const bar = svg("rect", {
-      class: missing ? "bar empty-period" : "bar",
-      x: x - barWidth / 2,
-      y,
-      width: barWidth,
-      height: Math.max(1, barHeight),
-      rx: 2
+    const x = xFor(index);
+    const y = missing ? pad.top + chartHeight : yFor(value);
+    const barHeight = Math.max(1, chartHeight - (y - pad.top));
+    const left = x - barWidth / 2, radius = Math.min(4, barWidth / 2, barHeight);
+    // Rounded data end, square at the baseline.
+    const bar = svg("path", {
+      class: `bar${missing ? " empty-period" : ""}${inProgress[index] ? " in-progress" : ""}`,
+      d: `M${left},${y + barHeight}V${y + radius}Q${left},${y} ${left + radius},${y}H${left + barWidth - radius}Q${left + barWidth},${y} ${left + barWidth},${y + radius}V${y + barHeight}Z`
     });
-    attachTooltip(bar, `${bucket.label} ${metric.label}`, [
+    attachTooltip(bar, `${bucket.label}${inProgress[index] ? " (in progress)" : ""} ${metric.label}`, [
       { label: metric.label, value: metric.format(value) },
+      showAverage && Number.isFinite(averages[index]) ? { label: `${averageWindow}-${mode} average`, value: metric.format(averages[index]) } : null,
       { label: "Miles", value: `${displayDistance(bucket.distanceMiles, 1)}` },
       { label: "Runs", value: bucket.runs },
       { label: "Avg pace", value: formatPace(bucket.averagePace) },
       { label: "Long run", value: `${displayDistance(bucket.longRunMiles, 1)}` },
       { label: "Elevation", value: `${Math.round(bucket.elevationFeet).toLocaleString()} ft` },
       { label: "Avg HR", value: bucket.averageHr ? `${Math.round(bucket.averageHr)} bpm` : "-" },
-      { label: "Load", value: Math.round(bucket.trainingLoad).toLocaleString() }
-    ]);
+      { label: "Running time", value: `${Math.round(bucket.trainingLoad).toLocaleString()} min` }
+    ].filter(Boolean));
     if (bucket.runs) attachChartAction(bar, bucket.label, runsForBucket(bucket));
     root.appendChild(bar);
     if (index % Math.ceil(buckets.length / Math.max(2, Math.floor(chartWidth / 95))) === 0) {
       root.appendChild(svg("text", { class: "label", x, y: height - 7, "text-anchor": "middle" }, [document.createTextNode(bucket.label)]));
     }
+    if (inProgress[index] && !missing && barHeight > 0) {
+      root.appendChild(svg("text", { class: "progress-label", x, y: y - 6, "text-anchor": "middle" }, [document.createTextNode("so far")]));
+    }
     return missing ? null : `${x},${y}`;
   });
+  // Label only the latest complete period, so the current level reads without hovering.
+  if (lastComplete >= 0 && points[lastComplete] && !["pace", "heartrate", "efficiency"].includes(metricKey)) {
+    const y = yFor(values[lastComplete]);
+    root.appendChild(svg("text", { class: "bar-value", x: xFor(lastComplete), y: y - 6, "text-anchor": "middle" }, [document.createTextNode(metric.format(values[lastComplete]))]));
+  }
   if (["pace", "heartrate", "efficiency"].includes(metricKey)) {
     let segment = [];
     for (const point of [...points, null]) {
@@ -1433,7 +1456,25 @@ function renderBarLineChart(container, buckets, metric) {
       }
     }
   }
+  if (showAverage) {
+    let path = "", pen = false, lastPoint = null;
+    averages.forEach((value, index) => {
+      if (!Number.isFinite(value)) { pen = false; return; }
+      path += `${pen ? "L" : "M"}${xFor(index).toFixed(1)},${yFor(value).toFixed(1)}`; pen = true; lastPoint = [xFor(index), yFor(value)];
+    });
+    if (path) {
+      root.appendChild(svg("path", { class: "avg-line", d: path }));
+      root.appendChild(svg("circle", { class: "avg-dot", cx: lastPoint[0], cy: lastPoint[1], r: 4 }));
+    }
+  }
   container.replaceChildren(root);
+  let legend = container.parentElement.querySelector(".trend-legend");
+  if (!legend) { legend = document.createElement("div"); legend.className = "trend-legend"; container.after(legend); }
+  legend.innerHTML = [
+    `<span class="legend-item"><i class="key bar-key"></i>${escapeHtml(metric.label)} per ${mode}</span>`,
+    showAverage ? `<span class="legend-item"><i class="key avg-key"></i>${averageWindow}-${mode} average</span>` : "",
+    inProgress.includes(true) ? `<span class="legend-item"><i class="key progress-key"></i>Current ${mode}, in progress</span>` : ""
+  ].join("");
 }
 
 function movingAverage(values, windowSize) {
@@ -2713,8 +2754,13 @@ function makeDemoData() {
     const trend = 1 + (390 - i) / 900;
     const distanceMiles = baseMiles * trend;
     const pace = 520 - (390 - i) * 0.16 + random() * 45;
-    const hr = 136 + random() * 24 + (longRun ? 4 : 0);
     const movingTime = Math.round(distanceMiles * pace);
+    // Heart rate follows the effort: the oxygen cost of the pace against a
+    // VO2 max that improves through the year, plus drift on long runs.
+    const vo2max = 46 + (390 - i) / 390 * 4.5;
+    const speed = 1609.344 / (pace / 60);
+    const reserve = (FitnessCore.oxygenCost(speed) - 3.5) / (vo2max - 3.5) + (random() - 0.5) * 0.06 + (longRun ? 0.03 : 0);
+    const hr = 52 + Math.min(0.97, reserve) * 138;
     activities.push({
       id: `demo-${i}`,
       name: longRun ? "Long run" : ["Easy run", "Workout", "Steady run"][Math.floor(random() * 3)],
@@ -2726,7 +2772,7 @@ function makeDemoData() {
       elapsed_time: movingTime + Math.round(random() * 180),
       total_elevation_gain: (40 + random() * 95) * distanceMiles / 3.28084,
       average_heartrate: Math.round(hr),
-      max_heartrate: Math.round(hr + 18 + random() * 18),
+      max_heartrate: Math.min(191, Math.round(hr + 10 + random() * 18)),
       average_cadence: Math.round(160 + random() * 18),
       max_speed: 1609.344 / Math.max(300, pace - 75 - random() * 30),
       suffer_score: Math.round(distanceMiles * (hr / 18)),
