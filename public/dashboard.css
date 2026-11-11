@@ -109,7 +109,6 @@ button:disabled { cursor: default; opacity: .48; }
 .chart-controls .control:last-child { width: 100px; }
 .primary-chart .chart { height: 270px; }
 .primary-chart .bar { fill: var(--teal); opacity: .85; }
-.primary-chart .bar:hover, .primary-chart .bar:focus { fill: var(--ink); opacity: 1; }
 .primary-chart .empty-period { fill: var(--rule); }
 .primary-chart .line { stroke: var(--ink); }
 .primary-chart .chart svg { overflow: visible; width: 100%; height: 100%; }

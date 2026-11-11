@@ -134,3 +134,25 @@
 @media (max-width: 520px) {
   .bar-list { gap: 10px 8px; }
 }
+
+/* Tooltip: the pointed-at value leads, large; context rows follow. */
+.chart-tooltip { min-width: 168px; border-color: var(--panel-ink); }
+.chart-tooltip strong { margin-bottom: 4px; color: oklch(80% 0.015 198); font-size: .72rem; font-weight: 700; letter-spacing: .02em; text-transform: uppercase; }
+.tooltip-primary { display: grid; margin: 0 0 8px; }
+.tooltip-primary b { color: oklch(97% 0.008 135); font-size: 1.35rem; font-weight: 760; letter-spacing: -0.02em; line-height: 1.15; }
+.tooltip-primary span { color: oklch(76% 0.02 198); font-size: .72rem; }
+.chart-tooltip dl { padding-top: 8px; border-top: 1px solid oklch(34% 0.02 210); }
+
+/* Trend chart: each period has a full-height hit target and a hover band. */
+.primary-chart .period-band { fill: transparent; pointer-events: none; transition: fill 120ms var(--ease); }
+.primary-chart .period:hover .period-band, .primary-chart .period:focus-within .period-band { fill: color-mix(in oklch, var(--teal) 9%, transparent); }
+.primary-chart .period:hover .bar, .primary-chart .period:focus-within .bar { fill: color-mix(in oklch, var(--teal) 78%, var(--ink-strong)); opacity: 1; }
+.primary-chart .period:hover .bar.in-progress, .primary-chart .period:focus-within .bar.in-progress { opacity: .6; }
+.primary-chart .period-hit { cursor: pointer; outline: none; }
+.primary-chart .period-hit:focus-visible { stroke: var(--ink-strong); stroke-width: 2; }
+.primary-chart .bar, .primary-chart .progress-label { pointer-events: none; }
+
+/* Column chart hover band. */
+.column-hit:hover, .column-hit:focus-visible { fill: color-mix(in oklch, var(--series-a) 8%, transparent); }
+.primary-chart .rate-dot { transition: r 120ms var(--ease); }
+.primary-chart .period:hover .rate-dot, .primary-chart .period:focus-within .rate-dot { r: 7px; }

@@ -132,7 +132,7 @@ function syncCoachingInputs() {
 }
 
 const METRICS = {
-  distance: { tick: (v) => displayDistance(v, 0), label: "Mileage", unit: "mi", value: (b) => b.distanceMiles, format: (v) => `${displayDistance(v, 1)}` },
+  distance: { tick: (v) => displayDistance(v, 0), label: "Distance", unit: "mi", value: (b) => b.distanceMiles, format: (v) => `${displayDistance(v, 1)}` },
   runs: { label: "Run count", unit: "runs", value: (b) => b.runs, format: (v) => `${Math.round(v)} runs` },
   avgRun: { tick: (v) => displayDistance(v, 0), label: "Average run", unit: "mi", value: (b) => b.runs ? b.distanceMiles / b.runs : 0, format: (v) => `${displayDistance(v, 1)}` },
   longRun: { tick: (v) => displayDistance(v, 0), label: "Long run", unit: "mi", value: (b) => b.longRunMiles, format: (v) => `${displayDistance(v, 1)}` },
@@ -1299,11 +1299,14 @@ function showRunCollectionModal(title, runs, trigger = document.activeElement) {
   els.workoutModalClose.focus();
 }
 
+// The first row is the value the reader is pointing at: shown large, then the context rows.
 function tooltipContent(title, rows) {
-  const safeRows = rows
+  const [primary, ...rest] = rows;
+  const lead = primary ? `<p class="tooltip-primary"><b>${escapeHtml(primary.value)}</b><span>${escapeHtml(primary.label)}</span></p>` : "";
+  const safeRows = rest
     .map((row) => `<dt>${escapeHtml(row.label)}</dt><dd>${escapeHtml(row.value)}</dd>`)
     .join("");
-  return `<strong>${escapeHtml(title)}</strong><dl>${safeRows}</dl>`;
+  return `<strong>${escapeHtml(title)}</strong>${lead}${safeRows ? `<dl>${safeRows}</dl>` : ""}`;
 }
 
 function getTooltipTarget(target) {
@@ -1415,34 +1418,52 @@ function renderBarLineChart(container, buckets, metric) {
   });
   const labelEvery = Math.ceil(buckets.length / Math.max(2, Math.floor(chartWidth / 80)));
   const linePoints = [];
+  const changeText = (index) => {
+    const previous = index - 1;
+    if (previous < 0 || missing[index] || missing[previous]) return null;
+    const now = values[index], before = values[previous];
+    if (metricKey === "pace") {
+      const seconds = Math.round((now - before) / unitFactor());
+      return seconds ? `${Math.abs(seconds)} sec/${unitName()} ${seconds < 0 ? "faster" : "slower"}` : "Same pace";
+    }
+    if (isRate) return `${now >= before ? "+" : "−"}${metric.format(Math.abs(now - before))}`;
+    const percent = before ? Math.round((now - before) / before * 100) : null;
+    return percent === null ? null : `${percent > 0 ? "+" : percent < 0 ? "−" : "±"}${Math.abs(percent)}%`;
+  };
   buckets.forEach((bucket, index) => {
     const value = values[index];
     const x = xFor(index);
-    let mark;
+    // One group per period: a hover band, the mark, and a full-height hit target
+    // so short bars and empty periods are as easy to point at as tall ones.
+    const group = svg("g", { class: `period${inProgress[index] ? " is-progress" : ""}` });
+    group.appendChild(svg("rect", { class: "period-band", x: pad.left + index * slot, y: pad.top, width: slot, height: chartHeight }));
     if (isRate) {
-      // Rates are levels, not amounts: a point per period on a fitted axis.
-      mark = svg("rect", { class: "period-hit", x: pad.left + index * slot, y: pad.top, width: slot, height: chartHeight, fill: "transparent" });
       if (!missing[index]) linePoints.push({ x, y: yFor(value), index });
     } else {
       const y = missing[index] ? pad.top + chartHeight : yFor(value);
       const barHeight = Math.max(1, pad.top + chartHeight - y);
-      mark = svg("path", {
+      group.appendChild(svg("path", {
         class: `bar${missing[index] ? " empty-period" : ""}${inProgress[index] ? " in-progress" : ""}`,
         d: columnPath(x - barWidth / 2, y, barWidth, y + barHeight)
-      });
-      if (inProgress[index] && !missing[index]) root.appendChild(svg("text", { class: "progress-label", x, y: y - 6, "text-anchor": "middle" }, [document.createTextNode("so far")]));
+      }));
+      if (inProgress[index] && !missing[index]) group.appendChild(svg("text", { class: "progress-label", x, y: y - 6, "text-anchor": "middle" }, [document.createTextNode("so far")]));
     }
-    attachTooltip(mark, `${bucket.label}${inProgress[index] ? " (in progress)" : ""}`, [
-      { label: metric.label, value: missing[index] ? "-" : metric.format(value) },
+    const mark = svg("rect", { class: "period-hit", x: pad.left + index * slot, y: pad.top, width: slot, height: chartHeight, fill: "transparent" });
+    const change = changeText(index);
+    attachTooltip(mark, `${mode === "week" ? "Week of " : ""}${bucket.label}${inProgress[index] ? " · in progress" : ""}`, [
+      { label: metric.label, value: missing[index] ? "No runs" : metric.format(value) },
+      change ? { label: `vs previous ${mode}`, value: change } : null,
       showAverage && Number.isFinite(averages[index]) ? { label: `${averageWindow}-${mode} average`, value: metric.format(averages[index]) } : null,
-      { label: "Distance", value: `${displayDistance(bucket.distanceMiles, 1)}` },
-      { label: "Runs", value: bucket.runs },
-      { label: "Avg pace", value: formatPace(bucket.averagePace) },
-      { label: "Long run", value: `${displayDistance(bucket.longRunMiles, 1)}` },
-      { label: "Avg HR", value: bucket.averageHr ? `${Math.round(bucket.averageHr)} bpm` : "-" }
+      metricKey !== "distance" ? { label: "Distance", value: `${displayDistance(bucket.distanceMiles, 1)}` } : null,
+      metricKey !== "runs" ? { label: "Runs", value: bucket.runs } : null,
+      metricKey !== "pace" ? { label: "Avg pace", value: formatPace(bucket.averagePace) } : null,
+      metricKey !== "longRun" ? { label: "Long run", value: `${displayDistance(bucket.longRunMiles, 1)}` } : null,
+      metricKey !== "heartrate" && bucket.averageHr ? { label: "Avg HR", value: `${Math.round(bucket.averageHr)} bpm` } : null,
+      bucket.runs ? { label: "Click to open", value: `${bucket.runs} run${bucket.runs === 1 ? "" : "s"}` } : null
     ].filter(Boolean));
     if (bucket.runs) attachChartAction(mark, bucket.label, runsForBucket(bucket));
-    root.appendChild(mark);
+    group.appendChild(mark);
+    root.appendChild(group);
     if (index % labelEvery === 0) root.appendChild(svg("text", { class: "label", x, y: height - 7, "text-anchor": "middle" }, [document.createTextNode(bucket.label)]));
   });
   if (isRate && linePoints.length) {
@@ -1451,8 +1472,15 @@ function renderBarLineChart(container, buckets, metric) {
       const joined = order && linePoints[order - 1].index === point.index - 1;
       path += `${joined ? "L" : "M"}${point.x.toFixed(1)},${point.y.toFixed(1)}`;
     });
-    root.insertBefore(svg("path", { class: "rate-line", d: path }), root.querySelector(".period-hit"));
-    linePoints.forEach((point) => root.appendChild(svg("circle", { class: `rate-dot${inProgress[point.index] ? " in-progress" : ""}`, cx: point.x, cy: point.y, r: 4.5 })));
+    root.appendChild(svg("path", { class: "rate-line", d: path }));
+    // Each point lives in its period's group (before the hit target) so hovering the period grows it.
+    const groups = root.querySelectorAll(".period");
+    linePoints.forEach((point) => {
+      const group = groups[point.index];
+      group.insertBefore(svg("circle", { class: `rate-dot${inProgress[point.index] ? " in-progress" : ""}`, cx: point.x, cy: point.y, r: 4.5 }), group.querySelector(".period-hit"));
+    });
+    // Keep the line under the points.
+    root.insertBefore(root.querySelector(".rate-line"), groups[0]);
   }
   if (showAverage) {
     let path = "", pen = false, lastPoint = null;
@@ -1517,9 +1545,8 @@ function renderScatter() {
       x: miles(run.distance), y: paceSeconds(run), className: `type-${runType(run).group}`,
       title: `${runType(run).label} · ${run.name} · ${parseActivityDate(run).toLocaleDateString(undefined, { month: "short", day: "numeric" })}`,
       rows: [
+        { label: "distance at average pace", value: `${displayDistance(miles(run.distance), 1)} · ${formatPace(paceSeconds(run))}` },
         { label: "Type", value: runType(run).label },
-        { label: "Distance", value: displayDistance(miles(run.distance), 2) },
-        { label: "Pace", value: formatPace(paceSeconds(run)) },
         { label: "Heart rate", value: run.average_heartrate ? `${Math.round(run.average_heartrate)} bpm` : "-" }
       ],
       open: (dot) => showWorkoutModal(run.id, dot)
@@ -2877,18 +2904,19 @@ render();
 checkStatus().catch((error) => setStatus(error.message, true));
 
 let chartResizeTimer;
-let lastChartWidth = 0;
+let lastChartWidth = document.querySelector("#app").clientWidth;
 new ResizeObserver(() => {
   clearTimeout(chartResizeTimer);
   chartResizeTimer = setTimeout(() => {
     if (!state.rawActivities.length) return;
     const width = document.querySelector("#app").clientWidth;
-    const widthChanged = width !== lastChartWidth;
+    // Height changes (opening a section, new rows) must not redraw: that would drop a hover in progress.
+    if (width === lastChartWidth) return;
     lastChartWidth = width;
     if (activeView === "overview" && state.filteredRuns.length) {
       renderMainChart();
-      if (widthChanged) renderSecondaryCharts();
+      renderSecondaryCharts();
     }
-    if (activeView === "fitness" && widthChanged) renderFitness();
+    if (activeView === "fitness") renderFitness();
   }, 120);
 }).observe(document.querySelector("#app"));
