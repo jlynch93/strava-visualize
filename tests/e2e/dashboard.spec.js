@@ -383,3 +383,35 @@ for (const viewport of [{ width: 1280, height: 900 }, { width: 390, height: 844 
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   });
 }
+
+test("hovering any chart shows its value on screen, in the chosen units", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Preview demo data", exact: true }).click();
+  await page.evaluate(() => { const select = document.querySelector("#unitPreference"); select.value = "metric"; select.dispatchEvent(new Event("change", { bubbles: true })); });
+  await expect(page.locator("#mainChart text.label").first()).toContainText("km");
+  const tooltip = page.locator("#chartTooltip");
+  const expectOnScreen = async () => {
+    await expect(tooltip).toHaveClass(/visible/);
+    const box = await tooltip.boundingBox();
+    expect(box.y).toBeGreaterThanOrEqual(0);
+    expect(box.y + box.height).toBeLessThanOrEqual(800);
+  };
+  // The page is long; scroll so a fixed tooltip without top/left would land off screen.
+  // A real width change (e.g. a scrollbar appearing) may redraw once; retry the gesture.
+  const hover = (locator) => expect(async () => { await locator.scrollIntoViewIfNeeded(); await locator.hover(); await expect(tooltip).toHaveClass(/visible/, { timeout: 500 }); }).toPass();
+  await hover(page.locator("#mainChart .period-hit").nth(5));
+  await expectOnScreen();
+  await expect(tooltip.locator(".tooltip-primary b")).toHaveText(/\d+(\.\d)? km/);
+  await expect(tooltip).toContainText("vs previous week");
+  await expect(page.locator(".trend-legend")).toContainText("Current week, in progress");
+  await expect(page.locator(".trend-legend")).not.toContainText("mm");
+  await page.locator(".exploration > summary").click();
+  for (const selector of ["#structureChart .column-hit", "#scatterChart .scatter-dot", "#heatmapChart .heat.chart-action"]) {
+    await hover(page.locator(selector).nth(3));
+    await expectOnScreen();
+  }
+  await page.getByRole("link", { name: "Fitness", exact: true }).click();
+  await hover(page.locator("#loadChart .hit-area"));
+  await expectOnScreen();
+});

@@ -106,11 +106,11 @@ function applyDisplayUnits(root = document.querySelector("#app")) {
         return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}/km`;
       });
       output = output.replace(/(-?[\d,]+(?:\.\d+)?)\s*°F\b/g, (_, n) => `${Math.round((Number(n.replaceAll(",", "")) - 32) * 5 / 9)}°C`);
-      output = output.replace(/([\d,]+(?:\.\d+)?)\s*(ft\/mi|ft|sec\/mi|min\/mi|mph|mi|miles|in)\b/g, (_, n, unit) => {
+      output = output.replace(/(\d[\d,]*(?:\.\d+)?)\s*(ft\/mi|ft|sec\/mi|min\/mi|mph|mi|miles|in)\b/g, (_, n, unit) => {
         const value = Number(n.replaceAll(",", ""));
         const factor = { "ft/mi": .3048 / 1.609344, ft: .3048, "sec/mi": 1 / 1.609344, "min/mi": 1 / 1.609344, mph: 1.609344, mi: 1.609344, miles: 1.609344, in: 25.4 }[unit];
         const label = { "ft/mi": "m/km", ft: "m", "sec/mi": "sec/km", "min/mi": "min/km", mph: "km/h", mi: "km", miles: "km", in: "mm" }[unit];
-        return `${(value * factor).toLocaleString(undefined, { maximumFractionDigits: unit === "in" ? 1 : 2 })} ${label}`;
+        return `${(value * factor).toLocaleString(undefined, { maximumFractionDigits: unit === "in" || unit === "min/mi" ? 1 : unit === "sec/mi" ? 0 : 2 })} ${label}`;
       });
       output = output.replace(/\bMileage\b/g, "Distance").replace(/\bmileage\b/g, "distance").replace(/\bMiles\b/g, "Kilometers").replace(/\bmi\b/g, "km").replace(/\bft\b/g, "m");
     }
