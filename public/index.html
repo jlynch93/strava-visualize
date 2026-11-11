@@ -7,6 +7,7 @@
     <title>Strava Run Trends</title>
     <link rel="stylesheet" href="/styles.css">
     <link rel="stylesheet" href="/dashboard.css">
+    <link rel="stylesheet" href="/fitness.css">
   </head>
   <body>
     <!--
@@ -25,6 +26,7 @@
         </a>
         <nav class="app-nav" aria-label="Dashboard sections">
           <a href="#overview">Overview</a>
+          <a href="#fitness">Fitness</a>
           <a href="#planning">Plan</a>
           <a href="#runs">Runs</a>
         </nav>
@@ -116,6 +118,8 @@
           <span id="dataSource" class="source-label">Training history</span>
         </div>
 
+        <section id="todayStrip" class="today-strip" aria-label="Readiness today" data-native-units hidden></section>
+
         <section class="block-review" aria-labelledby="blockReviewTitle">
           <div class="block-review-lead">
             <h2 id="blockReviewTitle">Load training data to review your block</h2>
@@ -205,6 +209,76 @@
           </div>
         </section>
       </div>
+
+
+      <section id="fitness" class="fitness-view" aria-labelledby="fitnessTitle" data-view-section="fitness" data-native-units hidden>
+        <div class="overview-head">
+          <div>
+            <h1 id="fitnessTitle">Fitness &amp; readiness</h1>
+            <p>Readiness and today's numbers use your full history. Charts follow the review window.</p>
+          </div>
+        </div>
+        <div id="fitnessEmpty" class="fitness-empty">
+          <h2>Load runs to see your fitness</h2>
+          <p>Connect Strava, import an export, or try the demo data. Runs with heart rate give the best VO2 max estimate.</p>
+        </div>
+        <div id="fitnessBody" hidden>
+          <section id="readinessHero" class="readiness-hero" aria-label="Readiness to train"></section>
+          <ul id="fitnessNotes" class="fitness-notes" hidden></ul>
+          <div id="fitnessKpis" class="fitness-kpis" aria-label="Current fitness metrics"></div>
+
+          <section class="fitness-panel" aria-labelledby="vo2Title">
+            <div class="fitness-panel-head">
+              <div><h2 id="vo2Title">Estimated VO2 max</h2><p>Your aerobic ceiling in ml/kg/min. Rolling 6-week estimate from pace and heart rate; VDOT comes from your best effort.</p></div>
+              <div id="vo2Legend" class="chart-legend"></div>
+            </div>
+            <div id="vo2Chart" class="fitness-chart"></div>
+          </section>
+
+          <section class="fitness-panel" aria-labelledby="loadTitle">
+            <div class="fitness-panel-head">
+              <div><h2 id="loadTitle">Fitness, fatigue &amp; form</h2><p>Fitness is your 6-week load, fatigue your last week. Form is the gap: positive is fresh, negative means you're carrying fatigue.</p></div>
+              <div class="chart-legend"><span class="legend-item"><i class="key fitness-line"></i>Fitness (42-day)</span><span class="legend-item"><i class="key fatigue-line"></i>Fatigue (7-day)</span></div>
+            </div>
+            <div id="loadChart" class="fitness-chart"></div>
+            <h3 class="form-chart-title">Form <span>fitness − fatigue</span></h3>
+            <div id="formChart" class="fitness-chart fitness-chart-short"></div>
+          </section>
+
+          <div class="fitness-columns">
+            <section class="fitness-panel" aria-labelledby="predictionsTitle">
+              <div class="fitness-panel-head"><div><h2 id="predictionsTitle">Race predictions</h2><p>What your current fitness supports with good pacing and a taper.</p></div></div>
+              <div id="racePredictions"></div>
+            </section>
+            <section class="fitness-panel" aria-labelledby="pacesTitle">
+              <div class="fitness-panel-head"><div><h2 id="pacesTitle">Training paces</h2><p>Targets for each kind of session at today's fitness.</p></div></div>
+              <div id="trainingPaces"></div>
+            </section>
+          </div>
+
+          <section class="fitness-panel" aria-labelledby="metricsTitle">
+            <div class="fitness-panel-head"><div><h2 id="metricsTitle">Running metrics</h2><p>Weekly values across the review window.</p></div></div>
+            <div id="runningMetrics" class="running-metrics"></div>
+          </section>
+
+          <details class="secondary-disclosure fitness-profile">
+            <summary>Heart-rate profile &amp; method<span id="profileSummary"></span></summary>
+            <div class="fitness-profile-body">
+              <form id="athleteForm" class="athlete-form" data-feedback-scope>
+                <label for="maxHr">Max heart rate (bpm)</label><input id="maxHr" name="maxHr" type="number" min="120" max="225" inputmode="numeric">
+                <label for="restHr">Resting heart rate (bpm)</label><input id="restHr" name="restHr" type="number" min="30" max="100" inputmode="numeric">
+                <button type="submit" class="context-save">Save profile</button>
+              </form>
+              <div class="method-notes">
+                <h3>How these are calculated</h3>
+                <p><strong>VO2 max</strong> compares the oxygen cost of each run's pace (Daniels' equation, with a hill correction) with the share of your heart-rate reserve it took. The chart shows the upper quartile of the last six weeks, since heat, hills and fatigue only drag single runs down. <strong>VDOT</strong> is the same scale computed from your best performance alone.</p>
+                <p><strong>Training load</strong> uses heart rate (Banister TRIMP) when available and pace relative to threshold otherwise; one hour at threshold is about 100 points. <strong>Fitness</strong> and <strong>fatigue</strong> are 42- and 7-day weighted averages of daily load.</p>
+                <p><strong>Readiness</strong> weighs form (40%), the load ramp (25%), time since your last hard run (20%) and your weekly check-in (15%). These are models for planning, not medical measurements.</p>
+              </div>
+            </div>
+          </details>
+        </div>
+      </section>
 
       <section id="planning" class="coaching-workspace data-panel" aria-labelledby="coachingWorkspaceTitle">
         <div class="panel-heading"><h2 id="coachingWorkspaceTitle">Make room for your next week</h2><span>Goals and check-ins stay in this browser</span></div>
@@ -339,7 +413,9 @@
       </section>
     </div>
     <script src="/training-core.js"></script>
+    <script src="/fitness-core.js"></script>
     <script src="/experience.js"></script>
+    <script src="/fitness.js"></script>
     <script src="/script.js"></script>
   </body>
 </html>

@@ -34,6 +34,8 @@ jobs:
           node --check public/script.js
           node --check public/experience.js
           node --check public/training-core.js
+          node --check public/fitness-core.js
+          node --check public/fitness.js
           node --check shared/services.cjs
           node --check shared/analysis-limits.cjs
           node --check server.js

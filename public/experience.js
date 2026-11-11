@@ -56,7 +56,7 @@ function planKey() { return localDateValue(selectedPlanStart()); }
 function savePlans() { return persist("run-trends-plans-v1", acceptedPlans); }
 function displayDistance(value, digits = 1) { return `${(value * (preferences.units === "metric" ? 1.609344 : 1)).toFixed(digits)} ${preferences.units === "metric" ? "km" : "mi"}`; }
 function setView(view, focus = false) {
-  activeView = ["overview", "runs", "planning"].includes(view) ? view : "overview";
+  activeView = ["overview", "fitness", "runs", "planning"].includes(view) ? view : "overview";
   document.body.dataset.view = activeView;
   document.querySelectorAll("[data-view-section]").forEach((section) => {
     const hidden = section.dataset.viewSection !== activeView;
@@ -71,6 +71,7 @@ function setView(view, focus = false) {
     window.scrollTo({ top: 0, behavior: "instant" });
   }
   if (activeView === "overview" && state.filteredRuns.length) renderMainChart();
+  if (activeView === "fitness") renderFitness();
 }
 function matchesRunFilter(run) {
   const filter = document.querySelector("#runTypeFilter")?.value || "all";
@@ -331,7 +332,7 @@ function initializeExperience() {
   document.querySelector("#planning").dataset.viewSection = "planning"; document.querySelector("#runs").dataset.viewSection = "runs";
   document.querySelector(".brand-lockup").addEventListener("click", () => setView("overview", true));
   document.querySelectorAll(".app-nav a").forEach((link) => link.addEventListener("click", (event) => { event.preventDefault(); history.replaceState(null, "", `${location.pathname}${location.search}${link.hash}`); setView(link.hash.slice(1), true); }));
-  activeView = ["planning", "runs"].includes(location.hash.slice(1)) ? location.hash.slice(1) : "overview";
+  activeView = ["fitness", "planning", "runs"].includes(location.hash.slice(1)) ? location.hash.slice(1) : "overview";
   window.addEventListener("hashchange", () => setView(location.hash.slice(1), true));
   document.querySelector("#planning .panel-heading").insertAdjacentHTML("afterend", `<p id="planningHistoryNote" role="status"></p><div class="plan-controls"><button id="previousPlanWeek" type="button">Previous week</button><strong id="planWeekLabel"></strong><button id="nextPlanWeek" type="button">Next week</button><button id="acceptPlanButton" type="button">Save this draft</button><button id="replacePlanButton" type="button">Replace saved plan with draft</button></div><section id="acceptedPlan" data-native-units aria-label="Saved weekly plan"></section>`);
   document.querySelector("#coachingWorkspaceTitle").textContent = "Your training plan";

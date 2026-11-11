@@ -262,3 +262,41 @@ test("failed browser storage reports that accepted plans are only available in t
   await expect(page.locator("#acceptedPlan .saved-session")).toHaveCount(7);
   await expect(page.locator("#status")).toContainText("browser storage failed");
 });
+
+test("fitness view shows readiness, VO2 max, load and accepts a heart-rate profile", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Preview demo data", exact: true }).click();
+  const strip = page.locator("#todayStrip");
+  await expect(strip).toBeVisible();
+  await expect(strip).toContainText("Readiness today");
+  await strip.getByRole("link", { name: /Open fitness/ }).click();
+  await expect(page.locator("#fitness")).toBeVisible();
+  await expect(page.locator("#overview")).toBeHidden();
+  await expect(page.locator(".app-nav a[href='#fitness']")).toHaveAttribute("aria-current", "page");
+  await expect(page.locator(".readiness-gauge")).toHaveAttribute("aria-label", /Readiness \d+ out of 100/);
+  await expect(page.locator(".readiness-factors li")).not.toHaveCount(0);
+  await expect(page.locator("#fitnessKpis")).toContainText(/VO2 max \(est\.\)\s*\d+\.\d/i);
+  await expect(page.locator("#vo2Chart svg")).toBeVisible();
+  await expect(page.locator("#loadChart svg")).toBeVisible();
+  await expect(page.locator("#racePredictions tbody tr")).toHaveCount(4);
+  await expect(page.locator("#trainingPaces tbody tr")).toHaveCount(5);
+
+  // Keyboard users can step through the chart and read each day.
+  await page.locator("#loadChart svg").focus();
+  await expect(page.locator("#chartTooltip")).toHaveClass(/visible/);
+  await expect(page.locator("#chartTooltip")).toContainText("Fitness");
+  await page.keyboard.press("ArrowLeft");
+  await expect(page.locator("#chartTooltip")).toContainText("Form");
+
+  const before = await page.locator("#fitnessKpis .kpi-tile").first().locator("strong").textContent();
+  await page.locator(".fitness-profile > summary").click();
+  await page.locator("#restHr").fill("45");
+  await page.locator("#athleteForm button[type=submit]").click();
+  await expect(page.locator("#profileSummary")).toContainText("resting HR 45 (saved)");
+  await expect(page.locator("#fitnessKpis .kpi-tile").first().locator("strong")).not.toHaveText(before);
+  await page.reload();
+  await expect(page.locator("#restHr")).toHaveValue("45");
+
+  const report = await new AxeBuilder({ page }).include("#fitness").withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
+  expect(report.violations).toEqual([]);
+});
