@@ -66,6 +66,9 @@ function buildFitnessModel(runs) {
   const fitnessVdot = currentVdot && currentVo2 ? Math.min(currentVo2.vo2max, Math.max(currentVdot.vdot, currentVo2.vo2max * 0.9)) : vo2?.value ?? null;
   const thresholdSpeed = fitnessVdot ? FitnessCore.speedForOxygen(fitnessVdot * 0.88) : 0;
   const loads = FitnessCore.dailyLoads(runs, hrProfile, thresholdSpeed, parseActivityDate);
+  const typicalMeters = FitnessCore.percentile(runs.slice(-60).map((run) => Number(run.distance) || 0), 0.5) || 0;
+  const typeContext = { profile: hrProfile, thresholdSpeed, typicalMeters };
+  const types = new Map(runs.map((run) => [String(run.id), FitnessCore.classifyRunType(run, typeContext)]));
   const firstDay = parseActivityDate(runs[0]);
   const loadSeries = FitnessCore.loadSeries(loads, firstDay, today);
   const latest = loadSeries.at(-1);
@@ -84,149 +87,10 @@ function buildFitnessModel(runs) {
   });
   const loadSources = runLoads.filter((item) => item.date >= recentCutoff).reduce((counts, item) => ({ ...counts, [item.source]: (counts[item.source] || 0) + 1 }), {});
   return {
-    runs, runLoads, profile, vo2Points, vo2, fitnessVdot, thresholdSpeed, loads, loadSeries, latest, ratios, readiness,
+    runs, runLoads, profile, vo2Points, types, typeContext, vo2, fitnessVdot, thresholdSpeed, loads, loadSeries, latest, ratios, readiness,
     lastHard, historyDays, stale, newestRun, loadSources,
     hrCoverage: runs.filter((run) => run.average_heartrate).length / runs.length
   };
-}
-
-/* ---------- Small SVG helpers ---------- */
-
-function niceTicks(min, max, count = 4) {
-  if (!(max > min)) { max = min + 1; }
-  const raw = (max - min) / count;
-  const magnitude = 10 ** Math.floor(Math.log10(raw));
-  const step = [1, 2, 2.5, 5, 10].map((factor) => factor * magnitude).find((value) => value >= raw) || raw;
-  const ticks = [];
-  for (let value = Math.floor(min / step) * step; value <= max + step * 0.001; value += step) ticks.push(Number(value.toFixed(6)));
-  if (ticks[ticks.length - 1] < max) ticks.push(ticks[ticks.length - 1] + step);
-  return ticks;
-}
-
-function shortDate(date) {
-  return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-}
-
-/*
- * Time chart with one y-axis. Lines share a crosshair tooltip; bars are drawn
- * from zero. Hover or focus the chart and use arrow keys to move between days.
- */
-function timeChart(container, { dates, series, yFormat, yMin, yMax, bands = [], tooltip, ariaLabel, height, zeroLine = false, endLabels = true, rightPad }) {
-  if (!dates.length || !series.some((item) => item.values.some((value) => Number.isFinite(value)))) {
-    renderEmpty(container, "Not enough data in this window yet.");
-    return;
-  }
-  const width = Math.max(container.clientWidth || 0, 300);
-  const chartHeight = height || Math.max(container.clientHeight || 0, 220);
-  const hasEndLabels = endLabels && series.some((item) => item.kind !== "bars" && item.kind !== "dots");
-  const pad = { top: 14, right: rightPad ?? (hasEndLabels ? 72 : 14), bottom: 26, left: 46 };
-  const all = series.flatMap((item) => item.values.filter(Number.isFinite));
-  let low = yMin ?? Math.min(...all, ...bands.map((band) => band.from).filter(Number.isFinite));
-  let high = yMax ?? Math.max(...all);
-  if (yMin === undefined) low = Math.min(low, high) - (high - low) * 0.08;
-  if (yMax === undefined) high = high + (high - low) * 0.08;
-  const ticks = niceTicks(low, high, 4);
-  low = ticks[0]; high = ticks[ticks.length - 1];
-  const innerWidth = width - pad.left - pad.right;
-  const innerHeight = chartHeight - pad.top - pad.bottom;
-  const step = dates.length > 1 ? innerWidth / (dates.length - 1) : 0;
-  const x = (index) => pad.left + (dates.length > 1 ? index * step : innerWidth / 2);
-  const y = (value) => pad.top + innerHeight - (value - low) / (high - low || 1) * innerHeight;
-  const root = svg("svg", { viewBox: `0 0 ${width} ${chartHeight}`, role: "img", tabindex: "0", "aria-label": ariaLabel, class: "time-chart" });
-  bands.forEach((band) => {
-    const top = y(Math.min(high, band.to)), bottom = y(Math.max(low, band.from));
-    if (bottom - top <= 0) return;
-    root.append(svg("rect", { class: `band ${band.className}`, x: pad.left, y: top, width: innerWidth, height: bottom - top }));
-    if (band.label && bottom - top > 14) root.append(svg("text", { class: "band-label", x: pad.left + 6, y: top + 12 }, [document.createTextNode(band.label)]));
-  });
-  ticks.forEach((tick) => {
-    root.append(svg("line", { class: "axis", x1: pad.left, x2: width - pad.right, y1: y(tick), y2: y(tick) }));
-    root.append(svg("text", { class: "label", x: pad.left - 8, y: y(tick) + 4, "text-anchor": "end" }, [document.createTextNode(yFormat(tick))]));
-  });
-  if (zeroLine && low < 0 && high > 0) root.append(svg("line", { class: "zero-line", x1: pad.left, x2: width - pad.right, y1: y(0), y2: y(0) }));
-  const labelEvery = Math.max(1, Math.ceil(dates.length / Math.max(2, Math.floor(innerWidth / 90))));
-  dates.forEach((date, index) => {
-    if (index % labelEvery === 0) root.append(svg("text", { class: "label", x: x(index), y: chartHeight - 6, "text-anchor": index === 0 ? "start" : "middle" }, [document.createTextNode(shortDate(date))]));
-  });
-  series.forEach((item) => {
-    if (item.kind === "bars") {
-      const barWidth = Math.max(1, Math.min(10, step * 0.7));
-      item.values.forEach((value, index) => {
-        if (!Number.isFinite(value) || !value) return;
-        const top = y(Math.max(0, value)), bottom = y(Math.min(0, value));
-        root.append(svg("rect", { class: `series-bar ${typeof item.className === "function" ? item.className(value) : item.className}`, x: x(index) - barWidth / 2, y: top, width: barWidth, height: Math.max(1, bottom - top), "pointer-events": "none" }));
-      });
-      return;
-    }
-    if (item.kind === "dots") {
-      item.values.forEach((value, index) => {
-        if (Number.isFinite(value)) root.append(svg("circle", { class: `series-dot ${item.className}`, cx: x(index), cy: y(value), r: 2.5, "pointer-events": "none" }));
-      });
-      return;
-    }
-    let path = "", pen = false;
-    item.values.forEach((value, index) => {
-      if (!Number.isFinite(value)) { pen = false; return; }
-      path += `${pen ? "L" : "M"}${x(index).toFixed(1)},${y(value).toFixed(1)}`; pen = true;
-    });
-    root.append(svg("path", { class: `series-line ${item.className}`, d: path, "pointer-events": "none" }));
-    const lastIndex = item.values.findLastIndex(Number.isFinite);
-    if (lastIndex >= 0) {
-      root.append(svg("circle", { class: `series-end ${item.className}`, cx: x(lastIndex), cy: y(item.values[lastIndex]), r: 4, "pointer-events": "none" }));
-      if (hasEndLabels) item.labelY = y(item.values[lastIndex]);
-      item.lastIndex = lastIndex;
-    }
-  });
-  // End labels: value at the line end, nudged apart only when they would overlap.
-  if (hasEndLabels) {
-    const labelled = series.filter((item) => item.labelY !== undefined && item.kind !== "bars" && item.kind !== "dots").sort((a, b) => a.labelY - b.labelY);
-    labelled.forEach((item, index) => {
-      if (index && item.labelY - labelled[index - 1].labelY < 26) item.labelY = labelled[index - 1].labelY + 26;
-      const text = svg("text", { class: "end-label", x: width - pad.right + 10, y: item.labelY }, [document.createTextNode(yFormat(item.values[item.lastIndex]))]);
-      const name = svg("text", { class: "end-name", x: width - pad.right + 10, y: item.labelY + 12 }, [document.createTextNode(item.short || item.label)]);
-      root.append(text, name);
-    });
-  }
-  const guide = svg("line", { class: "crosshair", y1: pad.top, y2: pad.top + innerHeight, x1: 0, x2: 0, visibility: "hidden" });
-  const focusDots = series.filter((item) => item.kind !== "bars" && item.kind !== "dots").map((item) => {
-    const dot = svg("circle", { class: `series-end ${item.className}`, r: 4.5, visibility: "hidden", "pointer-events": "none" });
-    return { item, dot };
-  });
-  root.append(guide, ...focusDots.map((entry) => entry.dot));
-  const overlay = svg("rect", { class: "hit-area", x: pad.left, y: pad.top, width: innerWidth, height: innerHeight, fill: "transparent" });
-  root.append(overlay);
-  let active = dates.length - 1;
-  const show = (index, event) => {
-    active = Math.max(0, Math.min(dates.length - 1, index));
-    const px = x(active);
-    guide.setAttribute("x1", px); guide.setAttribute("x2", px); guide.setAttribute("visibility", "visible");
-    focusDots.forEach(({ item, dot }) => {
-      const value = item.values[active];
-      dot.setAttribute("visibility", Number.isFinite(value) ? "visible" : "hidden");
-      if (Number.isFinite(value)) { dot.setAttribute("cx", px); dot.setAttribute("cy", y(value)); }
-    });
-    const content = tooltip(active);
-    const box = root.getBoundingClientRect();
-    const scale = box.width / width || 1;
-    showTooltip(tooltipContent(content.title, content.rows), event || { clientX: box.left + px * scale, clientY: box.top + pad.top * scale }, root);
-  };
-  const hide = () => { guide.setAttribute("visibility", "hidden"); focusDots.forEach(({ dot }) => dot.setAttribute("visibility", "hidden")); hideTooltip(); };
-  overlay.addEventListener("pointermove", (event) => {
-    const box = root.getBoundingClientRect();
-    const px = (event.clientX - box.left) * (width / box.width);
-    show(Math.round((px - pad.left) / (step || 1)), event);
-  });
-  overlay.addEventListener("pointerleave", hide);
-  root.addEventListener("focus", () => show(active));
-  root.addEventListener("blur", hide);
-  root.addEventListener("keydown", (event) => {
-    const moves = { ArrowLeft: -1, ArrowRight: 1, Home: -Infinity, End: Infinity, PageUp: -7, PageDown: 7 };
-    if (!(event.key in moves)) return;
-    event.preventDefault();
-    const next = Number.isFinite(moves[event.key]) ? active + moves[event.key] : moves[event.key] < 0 ? 0 : dates.length - 1;
-    show(next);
-  });
-  container.replaceChildren(root);
 }
 
 /* ---------- Rendering ---------- */
@@ -558,11 +422,58 @@ function renderTodayStrip(model) {
     <a class="today-link" href="#fitness">Open fitness <span aria-hidden="true">→</span></a>`;
 }
 
+// Overview: the current calendar week against the saved plan (or recent average).
+function renderThisWeek(model) {
+  const host = document.querySelector("#thisWeek");
+  if (!host) return;
+  if (!model) { host.hidden = true; return; }
+  host.hidden = false;
+  const start = TrainingCore.weekStart(new Date());
+  const today = localDateValue(new Date());
+  const plan = acceptedPlans[localDateValue(start)];
+  const days = Array.from({ length: 7 }, (_, index) => new Date(start.getFullYear(), start.getMonth(), start.getDate() + index));
+  const byDay = new Map();
+  model.runs.forEach((run) => {
+    const key = localDateValue(parseActivityDate(run));
+    if (key >= localDateValue(days[0]) && key <= localDateValue(days[6])) byDay.set(key, [...(byDay.get(key) || []), run]);
+  });
+  const doneMiles = [...byDay.values()].flat().reduce((sum, run) => sum + miles(run.distance), 0);
+  const doneRuns = [...byDay.values()].flat().length;
+  const planned = plan?.sessions?.filter((session) => session.kind === "run") || [];
+  const fourWeekStart = new Date(start); fourWeekStart.setDate(fourWeekStart.getDate() - 28);
+  const recent = model.runs.filter((run) => { const date = parseActivityDate(run); return date >= fourWeekStart && date < start; });
+  const average = recent.reduce((sum, run) => sum + miles(run.distance), 0) / 4;
+  const target = planned.length ? planned.reduce((sum, session) => sum + (Number(session.miles) || 0), 0) : average;
+  const targetRuns = planned.length || Math.round(recent.length / 4);
+  const progress = target ? Math.min(1, doneMiles / target) : 0;
+  const end = days[6];
+  const range = `${start.toLocaleDateString(undefined, { month: "short", day: "numeric" })}–${end.toLocaleDateString(undefined, start.getMonth() === end.getMonth() ? { day: "numeric" } : { month: "short", day: "numeric" })}`;
+  host.innerHTML = `
+    <div class="week-head">
+      <div><h2>This week <span>${range}</span></h2>
+      <p>${target ? `${displayDistance(doneMiles, 1)} of ${displayDistance(target, 0)} ${planned.length ? "planned" : "(your 4-week average)"} · ${doneRuns} of ${targetRuns} run${targetRuns === 1 ? "" : "s"}` : `${displayDistance(doneMiles, 1)} · ${doneRuns} run${doneRuns === 1 ? "" : "s"}`}</p></div>
+      <a class="today-link" href="#planning">${plan ? "Open plan" : "Plan this week"} <span aria-hidden="true">→</span></a>
+    </div>
+    <div class="week-meter" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(progress * 100)}" aria-label="Weekly distance ${Math.round(progress * 100)}% of target"><span style="width:${progress * 100}%"></span></div>
+    <ol class="week-days">${days.map((day) => {
+      const key = localDateValue(day);
+      const runs = byDay.get(key) || [];
+      const session = plan?.sessions?.find((item) => item.date === key);
+      const future = key > today;
+      const runText = runs.map((run) => `${runTypeChip(run)}<strong>${displayDistance(miles(run.distance), 1)}</strong>`).join("");
+      const planText = session ? (session.kind === "run" ? `<small>${escapeHtml(session.title)}${session.miles ? ` · ${displayDistance(session.miles, 1)}` : ""}</small>` : "<small>Rest</small>") : "";
+      const state = runs.length ? "done" : future ? (session?.kind === "run" ? "planned" : "upcoming") : session?.kind === "run" ? "missed" : "rest";
+      const label = { done: "", planned: "", upcoming: "", missed: "<small>Not run</small>", rest: "<small>Rest</small>" }[state];
+      return `<li class="week-day day-${state}${key === today ? " is-today" : ""}"><span class="week-day-name">${day.toLocaleDateString(undefined, { weekday: "short" })}${key === today ? " · today" : ""}</span>${runText}${!runs.length ? planText || label : planText}</li>`;
+    }).join("")}</ol>`;
+}
+
 function renderFitness() {
   const section = document.querySelector("#fitness");
   if (!section) return;
   const model = fitnessModel();
   renderTodayStrip(model);
+  renderThisWeek(model);
   renderProfileForm(model);
   const body = document.querySelector("#fitnessBody");
   const empty = document.querySelector("#fitnessEmpty");
@@ -577,6 +488,23 @@ function renderFitness() {
   renderVo2Chart(model, days);
   renderLoadCharts(model, days);
   renderRunningMetrics(model, days);
+}
+
+// Effort-based type for any run; falls back to the source label before a model exists.
+function runType(run) {
+  const model = fitnessModel();
+  return model?.types.get(String(run.id)) || FitnessCore.classifyRunType(run, model?.typeContext || {});
+}
+
+function runTypeChip(run) {
+  const type = runType(run);
+  return `<span class="type-chip type-${type.group}" title="Classified from effort and distance">${type.label}</span>`;
+}
+
+// Readiness only steers the current and next week; further out it says nothing.
+function planReadiness() {
+  if (typeof selectedPlanOffset !== "undefined" && (selectedPlanOffset < 0 || selectedPlanOffset > 1)) return null;
+  return fitnessModel()?.readiness || null;
 }
 
 function readinessSummaryText() {

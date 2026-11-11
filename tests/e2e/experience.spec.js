@@ -25,7 +25,8 @@ test("secondary controls stay collapsed and the data menu supports keyboard dism
   await expect(page.locator("#sourceStatus")).toHaveText("Imported history");
   await expect(page.locator("#demoButton")).toBeHidden();
   await expect(page.locator("#unitPreference")).toBeHidden();
-  await expect(page.locator("#signalsDisclosure")).not.toHaveAttribute("open", "");
+  await expect(page.locator(".exploration")).not.toHaveAttribute("open", "");
+  await expect(page.locator("#overview details.secondary-disclosure, [data-view-section='overview'] details.secondary-disclosure, details.exploration")).toHaveCount(2);
   await expect(page.locator("#aiAnalyzeButton")).toBeHidden();
   await page.locator("#dataMenu > summary").click();
   await expect(page.locator("#unitPreference")).toBeVisible();
@@ -131,7 +132,8 @@ test("saved sessions can be rescheduled and explicitly matched, never completing
   await page.locator("#previousPlanWeek").click(); await page.locator("#acceptPlanButton").click();
   const rows = page.locator("#acceptedPlan .saved-session");
   expect(await page.evaluate(() => acceptedPlans[planKey()].sessions.every((session) => session.status === "planned"))).toBe(true);
-  const firstRun = rows.filter({ has: page.getByText("Quality option", { exact: true }) });
+  // Readiness may swap the quality session for an easy run; any run session works here.
+  const firstRun = rows.filter({ has: page.getByText(/^(Quality option|Easy run)$/) }).first();
   await firstRun.locator("summary").click();
   const date = history()[0].start_date_local.slice(0, 10);
   await firstRun.locator('input[type="date"]').fill(date); await firstRun.locator('input[type="date"]').press("Tab");
@@ -299,4 +301,72 @@ test("fitness view shows readiness, VO2 max, load and accepts a heart-rate profi
 
   const report = await new AxeBuilder({ page }).include("#fitness").withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
   expect(report.violations).toEqual([]);
+});
+
+test("today's readiness shapes the auto plan and says why", async ({ page }) => {
+  await page.goto("/"); await importHistory(page); await view(page, "Plan");
+  const readiness = await page.evaluate(() => planReadiness());
+  const calendar = page.locator("#recommendedCalendar");
+  if (readiness && readiness.score < 35) {
+    await expect(page.locator("#intentRecommendation")).toContainText(`readiness today is ${readiness.score}/100`);
+    await expect(page.locator("#planAdaptation")).toContainText("recovery week");
+  } else if (readiness && readiness.score < 55) {
+    await expect(calendar).not.toContainText("Quality option");
+    await expect(calendar).toContainText(`Readiness ${readiness.score}/100: quality moved out this week`);
+    await expect(page.locator("#planAdaptation")).toContainText("quality session is swapped");
+  } else {
+    await expect(page.locator("#planAdaptation")).not.toContainText("Readiness is");
+  }
+  // A manual intent is the runner's call: readiness no longer swaps sessions.
+  await page.locator("summary").filter({ hasText: "Goal & availability" }).click();
+  await page.locator("#goalMode").selectOption("build");
+  await page.locator("#goalForm button[type=submit]").click();
+  await expect(page.locator("#planAdaptation")).not.toContainText("Readiness is");
+  // Weeks further out are not steered by today's readiness.
+  expect(await page.evaluate(() => { selectedPlanOffset = 3; const value = planReadiness(); selectedPlanOffset = 1; return value; })).toBeNull();
+});
+
+test("theme follows the system and can be pinned, with accessible contrast in dark mode", async ({ page }) => {
+  await page.emulateMedia({ colorScheme: "dark" });
+  await page.goto("/"); await importHistory(page);
+  const background = () => page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+  const dark = await background();
+  await preferences(page);
+  await page.locator("#themePreference").selectOption("light");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  expect(await background()).not.toBe(dark);
+  await page.locator("#themePreference").selectOption("dark");
+  await page.reload(); await importHistory(page);
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  expect(await background()).toBe(dark);
+  for (const name of ["Overview", "Fitness", "Runs"]) {
+    await view(page, name);
+    const report = await new AxeBuilder({ page }).withTags(["wcag2aa"]).withRules(["color-contrast"]).analyze();
+    expect(report.violations.filter((violation) => ["critical", "serious"].includes(violation.impact)), JSON.stringify(report.violations.map((violation) => violation.nodes.map((node) => node.target)))).toEqual([]);
+  }
+});
+
+test("this week compares completed runs with the plan or the recent average", async ({ page }) => {
+  await page.goto("/"); await importHistory(page);
+  const week = page.locator("#thisWeek");
+  await expect(week).toBeVisible();
+  await expect(week.locator(".week-day")).toHaveCount(7);
+  await expect(week.locator(".week-day.is-today")).toHaveCount(1);
+  await expect(week).toContainText("4-week average");
+  await expect(week.getByRole("meter")).toHaveAttribute("aria-valuenow", /\d+/);
+  // Saving this week's plan switches the target to the plan.
+  await view(page, "Plan"); await page.locator("#previousPlanWeek").click(); await page.locator("#acceptPlanButton").click();
+  await view(page, "Overview");
+  await expect(week).toContainText("planned");
+  await expect(week.getByRole("link", { name: /Open plan/ })).toBeVisible();
+});
+
+test("runs carry an effort-based type that the ledger can filter by", async ({ page }) => {
+  await page.goto("/"); await importHistory(page); await view(page, "Runs");
+  await expect(page.locator("#activityRows .type-chip").first()).toBeVisible();
+  const total = await page.locator("#activityRows tr").count();
+  await page.locator("#runTypeFilter").selectOption("easy");
+  const easy = await page.locator("#activityRows tr").count();
+  expect(easy).toBeLessThanOrEqual(total);
+  for (const chip of await page.locator("#activityRows .type-chip").allTextContents()) expect(["Easy", "Recovery"]).toContain(chip);
 });

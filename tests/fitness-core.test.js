@@ -83,3 +83,17 @@ test("VO2 series needs several samples before reporting", () => {
   assert.ok(series[4].vo2max > 45);
   assert.ok(series[4].vdot > 35);
 });
+
+test("run types come from effort and distance, not names", () => {
+  const context = { profile, thresholdSpeed: 250, typicalMeters: 10000 };
+  const base = { distance: 10000, moving_time: 3000, sport_type: "Run" };
+  assert.equal(fit.classifyRunType({ ...base, workout_type: 1 }, context).key, "race");
+  assert.equal(fit.classifyRunType({ ...base, distance: 21000, moving_time: 6600, average_heartrate: 150 }, context).key, "long");
+  assert.equal(fit.classifyRunType({ ...base, average_heartrate: 170 }, context).key, "quality");
+  assert.equal(fit.classifyRunType({ ...base, average_heartrate: 140 }, context).key, "easy");
+  assert.equal(fit.classifyRunType({ ...base, distance: 6000, average_heartrate: 125 }, context).key, "recovery");
+  // Without heart rate, pace relative to threshold decides.
+  assert.equal(fit.classifyRunType({ distance: 8000, moving_time: 1800 }, context).key, "quality");
+  assert.equal(fit.classifyRunType({ distance: 8000, moving_time: 2400 }, context).key, "easy");
+  assert.equal(fit.classifyRunType({ distance: 8000, moving_time: 2700 }, context).key, "recovery");
+});

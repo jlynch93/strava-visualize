@@ -12,7 +12,7 @@ test("production HTML points to existing content-fingerprinted assets with cache
   const output = path.join(repo, ".build/public");
   const manifest = JSON.parse(fs.readFileSync(path.join(output, "asset-manifest.json"), "utf8"));
   const html = fs.readFileSync(path.join(output, "index.html"), "utf8");
-  assert.equal(Object.keys(manifest).length, 8);
+  assert.equal(Object.keys(manifest).length, 11);
   for (const [source, filename] of Object.entries(manifest)) {
     const content = fs.readFileSync(path.join(repo, "public", source));
     const hash = createHash("sha256").update(content).digest("hex").slice(0, 12);
@@ -39,7 +39,7 @@ test("direct Wrangler deploy builds assets from a checkout with no build output"
     assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
     assert.ok(fs.existsSync(path.join(checkout, ".build/public/index.html")));
     assert.ok(fs.existsSync(path.join(checkout, ".build/public/asset-manifest.json")));
-    assert.match(result.stdout, /Built 8 fingerprinted assets/);
+    assert.match(result.stdout, /Built 11 fingerprinted assets/);
   } finally {
     if (!path.resolve(checkout).startsWith(path.resolve(prefix))) throw new Error("Unexpected temporary checkout path.");
     fs.rmSync(checkout, { recursive: true, force: true });
