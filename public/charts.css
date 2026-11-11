@@ -1,0 +1,123 @@
+/* Shared chart system: legends, marks, and the chart types in charts.js. Loads after dashboard.css. */
+:root {
+  /* Validated categorical order (dataviz validate_palette.js, light surface). */
+  --series-a: #008c80;
+  --series-b: #5b4fc4;
+  --series-c: #d1531a;
+}
+
+.chart-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; color: var(--ink-soft); font-size: .8rem; }
+.legend-item { display: inline-flex; gap: 7px; align-items: center; }
+.key { display: inline-block; width: 16px; height: 2px; border-radius: 1px; background: var(--ink-faint); }
+.key.key-dot { width: 8px; height: 8px; border-radius: 50%; }
+.key.key-bar { width: 8px; height: 12px; border-radius: 2px 2px 0 0; }
+.key.vo2-line, .key.fitness-line { background: var(--series-fitness); }
+.key.vo2-sample { background: color-mix(in oklch, var(--series-fitness) 45%, transparent); }
+.key.vdot-line { background: var(--series-vdot); }
+.key.fatigue-line { background: var(--series-fatigue); }
+
+/* Time-chart marks */
+.time-chart:focus { outline: none; }
+.time-chart:focus-visible { outline: 2px solid var(--teal); outline-offset: 4px; }
+.series-line { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.series-line.vo2-line, .series-line.fitness-line { stroke: var(--series-fitness); }
+.series-line.vdot-line { stroke: var(--series-vdot); }
+.series-line.fatigue-line { stroke: var(--series-fatigue); }
+.series-end { stroke: var(--surface); stroke-width: 2; }
+.series-end.vo2-line, .series-end.fitness-line { fill: var(--series-fitness); }
+.series-end.vdot-line { fill: var(--series-vdot); }
+.series-end.fatigue-line { fill: var(--series-fatigue); }
+.series-dot.vo2-sample { fill: color-mix(in oklch, var(--series-fitness) 45%, transparent); }
+.series-bar.form-positive { fill: var(--status-good); }
+.series-bar.form-negative { fill: var(--series-fatigue); }
+.band { opacity: .5; }
+.band-fresh { fill: color-mix(in oklch, var(--status-good) 12%, transparent); }
+.band-productive { fill: color-mix(in oklch, var(--status-warning) 12%, transparent); }
+.band-overreaching { fill: color-mix(in oklch, var(--status-critical) 14%, transparent); }
+.band-label { fill: var(--ink-soft); font-size: 10px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; }
+.zero-line { stroke: var(--rule-strong); stroke-width: 1; }
+.crosshair { stroke: var(--ink-faint); stroke-width: 1; pointer-events: none; }
+.end-label { fill: var(--ink-strong); font-size: 12px; font-weight: 720; }
+.end-name { fill: var(--ink-soft); font-size: 10px; }
+
+
+.chart-legend-row { margin: -4px 0 10px; }
+.key.other-runs { width: 10px; height: 12px; border-radius: 2px 2px 0 0; background: var(--series-a); }
+.key.long-run { width: 10px; height: 12px; border-radius: 2px 2px 0 0; background: var(--series-b); }
+.label { font-variant-numeric: tabular-nums; }
+.axis-title { fill: var(--ink-soft); font-size: 11px; font-weight: 650; }
+
+/* Column chart */
+.column-segment.other-runs { fill: var(--series-a); }
+.column-segment.long-run { fill: var(--series-b); }
+.column.in-progress .column-segment { opacity: .4; }
+.column:hover .column-segment, .column:focus-within .column-segment { filter: brightness(.82); }
+.column-hit { cursor: pointer; }
+.column-hit:focus-visible { outline: none; stroke: var(--ink-strong); stroke-width: 2; }
+
+/* Scatter */
+.scatter-dot { fill: var(--series-a); fill-opacity: .75; stroke: var(--surface); stroke-width: 2; cursor: pointer; }
+.scatter-dot:hover, .scatter-dot:focus-visible { fill: var(--ink-strong); fill-opacity: 1; outline: none; }
+
+/* Bar list (HTML horizontal bars) */
+.chart.chart-auto { height: auto; min-height: 0; }
+.bar-list { display: grid; grid-template-columns: max-content minmax(0, 1fr) max-content; gap: 10px 12px; align-items: center; margin: 0; padding: 0; list-style: none; }
+.bar-list li { display: contents; }
+.bar-list-label { color: var(--ink-soft); font-size: .82rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.bar-list-track { height: 14px; overflow: hidden; background: var(--surface-muted); border-radius: 0 4px 4px 0; }
+.bar-list-fill { display: block; height: 100%; background: var(--series-a); border-radius: 0 4px 4px 0; }
+.pace-bars .bar-list-fill { background: var(--series-b); opacity: .5; }
+.pace-bars li.highlight .bar-list-fill { opacity: 1; }
+.bar-list-value { color: var(--ink-strong); font-size: .85rem; font-variant-numeric: tabular-nums; font-weight: 720; text-align: right; white-space: nowrap; }
+.bar-list-value small { display: block; color: var(--ink-faint); font-size: .72rem; font-weight: 500; }
+
+/* Calendar heatmap: five ordered steps of one hue */
+.chart.calendar-chart { height: auto; }
+.calendar-scroll { overflow-x: auto; padding-bottom: 4px; }
+.calendar-svg { width: auto !important; height: auto !important; max-width: none; }
+.heat { stroke: none; }
+.heat.chart-action { cursor: pointer; }
+.heat.chart-action:focus-visible { outline: none; stroke: var(--ink-strong); stroke-width: 2; }
+.heat-level-0 { fill: var(--surface-muted); background: var(--surface-muted); }
+.heat-level-1 { fill: oklch(86% 0.05 190); background: oklch(86% 0.05 190); }
+.heat-level-2 { fill: oklch(72% 0.08 190); background: oklch(72% 0.08 190); }
+.heat-level-3 { fill: oklch(56% 0.1 190); background: oklch(56% 0.1 190); }
+.heat-level-4 { fill: oklch(40% 0.08 200); background: oklch(40% 0.08 200); }
+.calendar-legend { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin-top: 10px; color: var(--ink-soft); font-size: .76rem; }
+.calendar-legend span:first-child { margin-right: 4px; }
+.calendar-legend span:last-child { margin-left: 4px; }
+.heat-swatch { display: inline-block; width: 12px; height: 12px; border-radius: 3px; }
+
+/* Overview layout for the chart board */
+.exploration > .chart-board { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; padding: 0 18px 18px; }
+.exploration > .chart-board > .wide { grid-column: 1 / -1; }
+@media (max-width: 900px) { .exploration > .chart-board { grid-template-columns: 1fr; padding: 0 0 16px; } }
+.exploration > summary span { margin-left: 10px; color: var(--ink-soft); font-size: .8rem; font-weight: 500; }
+.supporting-panel { margin: 0 18px 18px; padding: 18px; }
+.supporting-panel h2 { margin: 0 0 12px; font-size: 1.05rem; }
+@media (max-width: 900px) { .supporting-panel { margin: 0 0 16px; padding: 14px; } }
+.onboarding-field .field-label, .onboarding-field .field-caption { color: var(--ink-soft); }
+
+/* ---------- Overview trend chart clarity ---------- */
+.primary-chart .bar.in-progress { fill: var(--teal); opacity: .35; }
+.primary-chart .avg-line { fill: none; stroke: var(--ink); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; pointer-events: none; }
+.primary-chart .avg-dot { fill: var(--ink); stroke: var(--surface); stroke-width: 2; pointer-events: none; }
+.primary-chart .bar-value { fill: var(--ink-strong); font-size: 11px; font-weight: 720; pointer-events: none; }
+.primary-chart .progress-label { fill: var(--ink-soft); font-size: 10px; pointer-events: none; }
+.trend-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 6px; color: var(--ink-soft); font-size: .78rem; }
+.trend-legend .key.bar-key { width: 10px; height: 12px; border-radius: 2px 2px 0 0; background: var(--teal); opacity: .85; }
+.trend-legend .key.progress-key { width: 10px; height: 12px; border-radius: 2px 2px 0 0; background: var(--teal); opacity: .35; }
+.trend-legend .key.avg-key { background: var(--ink); }
+
+
+.primary-chart .rate-line { fill: none; stroke: var(--teal); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; pointer-events: none; }
+.primary-chart .rate-dot { fill: var(--teal); stroke: var(--surface); stroke-width: 2; pointer-events: none; }
+.primary-chart .rate-dot.in-progress { fill: var(--surface); stroke: var(--teal); }
+.primary-chart .period-hit { cursor: pointer; }
+.primary-chart .period-hit:focus-visible { outline: none; fill: color-mix(in oklch, var(--teal) 10%, transparent); }
+.trend-legend .key.rate-key { width: 16px; height: 2px; background: var(--teal); }
+.trend-legend .key.rate-progress-key { width: 8px; height: 8px; border: 2px solid var(--teal); border-radius: 50%; background: var(--surface); }
+
+@media (max-width: 520px) {
+  .bar-list { gap: 10px 8px; }
+}

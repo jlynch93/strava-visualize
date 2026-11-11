@@ -317,11 +317,11 @@ function initializeExperience() {
   }, true);
   document.addEventListener("pointerdown", (event) => { if (disclosure.open && !disclosure.contains(event.target)) disclosure.open = false; });
   disclosure.addEventListener("keydown", (event) => { if (event.key === "Escape") { disclosure.open = false; disclosure.querySelector("summary").focus(); event.stopPropagation(); } });
-  const exploration = document.createElement("details"); exploration.className = "exploration data-panel"; exploration.dataset.viewSection = "overview"; exploration.innerHTML = "<summary>Explore patterns and supporting data</summary>";
+  const exploration = document.createElement("details"); exploration.className = "exploration data-panel"; exploration.dataset.viewSection = "overview"; exploration.innerHTML = "<summary>Charts &amp; patterns<span>Volume mix, calendar, pace and distance distributions</span></summary>";
   document.querySelector("#runs").before(exploration);
-  document.querySelectorAll(".training-texture, .advanced-exploration, main > .dashboard").forEach((section) => exploration.append(section));
-  exploration.addEventListener("toggle", () => { if (exploration.open && state.filteredRuns.length) { renderStructure(); renderHeatmap(); renderScatter(); renderRollingWorkload(); applyDisplayUnits(exploration); } });
-  exploration.insertAdjacentHTML("afterbegin", '<section class="data-panel" aria-label="Additional training signals"><h2>Supporting metrics</h2><div id="supportingSignals" class="intel-grid"></div></section>');
+  document.querySelectorAll("main > .dashboard, .training-texture").forEach((section) => exploration.append(section));
+  exploration.addEventListener("toggle", () => { if (exploration.open && state.filteredRuns.length) { renderSecondaryCharts(); applyDisplayUnits(exploration); } });
+  document.querySelector(".training-texture").insertAdjacentHTML("beforebegin", '<section class="data-panel supporting-panel" aria-label="Additional training signals"><h2>Supporting metrics</h2><div id="supportingSignals" class="intel-grid"></div></section>');
   document.querySelectorAll("#overview, .key-runs, .analysis-row").forEach((section) => section.dataset.viewSection = "overview");
   const signals = document.querySelector("#signals"); const coach = document.querySelector(".ai-insights");
   const signalDisclosure = document.createElement("details"); signalDisclosure.id = "signalsDisclosure"; signalDisclosure.className = "secondary-disclosure";
@@ -351,7 +351,7 @@ function initializeExperience() {
   document.querySelector(".plan-controls").insertAdjacentHTML("beforebegin", '<p id="planHistoryWarning" class="plan-history-warning" role="status" hidden></p>');
   document.querySelector("#checkinForm").insertAdjacentHTML("afterbegin", '<p id="checkinAge" role="status"></p>');
   document.querySelector("#checkinOutcome").insertAdjacentHTML("afterend", '<label for="missedReason">If missed, why?</label><select id="missedReason"><option value="fatigue">Fatigue / recovery</option><option value="schedule">Schedule / life</option><option value="other">Other / unsure</option></select>');
-  document.querySelector("#readinessTitle").textContent = "Current training context";
+  document.querySelector("#readinessTitle").textContent = "Last 7 days at a glance";
   els.goalAvailability.hidden = true;
   const availability = document.createElement("fieldset"); availability.className = "day-toggles"; availability.innerHTML = "<legend>Available running days (none selected means any day)</legend>";
   for (const day of ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]) availability.insertAdjacentHTML("beforeend", `<label><input type="checkbox" value="${day}" ${String(coachingContext.goal.availability || "").toLowerCase().includes(day.toLowerCase()) ? "checked" : ""}>${day}</label>`);

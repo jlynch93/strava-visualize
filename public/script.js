@@ -78,7 +78,6 @@ const els = {
   readinessContent: document.querySelector("#readinessContent"),
   planDraftCopy: document.querySelector("#planDraftCopy"),
   planAdaptation: document.querySelector("#planAdaptation"),
-  milestoneStats: document.querySelector("#milestoneStats"),
   recommendedCalendar: document.querySelector("#recommendedCalendar"),
   copyPlanButton: document.querySelector("#copyPlanButton"),
   runSearch: document.querySelector("#runSearch"),
@@ -133,17 +132,16 @@ function syncCoachingInputs() {
 }
 
 const METRICS = {
-  distance: { label: "Mileage", unit: "mi", value: (b) => b.distanceMiles, format: (v) => `${displayDistance(v, 1)}` },
+  distance: { tick: (v) => displayDistance(v, 0), label: "Mileage", unit: "mi", value: (b) => b.distanceMiles, format: (v) => `${displayDistance(v, 1)}` },
   runs: { label: "Run count", unit: "runs", value: (b) => b.runs, format: (v) => `${Math.round(v)} runs` },
-  avgRun: { label: "Average run", unit: "mi", value: (b) => b.runs ? b.distanceMiles / b.runs : 0, format: (v) => `${displayDistance(v, 1)}` },
-  longRun: { label: "Long run", unit: "mi", value: (b) => b.longRunMiles, format: (v) => `${displayDistance(v, 1)}` },
+  avgRun: { tick: (v) => displayDistance(v, 0), label: "Average run", unit: "mi", value: (b) => b.runs ? b.distanceMiles / b.runs : 0, format: (v) => `${displayDistance(v, 1)}` },
+  longRun: { tick: (v) => displayDistance(v, 0), label: "Long run", unit: "mi", value: (b) => b.longRunMiles, format: (v) => `${displayDistance(v, 1)}` },
   pace: { label: "Pace", unit: "/mi", value: (b) => b.averagePace, format: formatPace },
   elevation: { label: "Elevation", unit: "ft", value: (b) => b.elevationFeet, format: (v) => `${Math.round(v).toLocaleString()} ft` },
-  elevationDensity: { label: "Elevation density", unit: "ft/mi", value: (b) => b.distanceMiles ? b.elevationFeet / b.distanceMiles : 0, format: (v) => `${Math.round(v)} ft/mi` },
+  elevationDensity: { label: "Climb per mile", unit: "ft/mi", value: (b) => b.distanceMiles ? b.elevationFeet / b.distanceMiles : 0, format: (v) => `${Math.round(v)} ft/mi` },
   heartrate: { label: "Heart rate", unit: "bpm", value: (b) => b.averageHr, format: (v) => v ? `${Math.round(v)} bpm` : "-" },
   load: { label: "Running time", unit: "min", value: (b) => b.trainingLoad, format: (v) => `${Math.round(v).toLocaleString()} min` },
   loadPerMile: { label: "Time per distance", unit: "min/mi", value: (b) => b.distanceMiles ? b.trainingLoad / b.distanceMiles : 0, format: (v) => `${v.toFixed(1)} min/mi` },
-  efficiency: { label: "HR coverage", unit: "%", value: (b) => b.movingSeconds ? b.hrSeconds / b.movingSeconds * 100 : 0, format: (v) => `${Math.round(v)}%` }
 };
 
 function setStatus(message, isError = false, scopeId) {
@@ -290,7 +288,8 @@ function bucketKey(date, mode) {
 function bucketLabel(key, mode) {
   if (mode === "month") {
     const [year, month] = key.split("-");
-    return new Date(Number(year), Number(month) - 1, 1).toLocaleDateString(undefined, { month: "short", year: "2-digit" });
+    const date = new Date(Number(year), Number(month) - 1, 1);
+    return `${date.toLocaleDateString(undefined, { month: "short" })} ’${String(date.getFullYear()).slice(2)}`;
   }
   return new Date(`${key}T00:00:00`).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
@@ -518,17 +517,11 @@ function render() {
   renderBlockReview(summary, previous);
   renderCoachingWorkspace(currentTrainingSummary());
   renderTrainingTexture();
-  renderMilestones(summary);
   renderKeyRuns();
   renderIntel(summary, previous, start, end);
   renderAiState();
   renderMainChart();
-  renderScatter();
-  renderStructure();
-  renderHeatmap();
-  renderRollingWorkload();
-  renderDistanceMix();
-  renderPaceZones();
+  renderSecondaryCharts();
   renderTable();
   if (activeView !== "fitness") renderFitness(); // setView draws the visible Fitness view.
   updateWindowContext();
@@ -555,7 +548,7 @@ function updateWindowContext() {
   const { start, end } = getRangeDates();
   const dateFormat = { month: "short", day: "numeric", year: "numeric" };
   document.querySelector("#windowDates").textContent = `${start ? start.toLocaleDateString(undefined, dateFormat) : "Earliest run"} – ${end ? end.toLocaleDateString(undefined, dateFormat) : "Latest run"}`;
-  document.querySelector("#windowContext").textContent = "Overview, Runs and the Fitness charts follow this review window.";
+  document.querySelector("#windowContext").textContent = "Overview, Runs and Fitness charts follow this review window.";
   document.querySelector("#dataSource").textContent = state.dataSource === "demo" ? "Demo · sample running history" : state.dataSource === "import" ? "Imported activity history" : "Strava activity history";
   const noMatches = state.rawActivities.length > 0 && !state.filteredRuns.length;
   document.querySelector("#emptyWindow").hidden = !noMatches;
@@ -633,7 +626,7 @@ function renderTrainingTexture() {
   if (!els.trainingTextureStats) return;
   const runs = state.filteredRuns;
   if (!runs.length) {
-    els.trainingTextureStats.innerHTML = textureStat("Start temperature", "—", "Load a running block") + textureStat("Typical start", "—", "Local activity time") + textureStat("Favorite day", "—", "Most common run day") + textureStat("Long-run share", "—", "Miles from your longest runs") + textureStat("Climb per mile", "—", "Elevation across this window");
+    els.trainingTextureStats.innerHTML = textureStat("Start temperature", "—", "Load a running block") + textureStat("Typical start", "—", "Local activity time") + textureStat("Favorite day", "—", "Most common run day") + textureStat("Long-run share", "—", "Miles from your longest runs") + textureStat("Longest streak", "—", "Consecutive days with a run");
     return;
   }
   const weatherRuns = textureWeatherRuns(runs);
@@ -650,35 +643,18 @@ function renderTrainingTexture() {
   const totalMiles = distances.reduce((sum, value) => sum + value, 0);
   const longestMiles = distances.slice(0, longestCount).reduce((sum, value) => sum + value, 0);
   const longRunShare = totalMiles ? Math.round((longestMiles / totalMiles) * 100) : 0;
-  const elevation = runs.reduce((sum, run) => sum + feet(run.total_elevation_gain), 0);
   els.trainingTextureStats.innerHTML = [
     textureStat("Start temperature", temperature.value, temperature.detail, temperatures.length ? "weather-ready" : ""),
     textureStat("Typical start", start.value, start.detail),
     textureStat("Favorite day", day.value, day.detail),
     textureStat("Longest-fifth share", `${longRunShare}%`, "Mileage from the longest 20% of runs"),
-    textureStat("Elevation density", totalMiles ? `${Math.round(elevation / totalMiles)} ft/mi` : "—", "Across this selected window")
+    textureStat("Longest streak", `${getRunStreaks(runs).longestStreak} day${getRunStreaks(runs).longestStreak === 1 ? "" : "s"}`, "Consecutive days with a run")
   ].join("");
   if (!preferences.weather || !weatherRuns.length || state.textureWeatherFingerprint === state.insightFingerprint) return;
   state.textureWeatherFingerprint = state.insightFingerprint;
   Promise.all(weatherRuns.map((run) => requestRunWeather(run).catch(() => null))).then(() => {
     if (state.textureWeatherFingerprint === state.insightFingerprint) renderTrainingTexture();
   });
-}
-
-function renderMilestones(summary) {
-  if (!els.milestoneStats) return;
-  if (!summary.runCount) {
-    els.milestoneStats.innerHTML = textureStat("Consistency", "—", "Load a block") + textureStat("Longest run", "—", "Your durable effort") + textureStat("Active days", "—", "Rhythm over the selected window");
-    return;
-  }
-  const threshold = summary.averageWeeklyMiles ? Math.round(summary.averageWeeklyMiles) : 0;
-  els.milestoneStats.innerHTML = [
-    textureStat("Consistency", `${Math.round(summary.consistency * 100)}%`, "Weeks with a run in this window"),
-    textureStat("Longest run", `${displayDistance(summary.longRun, 1)}`, "Your durable effort so far"),
-    textureStat("Active days", `${summary.activeDays}`, `${summary.runCount} runs logged`),
-    textureStat("Baseline", `${displayDistance(summary.averageWeeklyMiles, 1)}/wk`, threshold ? `A repeatable ${threshold}-mile rhythm` : "A starting point"),
-    textureStat("Recovery space", `${summary.longestRestGap} days`, "Longest gap in this block")
-  ].join("");
 }
 
 function renderAiState() {
@@ -881,7 +857,10 @@ function renderIntel(summary, previous, start, end) {
     : "Selected range";
   els.intelSubtitle.textContent = `${dateLabel} · ${summary.runCount} runs · ${summary.activeDays} active days`;
   const rampClass = Math.abs(summary.rampRate) <= 12 ? "good" : summary.rampRate > 25 ? "warn" : "";
-  const longShareClass = summary.longRunShare <= 0.35 ? "good" : "warn";
+  // Share per week (a long run vs its own week), not vs the whole window.
+  const fullWeeks = state.buckets.filter((bucket) => bucket.runs >= 2 && bucket.distanceMiles);
+  const weeklyLongShare = fullWeeks.length ? fullWeeks.reduce((sum, bucket) => sum + bucket.longRunMiles / bucket.distanceMiles, 0) / fullWeeks.length : null;
+  const longShareClass = weeklyLongShare === null ? "" : weeklyLongShare <= 0.4 ? "good" : "warn";
   const restClass = summary.longestRestGap <= 3 ? "good" : summary.longestRestGap >= 7 ? "warn" : "";
   const cards = [
     {
@@ -907,22 +886,22 @@ function renderIntel(summary, previous, start, end) {
     {
       label: "Ramp rate",
       value: summary.rampRate === null ? "—" : `${summary.rampRate >= 0 ? "+" : ""}${summary.rampRate.toFixed(0)}%`,
-      detail: "Last 2 complete weeks vs prior 2; needs 4 weeks",
+      detail: "Distance in the last 2 full weeks vs the 2 before",
       tone: rampClass
     },
     {
-      label: "Longest-run share",
-      value: `${Math.round(summary.longRunShare * 100)}%`,
-      detail: "Best when long run is not doing all the work",
+      label: "Long-run share",
+      value: weeklyLongShare === null ? "—" : `${Math.round(weeklyLongShare * 100)}%`,
+      detail: `Average share of each ${els.bucketSelect.value}'s distance from its longest run`,
       tone: longShareClass
     },
     {
       label: "Running time",
-      value: `${Math.round(summary.totalLoad).toLocaleString()}`,
-      detail: "Minutes of running; same measure for every run"
+      value: formatDuration(summary.totalLoad * 60),
+      detail: `${formatDuration(summary.totalLoad * 60 / Math.max(1, summary.spanDays / 7))} per week on average`
     },
     {
-      label: "Elevation density",
+      label: "Climb per mile",
       value: `${Math.round(summary.elevationPerMile)} ft/mi`,
       detail: `${Math.round(summary.totalElevation).toLocaleString()} ft total`
     },
@@ -930,6 +909,11 @@ function renderIntel(summary, previous, start, end) {
       label: "Heart-rate coverage",
       value: `${Math.round(state.filteredRuns.filter((run) => run.average_heartrate > 0).length / Math.max(summary.runCount, 1) * 100)}%`,
       detail: "Share of runs with heart-rate data"
+    },
+    {
+      label: "Consistency",
+      value: `${Math.round(summary.consistency * 100)}%`,
+      detail: `Weeks with a run · ${summary.activeDays} active days`
     },
     {
       label: "Recovery gaps",
@@ -1008,7 +992,7 @@ function renderMainChart() {
   const metric = METRICS[els.metricSelect.value];
   els.mainChartTitle.textContent = `${metric.label} trend`;
   const periodLabel = `${state.buckets.length} ${els.bucketSelect.value === "week" ? "weeks" : "months"}`;
-  els.mainChartSubtitle.textContent = els.metricSelect.value === "pace" ? `${periodLabel} · faster is higher` : periodLabel;
+  els.mainChartSubtitle.textContent = els.metricSelect.value === "pace" ? `${periodLabel} · faster is higher` : RATE_METRICS.has(els.metricSelect.value) ? `${periodLabel} · axis fitted to your range` : periodLabel;
   renderBarLineChart(els.mainChart, state.buckets, metric);
   if (focusedKey) findChartAction(els.mainChart.id, focusedKey)?.focus({ preventScroll: true });
 }
@@ -1366,7 +1350,8 @@ function bindTooltips() {
   });
 }
 
-const ADDITIVE_METRICS = new Set(["distance", "runs", "load", "elevation", "longRun", "avgRun"]);
+const ADDITIVE_METRICS = new Set(["distance", "runs", "load", "elevation"]);
+const RATE_METRICS = new Set(["pace", "heartrate", "elevationDensity", "loadPerMile"]);
 
 function renderBarLineChart(container, buckets, metric) {
   if (!buckets.length) {
@@ -1375,86 +1360,90 @@ function renderBarLineChart(container, buckets, metric) {
   }
   const width = Math.max(container.clientWidth, 300);
   const height = Math.max(container.clientHeight, 230);
-  const pad = { top: 25, right: 12, bottom: 30, left: 62 };
-  const values = buckets.map(metric.value);
   const metricKey = els.metricSelect.value;
   const mode = els.bucketSelect.value;
+  const isRate = RATE_METRICS.has(metricKey);
+  const invert = metricKey === "pace"; // Faster pace plots higher.
+  const values = buckets.map(metric.value);
   // The period containing today is still filling up; draw it lighter so a
   // half-finished week never reads as a drop in training.
   const currentKey = bucketKey(new Date(), mode);
   const inProgress = buckets.map((bucket) => bucket.key === currentKey);
+  const missing = buckets.map((bucket, index) => !bucket.runs || !(values[index] > 0));
   const averageWindow = mode === "week" ? 4 : 3;
   const showAverage = ADDITIVE_METRICS.has(metricKey) && buckets.length > averageWindow;
   const averages = showAverage ? buckets.map((_, index) => {
-    if (inProgress[index]) return null;
-    const slice = values.slice(Math.max(0, index - averageWindow + 1), index + 1).filter((_, offset) => !inProgress[Math.max(0, index - averageWindow + 1) + offset]);
-    return index >= averageWindow - 1 ? slice.reduce((sum, value) => sum + value, 0) / slice.length : null;
+    if (inProgress[index] || index < averageWindow - 1) return null;
+    const slice = values.slice(index - averageWindow + 1, index + 1);
+    return slice.reduce((sum, value) => sum + value, 0) / slice.length;
   }) : [];
-  const paceValues = values.filter((value) => Number.isFinite(value) && value > 0);
-  const min = metricKey === "pace" && paceValues.length ? Math.min(...paceValues) : 0;
-  const max = Math.max(...values, 1);
-  const span = Math.max(max - min, 1);
+  const present = values.filter((value, index) => !missing[index]);
+  let ticks;
+  if (isRate && present.length) {
+    const low = Math.min(...present), high = Math.max(...present), spread = Math.max(high - low, high * 0.02);
+    // Pace ticks step in display-unit seconds so they land on :00, :15, :30.
+    const factor = metricKey === "pace" ? unitFactor() : 1;
+    ticks = niceTicks(Math.max(0, low - spread * 0.15) / factor, (high + spread * 0.15) / factor, 4, metricKey === "pace" ? "time" : "integer").map((tick) => tick * factor);
+  } else {
+    const scale = metric.tick ? unitFactor() : 1; // Distance ticks round in miles or km.
+    ticks = niceTicks(0, Math.max(...values, 1) * scale, 4, metricKey === "runs" ? "integer" : "decimal").map((tick) => tick / scale);
+  }
+  const low = ticks[0], high = ticks[ticks.length - 1];
+  const tickLabels = ticks.map((tick) => metric.tick ? metric.tick(tick) : metric.format(tick));
+  const pad = { top: 24, right: 12, bottom: 30, left: Math.max(44, ...tickLabels.map((label) => label.length * 6.4 + 14)) };
   const chartWidth = width - pad.left - pad.right;
   const chartHeight = height - pad.top - pad.bottom;
   const slot = chartWidth / buckets.length;
-  const barWidth = Math.max(2, Math.min(slot - 2, Math.max(slot * 0.55, 6), 28));
-  const root = svg("svg", { viewBox: `0 0 ${width} ${height}`, role: "group", "aria-label": `${metric.label} by ${mode}. Select a period to view runs.` });
-  for (let i = 0; i <= 4; i += 1) {
-    const y = pad.top + (chartHeight / 4) * i;
-    root.appendChild(svg("line", { class: "axis", x1: pad.left, y1: y, x2: width - pad.right, y2: y }));
-    const tick = metricKey === "pace" ? min + (span / 4) * i : max - (span / 4) * i;
-    root.appendChild(svg("text", { class: "label", x: 8, y: y + 4 }, [document.createTextNode(metric.format(tick))]));
-  }
-  const yFor = (value) => metricKey === "pace" ? pad.top + (value - min) / span * chartHeight : pad.top + chartHeight - (value - min) / span * chartHeight;
+  const barWidth = Math.max(3, Math.min(slot - 2, Math.max(slot * 0.55, 6), 28));
+  const fraction = (value) => (value - low) / (high - low || 1);
+  const yFor = (value) => invert ? pad.top + fraction(value) * chartHeight : pad.top + chartHeight - fraction(value) * chartHeight;
   const xFor = (index) => pad.left + index * slot + slot / 2;
-  const lastComplete = inProgress.lastIndexOf(false);
-  const points = buckets.map((bucket, index) => {
+  const root = svg("svg", { viewBox: `0 0 ${width} ${height}`, role: "group", "aria-label": `${metric.label} by ${mode}. Select a period to view runs.` });
+  ticks.forEach((tick, index) => {
+    const y = yFor(tick);
+    root.appendChild(svg("line", { class: "axis", x1: pad.left, y1: y, x2: width - pad.right, y2: y }));
+    root.appendChild(svg("text", { class: "label", x: pad.left - 8, y: y + 4, "text-anchor": "end" }, [document.createTextNode(tickLabels[index])]));
+  });
+  const labelEvery = Math.ceil(buckets.length / Math.max(2, Math.floor(chartWidth / 80)));
+  const linePoints = [];
+  buckets.forEach((bucket, index) => {
     const value = values[index];
-    const missing = !bucket.runs || (["pace", "heartrate", "efficiency"].includes(metricKey) && !value);
     const x = xFor(index);
-    const y = missing ? pad.top + chartHeight : yFor(value);
-    const barHeight = Math.max(1, chartHeight - (y - pad.top));
-    const left = x - barWidth / 2, radius = Math.min(4, barWidth / 2, barHeight);
-    // Rounded data end, square at the baseline.
-    const bar = svg("path", {
-      class: `bar${missing ? " empty-period" : ""}${inProgress[index] ? " in-progress" : ""}`,
-      d: `M${left},${y + barHeight}V${y + radius}Q${left},${y} ${left + radius},${y}H${left + barWidth - radius}Q${left + barWidth},${y} ${left + barWidth},${y + radius}V${y + barHeight}Z`
-    });
-    attachTooltip(bar, `${bucket.label}${inProgress[index] ? " (in progress)" : ""} ${metric.label}`, [
-      { label: metric.label, value: metric.format(value) },
+    let mark;
+    if (isRate) {
+      // Rates are levels, not amounts: a point per period on a fitted axis.
+      mark = svg("rect", { class: "period-hit", x: pad.left + index * slot, y: pad.top, width: slot, height: chartHeight, fill: "transparent" });
+      if (!missing[index]) linePoints.push({ x, y: yFor(value), index });
+    } else {
+      const y = missing[index] ? pad.top + chartHeight : yFor(value);
+      const barHeight = Math.max(1, pad.top + chartHeight - y);
+      mark = svg("path", {
+        class: `bar${missing[index] ? " empty-period" : ""}${inProgress[index] ? " in-progress" : ""}`,
+        d: columnPath(x - barWidth / 2, y, barWidth, y + barHeight)
+      });
+      if (inProgress[index] && !missing[index]) root.appendChild(svg("text", { class: "progress-label", x, y: y - 6, "text-anchor": "middle" }, [document.createTextNode("so far")]));
+    }
+    attachTooltip(mark, `${bucket.label}${inProgress[index] ? " (in progress)" : ""}`, [
+      { label: metric.label, value: missing[index] ? "-" : metric.format(value) },
       showAverage && Number.isFinite(averages[index]) ? { label: `${averageWindow}-${mode} average`, value: metric.format(averages[index]) } : null,
-      { label: "Miles", value: `${displayDistance(bucket.distanceMiles, 1)}` },
+      { label: "Distance", value: `${displayDistance(bucket.distanceMiles, 1)}` },
       { label: "Runs", value: bucket.runs },
       { label: "Avg pace", value: formatPace(bucket.averagePace) },
       { label: "Long run", value: `${displayDistance(bucket.longRunMiles, 1)}` },
-      { label: "Elevation", value: `${Math.round(bucket.elevationFeet).toLocaleString()} ft` },
-      { label: "Avg HR", value: bucket.averageHr ? `${Math.round(bucket.averageHr)} bpm` : "-" },
-      { label: "Running time", value: `${Math.round(bucket.trainingLoad).toLocaleString()} min` }
+      { label: "Avg HR", value: bucket.averageHr ? `${Math.round(bucket.averageHr)} bpm` : "-" }
     ].filter(Boolean));
-    if (bucket.runs) attachChartAction(bar, bucket.label, runsForBucket(bucket));
-    root.appendChild(bar);
-    if (index % Math.ceil(buckets.length / Math.max(2, Math.floor(chartWidth / 95))) === 0) {
-      root.appendChild(svg("text", { class: "label", x, y: height - 7, "text-anchor": "middle" }, [document.createTextNode(bucket.label)]));
-    }
-    if (inProgress[index] && !missing && barHeight > 0) {
-      root.appendChild(svg("text", { class: "progress-label", x, y: y - 6, "text-anchor": "middle" }, [document.createTextNode("so far")]));
-    }
-    return missing ? null : `${x},${y}`;
+    if (bucket.runs) attachChartAction(mark, bucket.label, runsForBucket(bucket));
+    root.appendChild(mark);
+    if (index % labelEvery === 0) root.appendChild(svg("text", { class: "label", x, y: height - 7, "text-anchor": "middle" }, [document.createTextNode(bucket.label)]));
   });
-  // Label only the latest complete period, so the current level reads without hovering.
-  if (lastComplete >= 0 && points[lastComplete] && !["pace", "heartrate", "efficiency"].includes(metricKey)) {
-    const y = yFor(values[lastComplete]);
-    root.appendChild(svg("text", { class: "bar-value", x: xFor(lastComplete), y: y - 6, "text-anchor": "middle" }, [document.createTextNode(metric.format(values[lastComplete]))]));
-  }
-  if (["pace", "heartrate", "efficiency"].includes(metricKey)) {
-    let segment = [];
-    for (const point of [...points, null]) {
-      if (point) segment.push(point);
-      else if (segment.length) {
-        root.appendChild(svg("polyline", { class: "line", points: segment.join(" "), "pointer-events": "none" }));
-        segment = [];
-      }
-    }
+  if (isRate && linePoints.length) {
+    let path = "";
+    linePoints.forEach((point, order) => {
+      const joined = order && linePoints[order - 1].index === point.index - 1;
+      path += `${joined ? "L" : "M"}${point.x.toFixed(1)},${point.y.toFixed(1)}`;
+    });
+    root.insertBefore(svg("path", { class: "rate-line", d: path }), root.querySelector(".period-hit"));
+    linePoints.forEach((point) => root.appendChild(svg("circle", { class: `rate-dot${inProgress[point.index] ? " in-progress" : ""}`, cx: point.x, cy: point.y, r: 4.5 })));
   }
   if (showAverage) {
     let path = "", pen = false, lastPoint = null;
@@ -1467,13 +1456,18 @@ function renderBarLineChart(container, buckets, metric) {
       root.appendChild(svg("circle", { class: "avg-dot", cx: lastPoint[0], cy: lastPoint[1], r: 4 }));
     }
   }
+  // Label only the latest complete period, so the current level reads without hovering.
+  const lastComplete = buckets.findLastIndex((_, index) => !inProgress[index] && !missing[index]);
+  if (lastComplete >= 0) {
+    root.appendChild(svg("text", { class: "bar-value", x: xFor(lastComplete), y: yFor(values[lastComplete]) - 9, "text-anchor": "middle" }, [document.createTextNode(metric.format(values[lastComplete]))]));
+  }
   container.replaceChildren(root);
   let legend = container.parentElement.querySelector(".trend-legend");
   if (!legend) { legend = document.createElement("div"); legend.className = "trend-legend"; container.after(legend); }
   legend.innerHTML = [
-    `<span class="legend-item"><i class="key bar-key"></i>${escapeHtml(metric.label)} per ${mode}</span>`,
+    `<span class="legend-item"><i class="key ${isRate ? "rate-key" : "bar-key"}"></i>${escapeHtml(metric.label)} per ${mode}</span>`,
     showAverage ? `<span class="legend-item"><i class="key avg-key"></i>${averageWindow}-${mode} average</span>` : "",
-    inProgress.includes(true) ? `<span class="legend-item"><i class="key progress-key"></i>Current ${mode}, in progress</span>` : ""
+    inProgress.includes(true) ? `<span class="legend-item"><i class="key ${isRate ? "rate-progress-key" : "progress-key"}"></i>Current ${mode}, in progress</span>` : ""
   ].join("");
 }
 
@@ -1485,323 +1479,204 @@ function movingAverage(values, windowSize) {
   });
 }
 
-function renderScatter() {
-  const buckets = state.buckets.filter((bucket) => bucket.distanceMiles && bucket.averagePace);
-  if (!buckets.length) {
-    renderEmpty(els.scatterChart);
-    return;
-  }
-  const width = 560;
-  const height = 270;
-  const pad = { top: 16, right: 18, bottom: 40, left: 48 };
-  const maxMiles = Math.max(...buckets.map((b) => b.distanceMiles), 1);
-  const paces = buckets.map((b) => b.averagePace);
-  const minPace = Math.min(...paces);
-  const maxPace = Math.max(...paces);
-  const root = svg("svg", { viewBox: `0 0 ${width} ${height}`, role: "img", "aria-label": "Volume versus pace" });
-  root.appendChild(svg("line", { class: "axis", x1: pad.left, y1: height - pad.bottom, x2: width - pad.right, y2: height - pad.bottom }));
-  root.appendChild(svg("line", { class: "axis", x1: pad.left, y1: pad.top, x2: pad.left, y2: height - pad.bottom }));
-  const paceRange = Math.max(maxPace - minPace, 1);
-  for (let tick = 0; tick <= 3; tick += 1) {
-    const y = pad.top + (tick / 3) * (height - pad.top - pad.bottom);
-    const pace = minPace + (tick / 3) * paceRange;
-    root.appendChild(svg("line", { class: "axis chart-grid", x1: pad.left, y1: y, x2: width - pad.right, y2: y }));
-    root.appendChild(svg("text", { class: "label", x: 4, y: y + 4 }, [document.createTextNode(formatPace(pace).replace("/mi", ""))]));
-  }
-  buckets.forEach((bucket) => {
-    const x = pad.left + (bucket.distanceMiles / maxMiles) * (width - pad.left - pad.right);
-    const y = pad.top + ((bucket.averagePace - minPace) / paceRange) * (height - pad.top - pad.bottom);
-    const r = 4 + Math.min(bucket.runs, 8);
-    const color = "#2867b2";
-    const dot = svg("circle", { class: "dot", cx: x, cy: y, r, style: `fill: ${color}` });
-    attachTooltip(dot, `${bucket.label} volume vs pace`, [
-      { label: "Miles", value: `${displayDistance(bucket.distanceMiles, 1)}` },
-      { label: "Avg pace", value: formatPace(bucket.averagePace) },
-      { label: "Runs", value: bucket.runs },
-      { label: "Avg run", value: `${displayDistance((bucket.distanceMiles / bucket.runs), 1)}` },
-      { label: "Avg HR", value: bucket.averageHr ? `${Math.round(bucket.averageHr)} bpm` : "-" },
-      { label: "Bubble size", value: `${bucket.runs} runs` },
-      { label: "Open", value: "View runs in this period" }
-    ]);
-    attachChartAction(dot, `${bucket.label} runs`, runsForBucket(bucket));
-    root.appendChild(dot);
-  });
-  root.appendChild(svg("text", { class: "label", x: width - 136, y: height - 10 }, [document.createTextNode("more miles →")]));
-  root.appendChild(svg("text", { class: "label", x: pad.left + 8, y: pad.top + 13 }, [document.createTextNode("faster ↑")]));
-  root.appendChild(svg("text", { class: "label chart-legend", x: width - 258, y: 14 }, [document.createTextNode("Color: HR · blue <140 · gold 140–154 · orange 155+")]));
-  els.scatterChart.replaceChildren(root);
+// Secondary charts measure their panels, so draw them only while visible.
+function renderSecondaryCharts() {
+  const host = document.querySelector(".exploration");
+  if (host && !host.open) return;
+  renderStructure();
+  renderHeatmap();
+  renderScatter();
+  renderRollingWorkload();
+  renderDistanceMix();
+  renderPaceZones();
 }
 
-function renderStructure() {
-  if (!state.buckets.length) {
-    renderEmpty(els.structureChart);
-    return;
-  }
-  const width = 560;
-  const height = 270;
-  const pad = { top: 18, right: 20, bottom: 34, left: 42 };
-  const root = svg("svg", { viewBox: `0 0 ${width} ${height}`, role: "img", "aria-label": "Week structure" });
-  const maxRuns = Math.max(...state.buckets.map((b) => b.runs), 1);
-  const step = (width - pad.left - pad.right) / state.buckets.length;
-  const chartHeight = height - pad.top - pad.bottom;
-  for (let tick = 0; tick <= maxRuns; tick += 1) {
-    const y = height - pad.bottom - (tick / maxRuns) * chartHeight;
-    root.appendChild(svg("line", { class: "axis chart-grid", x1: pad.left, y1: y, x2: width - pad.right, y2: y }));
-    root.appendChild(svg("text", { class: "label", x: 18, y: y + 4 }, [document.createTextNode(String(tick))]));
-  }
-  const longRunPoints = [];
-  state.buckets.forEach((bucket, index) => {
-    const x = pad.left + index * step + step * 0.25;
-    const runHeight = (bucket.runs / maxRuns) * chartHeight;
-    const runBar = svg("rect", {
-      class: "bar",
-      x,
-      y: height - pad.bottom - runHeight,
-      width: Math.max(3, step * 0.25),
-      height: Math.max(1, runHeight),
-      rx: 2
-    });
-    attachTooltip(runBar, `${bucket.label} run count`, [
-      { label: "Runs", value: bucket.runs },
-      { label: "Miles", value: `${displayDistance(bucket.distanceMiles, 1)}` },
-      { label: "Avg run", value: `${displayDistance((bucket.distanceMiles / bucket.runs), 1)}` },
-      { label: "Avg pace", value: formatPace(bucket.averagePace) },
-      { label: "Open", value: "View runs this week" }
-    ]);
-    attachChartAction(runBar, `${bucket.label} runs`, runsForBucket(bucket));
-    root.appendChild(runBar);
-    const pointX = x + Math.max(3, step * 0.13);
-    const pointY = height - pad.bottom - bucket.longRunShare * chartHeight;
-    const longRunPoint = svg("circle", { class: "structure-point", cx: pointX, cy: pointY, r: 4 });
-    attachTooltip(longRunPoint, `${bucket.label} long-run share`, [
-      { label: "Long run", value: `${displayDistance(bucket.longRunMiles, 1)}` },
-      { label: "Share", value: `${Math.round(bucket.longRunShare * 100)}%` },
-      { label: "Week miles", value: `${displayDistance(bucket.distanceMiles, 1)}` },
-      { label: "Elevation", value: `${Math.round(bucket.elevationFeet).toLocaleString()} ft` },
-      { label: "Open", value: "View runs this week" }
-    ]);
-    attachChartAction(longRunPoint, `${bucket.label} runs`, runsForBucket(bucket));
-    root.appendChild(longRunPoint);
-    longRunPoints.push(`${pointX},${pointY}`);
+const unitFactor = () => preferences.units === "metric" ? 1.609344 : 1;
+const unitName = () => preferences.units === "metric" ? "km" : "mi";
+
+// Per run: distance across, pace up (faster is higher). Each dot opens its run.
+function renderScatter() {
+  const runs = state.filteredRuns.filter((run) => miles(run.distance) > 0 && paceSeconds(run) > 0);
+  scatterChart(els.scatterChart, {
+    ariaLabel: "Pace against distance for each run. Faster runs sit higher.",
+    xTitle: `Distance (${unitName()}) →`, yTitle: "↑ Faster pace", invertY: true,
+    xScale: unitFactor(), yScale: 1 / unitFactor(), yKind: "time",
+    xFormat: (value) => `${Math.round(value * unitFactor())}`,
+    yFormat: (value) => formatPace(value).replace(/\/(mi|km)$/, ""),
+    points: runs.map((run) => ({
+      x: miles(run.distance), y: paceSeconds(run),
+      title: `${run.name} · ${parseActivityDate(run).toLocaleDateString(undefined, { month: "short", day: "numeric" })}`,
+      rows: [
+        { label: "Distance", value: displayDistance(miles(run.distance), 2) },
+        { label: "Pace", value: formatPace(paceSeconds(run)) },
+        { label: "Heart rate", value: run.average_heartrate ? `${Math.round(run.average_heartrate)} bpm` : "-" }
+      ],
+      open: (dot) => showWorkoutModal(run.id, dot)
+    }))
   });
-  root.insertBefore(svg("polyline", { class: "structure-line", points: longRunPoints.join(" ") }), root.querySelector(".structure-point"));
-  root.appendChild(svg("line", { class: "axis", x1: pad.left, y1: height - pad.bottom, x2: width - pad.right, y2: height - pad.bottom }));
-  root.appendChild(svg("text", { class: "label", x: pad.left, y: height - 8 }, [document.createTextNode("teal bars: runs · gold line: long-run share")]));
-  root.appendChild(svg("text", { class: "label", x: width - 86, y: pad.top + 2 }, [document.createTextNode("100% share")]));
-  els.structureChart.replaceChildren(root);
+}
+
+// Weekly (or monthly) distance split into the long run and everything else.
+function renderStructure() {
+  const buckets = state.buckets;
+  const mode = els.bucketSelect.value;
+  const currentKey = bucketKey(new Date(), mode);
+  const longRun = buckets.map((bucket) => bucket.longRunMiles || 0);
+  const other = buckets.map((bucket) => Math.max(0, bucket.distanceMiles - (bucket.longRunMiles || 0)));
+  const legend = [{ key: "other-runs", label: "Other runs" }, { key: "long-run", label: `Longest run of the ${mode}` }];
+  setLegend(els.structureChart, legend);
+  columnChart(els.structureChart, {
+    periods: buckets.map((bucket) => ({ label: bucket.label })),
+    series: [
+      { label: "Other runs", className: "other-runs", values: other },
+      { label: "Long run", className: "long-run", values: longRun }
+    ],
+    inProgress: buckets.map((bucket) => bucket.key === currentKey),
+    yFormat: (value) => `${Math.round(value * unitFactor())} ${unitName()}`, yScale: unitFactor(),
+    ariaLabel: `Distance per ${mode}, split into the long run and other runs. Select a ${mode} to open its runs.`,
+    tooltip: (index) => {
+      const bucket = buckets[index];
+      return { title: `${bucket.label}${bucket.key === currentKey ? " (in progress)" : ""}`, rows: [
+        { label: "Total", value: displayDistance(bucket.distanceMiles, 1) },
+        { label: "Long run", value: displayDistance(bucket.longRunMiles || 0, 1) },
+        { label: "Long-run share", value: bucket.distanceMiles ? `${Math.round(bucket.longRunMiles / bucket.distanceMiles * 100)}%` : "-" },
+        { label: "Runs", value: bucket.runs }
+      ] };
+    },
+    action: (index) => buckets[index].runs ? { title: `${buckets[index].label} runs`, runs: runsForBucket(buckets[index]) } : null
+  });
 }
 
 function renderHeatmap() {
   if (!state.filteredRuns.length) {
     renderEmpty(els.heatmapChart);
-    els.heatmapSubtitle.textContent = "Daily miles by week";
-    return;
-  }
-  const { start, end } = getRangeDates();
-  const first = start ? startOfWeek(start) : startOfWeek(parseActivityDate(state.filteredRuns[0]));
-  const last = end || parseActivityDate(state.filteredRuns[state.filteredRuns.length - 1]);
-  const dayMap = new Map();
-  state.filteredRuns.forEach((run) => {
-    const key = localDateValue(parseActivityDate(run));
-    const day = dayMap.get(key) || { miles: 0, seconds: 0, runs: 0, load: 0 };
-    day.miles += miles(run.distance);
-    day.seconds += Number(run.moving_time) || 0;
-    day.runs += 1;
-    day.load += runMinutes(run);
-    dayMap.set(key, day);
-  });
-  const weeks = Math.max(1, Math.ceil((last - first) / (7 * 86400000)) + 1);
-  const width = Math.max(320, els.heatmapChart.clientWidth || 720, weeks * 12 + 70);
-  const cell = 16;
-  const columnWidth = (width - 70) / weeks;
-  const gap = 4;
-  const height = 190;
-  const root = svg("svg", { viewBox: `0 0 ${width} ${height}`, role: "img", "aria-label": "Training calendar heatmap" });
-  const maxMiles = Math.max(...[...dayMap.values()].map((day) => day.miles), 1);
-  for (let week = 0; week < weeks; week += 1) {
-    for (let day = 0; day < 7; day += 1) {
-      const date = new Date(first);
-      date.setDate(first.getDate() + week * 7 + day);
-      const key = localDateValue(date);
-      const stats = dayMap.get(key) || { miles: 0, seconds: 0, runs: 0, load: 0 };
-      const value = stats.miles;
-      const level = value === 0 ? 0 : Math.min(5, Math.ceil((value / maxMiles) * 5));
-      const rect = svg("rect", {
-        class: level ? `heat-${level}` : "heat-empty",
-        x: 52 + week * columnWidth,
-        y: 24 + day * (cell + gap),
-        width: Math.max(6, columnWidth - gap),
-        height: cell,
-        rx: 3
-      });
-      attachTooltip(rect, new Date(`${key}T00:00:00`).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" }), [
-        { label: "Miles", value: `${displayDistance(stats.miles, 1)}` },
-        { label: "Runs", value: stats.runs },
-        { label: "Moving time", value: formatDuration(stats.seconds) },
-        { label: "Avg pace", value: stats.miles ? formatPace(stats.seconds / stats.miles) : "-" },
-        { label: "Load", value: Math.round(stats.load).toLocaleString() },
-        ...(stats.runs ? [{ label: "Open", value: "View runs on this day" }] : [])
-      ], { keyboard: stats.runs > 0 });
-      const dayRuns = state.filteredRuns.filter((run) => localDateValue(parseActivityDate(run)) === key).sort((a, b) => parseActivityDate(b) - parseActivityDate(a));
-      attachChartAction(rect, new Date(`${key}T00:00:00`).toLocaleDateString(undefined, { month: "short", day: "numeric" }), dayRuns);
-      root.appendChild(rect);
-    }
-    if (week % Math.max(1, Math.ceil(weeks / 8)) === 0) {
-      const labelDate = new Date(first);
-      labelDate.setDate(first.getDate() + week * 7);
-      root.appendChild(svg("text", { class: "label", x: 52 + week * columnWidth, y: 15 }, [document.createTextNode(labelDate.toLocaleDateString(undefined, { month: "short" }))]));
-    }
-  }
-  ["Mon", "Wed", "Fri", "Sun"].forEach((label, index) => {
-    root.appendChild(svg("text", { class: "label", x: 14, y: 34 + index * 2 * (cell + gap) }, [document.createTextNode(label)]));
-  });
-  els.heatmapSubtitle.textContent = `${state.filteredRuns.length} runs across ${weeks} weeks · click a day to drill in`;
-  els.heatmapChart.replaceChildren(root);
-}
-
-function renderDistanceMix() {
-  const bins = [
-    { label: "<4 mi", min: 0, max: 4 },
-    { label: "4-6 mi", min: 4, max: 6 },
-    { label: "6-8 mi", min: 6, max: 8 },
-    { label: "8-10 mi", min: 8, max: 10 },
-    { label: "10-13 mi", min: 10, max: 13 },
-    { label: "13+ mi", min: 13, max: Infinity }
-  ].map((bin) => ({ ...bin, count: 0, miles: 0 }));
-  state.filteredRuns.forEach((run) => {
-    const distance = miles(run.distance);
-    const bin = bins.find((candidate) => distance >= candidate.min && distance < candidate.max);
-    if (!bin) return;
-    bin.count += 1;
-    bin.miles += distance;
-  });
-  renderHorizontalBars(els.distanceMixChart, bins, "miles", (bin) => `${displayDistance(bin.miles, 1)}`, "#157f74");
-}
-
-function renderRollingWorkload() {
-  if (!state.filteredRuns.length) {
-    renderEmpty(els.rollingChart);
+    els.heatmapSubtitle.textContent = "Daily distance";
     return;
   }
   const { start, end } = getRangeDates();
   const first = start || parseActivityDate(state.filteredRuns[0]);
-  const last = end || parseActivityDate(state.filteredRuns[state.filteredRuns.length - 1]);
-  const daily = new Map();
+  const today = new Date(); today.setHours(23, 59, 59, 999);
+  const last = end ? new Date(Math.min(end, today)) : parseActivityDate(state.filteredRuns.at(-1));
+  const days = new Map();
   state.filteredRuns.forEach((run) => {
+    const key = localDateValue(parseActivityDate(run));
+    const day = days.get(key) || { miles: 0, seconds: 0, runs: [] };
+    day.miles += miles(run.distance);
+    day.seconds += Number(run.moving_time) || 0;
+    day.runs.push(run);
+    days.set(key, day);
+  });
+  calendarHeatmap(els.heatmapChart, {
+    start: first, end: last, days, valueOf: (day) => day.miles,
+    format: (value) => displayDistance(value, 0),
+    ariaLabel: "Training calendar: daily distance, one column per week. Select a day to open its runs.",
+    tooltip: (date, day) => ({
+      title: date.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" }),
+      rows: day ? [
+        { label: "Distance", value: displayDistance(day.miles, 1) },
+        { label: "Runs", value: day.runs.length },
+        { label: "Moving time", value: formatDuration(day.seconds) },
+        { label: "Pace", value: formatPace(day.seconds / day.miles) }
+      ] : [{ label: "Rest", value: "No run" }]
+    }),
+    action: (date, day) => ({ title: date.toLocaleDateString(undefined, { month: "short", day: "numeric" }), runs: [...day.runs].sort((a, b) => parseActivityDate(b) - parseActivityDate(a)) })
+  });
+  els.heatmapSubtitle.textContent = `${state.filteredRuns.length} runs on ${days.size} days · select a day to open it`;
+}
+
+// Share of total volume by run length, in the display unit.
+function renderDistanceMix() {
+  const metric = preferences.units === "metric";
+  const edges = metric ? [0, 5, 10, 15, 21.1, 30, Infinity] : [0, 3, 6, 9, 13.1, 18, Infinity];
+  const bins = edges.slice(0, -1).map((low, index) => ({ low, high: edges[index + 1], count: 0, miles: 0 }));
+  state.filteredRuns.forEach((run) => {
+    const distance = miles(run.distance) * unitFactor();
+    const bin = bins.find((candidate) => distance >= candidate.low && distance < candidate.high);
+    if (bin) { bin.count += 1; bin.miles += miles(run.distance); }
+  });
+  const total = bins.reduce((sum, bin) => sum + bin.miles, 0);
+  const label = (bin) => bin.high === Infinity ? `${bin.low}+ ${unitName()}` : `${bin.low}–${bin.high} ${unitName()}`;
+  barList(els.distanceMixChart, {
+    ariaLabel: "Share of total distance by run length",
+    rows: bins.map((bin) => ({
+      label: label(bin), value: bin.miles,
+      display: total ? `${Math.round(bin.miles / total * 100)}%` : "0%",
+      sub: `${bin.count} run${bin.count === 1 ? "" : "s"} · ${displayDistance(bin.miles, 0)}`
+    }))
+  });
+}
+
+// Daily rolling 7-day distance against the 28-day weekly average.
+function renderRollingWorkload() {
+  if (!state.filteredRuns.length) { renderEmpty(els.rollingChart); return; }
+  const { start, end } = getRangeDates();
+  const today = new Date(); today.setHours(23, 59, 59, 999);
+  const first = start || parseActivityDate(state.filteredRuns[0]);
+  const last = end ? new Date(Math.min(end, today)) : today;
+  const daily = new Map();
+  // Use full history so the first weeks of the window have a real baseline.
+  state.rawActivities.map(normalizeActivity).filter(isRun).forEach((run) => {
     const key = localDateValue(parseActivityDate(run));
     daily.set(key, (daily.get(key) || 0) + miles(run.distance));
   });
-  const series = [];
-  const cursor = new Date(first);
-  cursor.setHours(0, 0, 0, 0);
-  while (cursor <= last) {
-    const seven = rollingMiles(cursor, daily, 7);
-    const twentyEight = rollingMiles(cursor, daily, 28) / 4;
-    series.push({ date: new Date(cursor), seven, twentyEight });
-    cursor.setDate(cursor.getDate() + 1);
-  }
-  const width = 900;
-  const height = 300;
-  const pad = { top: 20, right: 28, bottom: 42, left: 58 };
-  const max = Math.max(...series.map((point) => Math.max(point.seven, point.twentyEight)), 1);
-  const root = svg("svg", { viewBox: `0 0 ${width} ${height}`, role: "img", "aria-label": "Rolling workload chart" });
-  for (let i = 0; i <= 4; i += 1) {
-    const y = pad.top + ((height - pad.top - pad.bottom) / 4) * i;
-    root.appendChild(svg("line", { class: "axis", x1: pad.left, y1: y, x2: width - pad.right, y2: y }));
-    root.appendChild(svg("text", { class: "label", x: 8, y: y + 4 }, [document.createTextNode(`${Math.round(max - (max / 4) * i)} mi`)]));
-  }
-  const xFor = (index) => pad.left + (index / Math.max(series.length - 1, 1)) * (width - pad.left - pad.right);
-  const yFor = (value) => pad.top + (height - pad.top - pad.bottom) - (value / max) * (height - pad.top - pad.bottom);
-  const sevenPoints = series.map((point, index) => `${xFor(index)},${yFor(point.seven)}`).join(" ");
-  const baselinePoints = series.map((point, index) => `${xFor(index)},${yFor(point.twentyEight)}`).join(" ");
-  root.appendChild(svg("polyline", { class: "line", points: sevenPoints }));
-  root.appendChild(svg("polyline", { class: "line secondary", points: baselinePoints }));
-  root.appendChild(svg("text", { class: "label", x: width - 230, y: 16 }, [document.createTextNode("orange: 7-day  blue: 28-day weekly baseline")]));
-  const labelEvery = Math.max(1, Math.ceil(series.length / 6));
-  series.forEach((point, index) => {
-    const hoverPoint = svg("circle", {
-      cx: xFor(index),
-      cy: yFor(point.seven),
-      r: 6,
-      fill: "transparent"
-    });
-    const ramp = point.twentyEight ? ((point.seven - point.twentyEight) / point.twentyEight) * 100 : 0;
-    attachTooltip(hoverPoint, point.date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }), [
-      { label: "7-day miles", value: `${displayDistance(point.seven, 1)}` },
-      { label: "28-day baseline", value: `${displayDistance(point.twentyEight, 1)}/wk` },
-      { label: "Load balance", value: `${ramp >= 0 ? "+" : ""}${ramp.toFixed(0)}%` },
-      { label: "Signal", value: ramp > 25 ? "Sharp build" : ramp < -20 ? "Taper / recovery" : "Steady" }
-    ]);
-    root.appendChild(hoverPoint);
-    if (index % labelEvery !== 0) return;
-    root.appendChild(svg("text", { class: "label", x: xFor(index) - 18, y: height - 12 }, [document.createTextNode(point.date.toLocaleDateString(undefined, { month: "short", day: "numeric" }))]));
+  const dates = [];
+  for (let date = new Date(first.getFullYear(), first.getMonth(), first.getDate()); date <= last; date = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1)) dates.push(date);
+  const seven = dates.map((date) => rollingMiles(date, daily, 7));
+  const baseline = dates.map((date) => rollingMiles(date, daily, 28) / 4);
+  setLegend(els.rollingChart, [{ key: "fatigue-line", label: "Last 7 days" }, { key: "fitness-line", label: "28-day weekly average" }]);
+  timeChart(els.rollingChart, {
+    dates, yMin: 0, yFormat: (value) => `${Math.round(value * unitFactor())} ${unitName()}`, yScale: unitFactor(),
+    ariaLabel: "Rolling 7-day distance against the 28-day weekly average. Use arrow keys to move between days.",
+    series: [
+      { label: "28-day weekly average", short: "28-day avg", className: "fitness-line", values: baseline },
+      { label: "Last 7 days", short: "7-day", className: "fatigue-line", values: seven }
+    ],
+    tooltip: (index) => {
+      const ratio = baseline[index] ? seven[index] / baseline[index] : null;
+      return { title: dates[index].toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" }), rows: [
+        { label: "Last 7 days", value: displayDistance(seven[index], 1) },
+        { label: "28-day weekly avg", value: displayDistance(baseline[index], 1) },
+        { label: "Balance", value: ratio === null ? "-" : `${ratio >= 1 ? "+" : "−"}${Math.abs(Math.round((ratio - 1) * 100))}% · ${ratio > 1.3 ? "building fast" : ratio < 0.8 ? "lighter" : "steady"}` }
+      ] };
+    }
   });
-  els.rollingChart.replaceChildren(root);
 }
 
 function rollingMiles(date, daily, days) {
   let total = 0;
   for (let offset = 0; offset < days; offset += 1) {
-    const cursor = new Date(date);
-    cursor.setDate(date.getDate() - offset);
-    total += daily.get(localDateValue(cursor)) || 0;
+    total += daily.get(localDateValue(new Date(date.getFullYear(), date.getMonth(), date.getDate() - offset))) || 0;
   }
   return total;
 }
 
+// Pace histogram with bins sized to this runner's spread, in display units.
 function renderPaceZones() {
-  const bins = [
-    { label: "<7:00", min: 0, max: 420 },
-    { label: "7:00-8:00", min: 420, max: 480 },
-    { label: "8:00-9:00", min: 480, max: 540 },
-    { label: "9:00-10:00", min: 540, max: 600 },
-    { label: "10:00+", min: 600, max: Infinity }
-  ].map((bin) => ({ ...bin, count: 0, miles: 0 }));
-  state.filteredRuns.forEach((run) => {
-    const pace = paceSeconds(run);
-    if (!pace) return;
-    const bin = bins.find((candidate) => pace >= candidate.min && pace < candidate.max);
-    if (!bin) return;
-    bin.count += 1;
-    bin.miles += miles(run.distance);
+  const paces = state.filteredRuns.map((run) => paceSeconds(run) / unitFactor()).filter((pace) => pace > 0);
+  if (!paces.length) { renderEmpty(els.paceZoneChart); return; }
+  const sorted = [...paces].sort((a, b) => a - b);
+  // Ignore the outer 2% so one walk or sprint does not stretch every bin.
+  const low = sorted[Math.floor(sorted.length * 0.02)], high = sorted[Math.ceil(sorted.length * 0.98) - 1];
+  const width = [10, 15, 20, 30, 60, 120].find((candidate) => (high - low) / candidate <= 7) || 120;
+  const start = Math.floor(low / width) * width;
+  const count = Math.max(1, Math.ceil((high - start + 0.001) / width));
+  const bins = Array.from({ length: count }, (_, index) => ({ low: start + index * width, high: start + (index + 1) * width, runs: 0 }));
+  paces.forEach((pace) => {
+    const index = Math.min(count - 1, Math.max(0, Math.floor((pace - start) / width)));
+    bins[index].runs += 1;
   });
-  bins.forEach((bin) => bin.label = bin.min === 0 ? `<${formatPace(bin.max)}` : bin.max === Infinity ? `${formatPace(bin.min)}+` : `${formatPace(bin.min)}–${formatPace(bin.max)}`);
-  renderHorizontalBars(els.paceZoneChart, bins, "count", (bin) => `${bin.count} runs`, "#2867b2");
-}
-
-function renderHorizontalBars(container, bins, valueKey, formatter, color) {
-  if (!state.filteredRuns.length) {
-    renderEmpty(container);
-    return;
-  }
-  const width = 560;
-  const height = 270;
-  const pad = { top: 18, right: 24, bottom: 18, left: 86 };
-  const max = Math.max(...bins.map((bin) => bin[valueKey]), 1);
-  const rowHeight = (height - pad.top - pad.bottom) / bins.length;
-  const root = svg("svg", { viewBox: `0 0 ${width} ${height}`, role: "img", "aria-label": "Distribution bars" });
-  bins.forEach((bin, index) => {
-    const y = pad.top + index * rowHeight + 7;
-    const barWidth = (bin[valueKey] / max) * (width - pad.left - pad.right);
-    root.appendChild(svg("text", { class: "label", x: 8, y: y + 16 }, [document.createTextNode(bin.label)]));
-    const rect = svg("rect", {
-      x: pad.left,
-      y,
-      width: Math.max(1, barWidth),
-      height: Math.max(12, rowHeight - 12),
-      rx: 4,
-      fill: color
-    });
-    attachTooltip(rect, bin.label, [
-      { label: "Primary", value: formatter(bin) },
-      { label: "Runs", value: bin.count },
-      { label: "Miles", value: `${displayDistance(bin.miles, 1)}` },
-      { label: "Avg per run", value: bin.count ? `${displayDistance((bin.miles / bin.count), 1)}` : "-" }
-    ]);
-    root.appendChild(rect);
-    root.appendChild(svg("text", { class: "label", x: pad.left + barWidth + 8, y: y + 16 }, [document.createTextNode(formatter(bin))]));
+  const peak = Math.max(...bins.map((bin) => bin.runs));
+  const plain = (seconds) => formatPace(seconds * unitFactor()).replace(/\/(mi|km)$/, "");
+  barList(els.paceZoneChart, {
+    ariaLabel: "Number of runs by average pace",
+    className: "pace-bars",
+    rows: bins.map((bin, index) => ({
+      label: count > 1 && index === 0 ? `Under ${plain(bin.high)}/${unitName()}` : count > 1 && index === count - 1 ? `${plain(bin.low)}/${unitName()} or slower` : `${plain(bin.low)}–${plain(bin.high)}/${unitName()}`,
+      value: bin.runs, highlight: bin.runs === peak,
+      display: `${bin.runs} run${bin.runs === 1 ? "" : "s"}`,
+      sub: `${Math.round(bin.runs / paces.length * 100)}%`
+    }))
   });
-  container.replaceChildren(root);
 }
 
 function formatNumber(value, digits = 1) {
@@ -2514,9 +2389,9 @@ function renderTable() {
       formatPace(paceSeconds(run)),
       run.has_elevation ? `${Math.round(feet(run.total_elevation_gain)).toLocaleString()} ft` : "Unavailable",
       run.average_heartrate ? `${Math.round(run.average_heartrate)} bpm` : "-",
-      `${Math.round(runMinutes(run))}`
+      formatDuration(Number(run.moving_time) || 0)
     ];
-    const labels = ["Date", "Name", "Distance", "Pace", "Elevation", "Heart rate", "Load"];
+    const labels = ["Date", "Name", "Distance", "Pace", "Elevation", "Heart rate", "Time"];
     values.forEach((value, index) => {
       const cell = document.createElement("td");
       cell.textContent = value;
@@ -2992,7 +2867,18 @@ render();
 checkStatus().catch((error) => setStatus(error.message, true));
 
 let chartResizeTimer;
+let lastChartWidth = 0;
 new ResizeObserver(() => {
   clearTimeout(chartResizeTimer);
-  chartResizeTimer = setTimeout(() => { if (state.filteredRuns.length) renderMainChart(); }, 120);
-}).observe(els.mainChart);
+  chartResizeTimer = setTimeout(() => {
+    if (!state.rawActivities.length) return;
+    const width = document.querySelector("#app").clientWidth;
+    const widthChanged = width !== lastChartWidth;
+    lastChartWidth = width;
+    if (activeView === "overview" && state.filteredRuns.length) {
+      renderMainChart();
+      if (widthChanged) renderSecondaryCharts();
+    }
+    if (activeView === "fitness" && widthChanged) renderFitness();
+  }, 120);
+}).observe(document.querySelector("#app"));

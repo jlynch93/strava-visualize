@@ -353,3 +353,33 @@ test.describe("mobile runner review", () => {
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   });
 });
+
+for (const viewport of [{ width: 1280, height: 900 }, { width: 390, height: 844 }]) {
+  test(`every overview and fitness chart renders cleanly at ${viewport.width}px`, async ({ page }) => {
+    await page.setViewportSize(viewport);
+    await page.goto("/");
+    await page.getByRole("button", { name: "Preview demo data", exact: true }).click();
+    await page.locator(".exploration > summary").click();
+    const charts = ["#mainChart", "#structureChart", "#heatmapChart", "#scatterChart", "#rollingChart"];
+    for (const id of charts) await expect(page.locator(`${id} svg`)).toBeVisible();
+    for (const id of ["#distanceMixChart", "#paceZoneChart"]) await expect(page.locator(`${id} .bar-list li`)).not.toHaveCount(0);
+    // Multi-series charts carry a legend built from the same series as their marks.
+    await expect(page.locator("#structureChart").locator("xpath=preceding-sibling::div[contains(@class,'chart-legend-row')]")).toContainText("Other runs");
+    await expect(page.locator("#rollingChart").locator("xpath=preceding-sibling::div[contains(@class,'chart-legend-row')]")).toContainText("Last 7 days");
+    await expect(page.locator("#heatmapChart .calendar-legend")).toBeVisible();
+    // Marks open runs.
+    await expect(page.locator("#heatmapChart [role='button']").first()).toHaveAccessibleName(/Open \d+ runs?\./);
+    await expect(page.locator("#scatterChart [role='button']").first()).toHaveAccessibleName(/Open run details/);
+    // Pace is a level, so it draws as a line on a fitted axis, with round tick labels.
+    await page.locator("#metricSelect").selectOption("pace");
+    await expect(page.locator("#mainChart .rate-line")).toHaveCount(1);
+    const paceTicks = await page.locator("#mainChart text.label").allTextContents();
+    expect(paceTicks.filter((text) => /\/mi$/.test(text)).every((text) => /:(00|05|10|15|20|30|40|45|50)\/mi$/.test(text)), paceTicks.join(" ")).toBe(true);
+    await page.getByRole("link", { name: "Fitness", exact: true }).click();
+    for (const id of ["#vo2Chart", "#loadChart", "#formChart"]) await expect(page.locator(`${id} svg`)).toBeVisible();
+    const problems = await page.evaluate(() => [...document.querySelectorAll("svg *")]
+      .flatMap((element) => [...element.attributes].filter((attribute) => /NaN|Infinity|undefined/.test(attribute.value)).map((attribute) => `${element.tagName}.${attribute.name}`)));
+    expect(problems).toEqual([]);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  });
+}

@@ -42,6 +42,22 @@ current, unfinished week or month lighter and labelled "so far", so a partial
 period never looks like a drop. Additive metrics also show a rolling 4-week
 (or 3-month) average, and the latest complete period is labelled.
 
+**Charts & patterns** (on Overview) holds the secondary charts. Each one fills
+its panel, uses round axis ticks in the units you have chosen, and has a legend
+built from the same series as its marks:
+
+- **Volume mix:** distance per week or month, split into the longest run and
+  everything else.
+- **Training calendar:** daily distance, one column per week, with a
+  five-step scale.
+- **Pace vs distance:** every run as a dot; select one to open it.
+- **Rolling distance:** the last 7 days against the 28-day weekly average.
+- **Where your distance comes from** and **Pace spread:** pace bins are sized to
+  your own range.
+
+In the trend chart, rates (pace, heart rate, climb per mile) are drawn as lines
+on a fitted axis, and amounts are drawn as columns from zero.
+
 **Fitness** collects the physiological view of your training:
 
 - **Readiness to train** (0–100) combines form (40%), the 7-day vs 28-day load
