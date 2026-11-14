@@ -3,9 +3,15 @@ const state = {
   filteredRuns: [],
   buckets: [],
   status: null,
-  stravaReady: false,
-  stravaConnected: false,
-  stravaError: "",
+  account: {
+    loaded: false,
+    signedIn: false,
+    user: null,
+    connections: [],
+    providers: [],
+    error: ""
+  },
+  activeProvider: "",
   modalTrigger: null,
   modalSession: 0,
   activeRunId: "",
@@ -30,6 +36,11 @@ const els = {
   emptyDemoButton: document.querySelector("#emptyDemoButton"),
   emptyFileInput: document.querySelector("#emptyFileInput"),
   heroStatus: document.querySelector("#heroStatus"),
+  accountButton: document.querySelector("#accountButton"),
+  accountDialog: document.querySelector("#accountDialog"),
+  accountDialogTitle: document.querySelector("#accountDialogTitle"),
+  accountDialogBody: document.querySelector("#accountDialogBody"),
+  accountDialogClose: document.querySelector("#accountDialogClose"),
   rangeSelect: document.querySelector("#rangeSelect"),
   startDate: document.querySelector("#startDate"),
   endDate: document.querySelector("#endDate"),
@@ -549,14 +560,13 @@ function updateWindowContext() {
   const dateFormat = { month: "short", day: "numeric", year: "numeric" };
   document.querySelector("#windowDates").textContent = `${start ? start.toLocaleDateString(undefined, dateFormat) : "Earliest run"} – ${end ? end.toLocaleDateString(undefined, dateFormat) : "Latest run"}`;
   document.querySelector("#windowContext").textContent = "Overview, Runs and Fitness charts follow this review window.";
-  document.querySelector("#dataSource").textContent = state.dataSource === "demo" ? "Demo · sample running history" : state.dataSource === "import" ? "Imported activity history" : "Strava activity history";
+  document.querySelector("#dataSource").textContent = state.dataSource === "demo" ? "Demo · sample running history" : state.dataSource === "import" ? "Imported activity history" : `${providerName(state.dataSource)} activity history`;
   const noMatches = state.rawActivities.length > 0 && !state.filteredRuns.length;
   document.querySelector("#emptyWindow").hidden = !noMatches;
   const reversedDates = start && end && start > end;
   document.querySelector("#emptyWindowTitle").textContent = reversedDates ? "These dates are out of order" : "No runs in this window";
   document.querySelector("#emptyWindowCopy").textContent = reversedDates ? "Choose an end date on or after the start date. Your history is still loaded." : "Your history is still loaded. Choose a wider range to find your runs.";
   document.querySelector("#exportButton").disabled = !state.filteredRuns.length;
-  document.querySelector("#disconnectButton").hidden = !state.stravaConnected;
 }
 
 function saveViewState() {
@@ -673,7 +683,7 @@ function renderAiState() {
   const detail = document.createElement("p");
   detail.textContent = state.filteredRuns.length
     ? `${state.filteredRuns.length} runs will be summarized for Ollama. No route coordinates or raw activity payloads are included.`
-    : "Connect Strava, import a file, or try the demo. Then choose a window and ask for an analysis.";
+    : "Sign in with Strava or Garmin, import a file, or try the demo. Then choose a window and ask for an analysis.";
   copy.append(title, detail);
   wrapper.append(index, copy);
   els.aiInsightContent.replaceChildren(wrapper);
@@ -2444,54 +2454,96 @@ function renderTable() {
   }));
 }
 
-async function fetchActivities(mode = "recent") {
+const AUTH_MESSAGES = {
+  expired: "That sign-in took too long or started in another browser. Try again.",
+  denied: "Sign-in was cancelled before access was granted.",
+  already_linked: "That account is already linked to a different Run Trends profile. Sign out and sign in with it instead."
+};
+const PROVIDER_CACHE_KEY = "run-trends-provider-session";
+
+function providerName(id) {
+  return state.account.providers.find((provider) => provider.id === id)?.name
+    || ({ strava: "Strava", garmin: "Garmin" })[id]
+    || "Connected";
+}
+
+function isConnected(providerId) {
+  return state.account.connections.some((connection) => connection.provider === providerId);
+}
+
+// True when the loaded history came from a connected provider rather than
+// demo data or an imported file.
+function isProviderSource() {
+  return Boolean(state.dataSource) && !["demo", "import"].includes(state.dataSource);
+}
+
+function hasProviderConnection() {
+  return state.account.signedIn && state.account.connections.length > 0;
+}
+
+function clearProviderCache() {
+  try { sessionStorage.removeItem(PROVIDER_CACHE_KEY); } catch { /* Storage may be unavailable. */ }
+}
+
+async function fetchActivities(mode = "recent", providerId = state.activeProvider) {
   if (state.syncing) return;
+  const provider = providerId || state.account.connections[0]?.provider;
+  if (!provider) return;
   state.syncing = true;
   els.connectButton.disabled = true;
   els.connectButton.textContent = "Syncing…";
-  setStatus("Pulling activities from Strava...");
+  setStatus(`Pulling activities from ${providerName(provider)}...`);
   try {
-  const params = new URLSearchParams({ pages: "8", per_page: "100" });
-  const previous = state.dataSource === "strava" ? state.rawActivities : [];
-  if (previous.length) {
-    if (mode === "older") params.set("before", String(Math.floor(Math.min(...previous.map((run) => new Date(run.start_date || run.start_date_local).valueOf())) / 1000)));
-    else if (mode === "full") params.set("after", String(Math.floor(Math.min(...previous.map((run) => new Date(run.start_date || run.start_date_local).valueOf())) / 1000) - 1));
-    else params.set("after", String(Math.floor((new Date(state.lastSync || Date.now()).valueOf() - 7 * 86400000) / 1000)));
-  }
-  const response = await fetch(`/api/activities?${params}`);
-  const data = await readApiJson(response);
-  if (!response.ok) {
-    if (response.status === 401) {
-      state.stravaConnected = false;
-      sessionStorage.removeItem("run-trends-strava-session");
-      throw new Error("Your Strava session expired. Connect Strava again to refresh your history.");
+    const name = providerName(provider);
+    const params = new URLSearchParams({ provider, pages: "8", per_page: "100" });
+    const previous = state.dataSource === provider ? state.rawActivities : [];
+    if (previous.length) {
+      if (mode === "older") params.set("before", String(Math.floor(Math.min(...previous.map((run) => new Date(run.start_date || run.start_date_local).valueOf())) / 1000)));
+      else if (mode === "full") params.set("after", String(Math.floor(Math.min(...previous.map((run) => new Date(run.start_date || run.start_date_local).valueOf())) / 1000) - 1));
+      else params.set("after", String(Math.floor((new Date(state.lastSync || Date.now()).valueOf() - 7 * 86400000) / 1000)));
     }
-    throw new Error(data.error || "Unable to fetch Strava activities.");
-  }
-  if (!Array.isArray(data.activities)) throw new Error("Strava returned an unreadable activity list. Try syncing again.");
-  const incoming = data.activities.map(normalizeActivity);
-  incoming.forEach((run) => state.activityDetails?.delete(String(run.id)));
-  // A completed refresh replaces its queried interval, reflecting deletions and edits.
-  const after = Number(params.get("after") || 0) * 1000;
-  const kept = mode !== "older" && !data.truncated ? previous.filter((run) => new Date(run.start_date || run.start_date_local).valueOf() <= after) : previous;
-  state.rawActivities = TrainingCore.mergeActivities(kept, incoming);
-  state.dataSource = "strava";
-  state.lastSync = new Date().toISOString();
-  if (mode === "older" || !previous.length) state.historyTruncated = Boolean(data.truncated);
-  else if (data.truncated) state.historyTruncated = true;
-  const oldest = state.rawActivities.length ? Math.min(...state.rawActivities.map((run) => parseActivityDate(run).valueOf())) : Date.now();
-  historyCoverage = { start: state.historyTruncated ? new Date(oldest).toISOString() : "1970-01-01T00:00:00.000Z", end: new Date().toISOString() };
-  try { sessionStorage.setItem("run-trends-strava-session", JSON.stringify({ activities: state.rawActivities, lastSync: state.lastSync, truncated: state.historyTruncated, coverage: historyCoverage })); } catch { /* A full sync remains available without a cache. */ }
-  state.ledgerPage = 0;
-  syncRangeInputs();
-  setStatus(`Loaded ${incoming.length} activities from Strava; ${state.rawActivities.length} in history.${state.historyTruncated ? " Load older activities to extend the history." : ""}`);
-  render();
+    const response = await fetch(`/api/activities?${params}`);
+    const data = await readApiJson(response);
+    if (!response.ok) {
+      if (response.status === 401) {
+        clearProviderCache();
+        await loadAccount({ sync: false });
+        // Signed out entirely, or only this provider's access lapsed.
+        throw new Error(state.account.signedIn
+          ? data.error || `Reconnect ${name} from Account to refresh your history.`
+          : "Your session expired. Sign in again to refresh your history.");
+      }
+      throw new Error(data.error || `Unable to fetch ${name} activities.`);
+    }
+    if (!Array.isArray(data.activities)) throw new Error(`${name} returned an unreadable activity list. Try syncing again.`);
+    const incoming = data.activities.map(normalizeActivity);
+    incoming.forEach((run) => state.activityDetails?.delete(String(run.id)));
+    // A completed refresh replaces its queried interval, reflecting deletions and edits.
+    const after = Number(params.get("after") || 0) * 1000;
+    const kept = mode !== "older" && !data.truncated ? previous.filter((run) => new Date(run.start_date || run.start_date_local).valueOf() <= after) : previous;
+    state.rawActivities = TrainingCore.mergeActivities(kept, incoming);
+    state.dataSource = provider;
+    state.activeProvider = provider;
+    state.lastSync = new Date().toISOString();
+    if (mode === "older" || !previous.length) state.historyTruncated = Boolean(data.truncated);
+    else if (data.truncated) state.historyTruncated = true;
+    const oldest = state.rawActivities.length ? Math.min(...state.rawActivities.map((run) => parseActivityDate(run).valueOf())) : Date.now();
+    historyCoverage = { start: state.historyTruncated ? new Date(oldest).toISOString() : "1970-01-01T00:00:00.000Z", end: new Date().toISOString() };
+    try { sessionStorage.setItem(PROVIDER_CACHE_KEY, JSON.stringify({ provider, activities: state.rawActivities, lastSync: state.lastSync, truncated: state.historyTruncated, coverage: historyCoverage })); } catch { /* A full sync remains available without a cache. */ }
+    state.ledgerPage = 0;
+    syncRangeInputs();
+    const recentlyConnected = data.connectedAt && Date.now() / 1000 - Number(data.connectedAt) < 24 * 60 * 60;
+    if (!state.rawActivities.length && recentlyConnected) {
+      setStatus(`${name} is still sending your history. It can take a few minutes to arrive; sync again shortly.`);
+    } else {
+      setStatus(`Loaded ${incoming.length} activities from ${name}; ${state.rawActivities.length} in history.${state.historyTruncated ? " Load older activities to extend the history." : ""}`);
+    }
+    render();
   } finally {
     state.syncing = false;
-    document.querySelector("#disconnectButton").hidden = !state.stravaConnected;
     renderSyncInfo();
     els.connectButton.disabled = false;
-    els.connectButton.textContent = state.stravaConnected ? "Refresh Strava" : "Connect Strava";
+    renderAccountControls();
   }
 }
 
@@ -2510,50 +2562,163 @@ async function readApiJson(response) {
   return { error: `Request failed with HTTP ${response.status}.` };
 }
 
-async function checkStatus() {
+function renderAccountControls() {
+  const { signedIn, user } = state.account;
+  const provider = state.activeProvider || state.account.connections[0]?.provider;
+  if (!state.syncing) {
+    els.connectButton.textContent = signedIn && provider ? `Sync ${providerName(provider)}` : "Sign in";
+  }
+  els.connectButton.title = !signedIn && state.account.error ? state.account.error : "";
+  if (els.emptyConnectButton) els.emptyConnectButton.textContent = signedIn ? "Sync activities" : "Sign in";
+  els.accountButton.hidden = !signedIn;
+  els.accountButton.textContent = user?.displayName || "Account";
+}
+
+function providerButton(provider) {
+  const label = `Continue with ${provider.name}`;
+  if (!provider.configured) {
+    return `<button class="provider-button" type="button" disabled title="${escapeHtml(provider.error || "")}">${escapeHtml(label)}<small>Not available yet</small></button>`;
+  }
+  return `<a class="provider-button provider-${escapeHtml(provider.id)}" href="/auth/${encodeURIComponent(provider.id)}/login">${escapeHtml(label)}</a>`;
+}
+
+function renderAccountDialog() {
+  const { signedIn, user, connections, providers } = state.account;
+  els.accountDialogTitle.textContent = signedIn ? (user?.displayName || "Your account") : "Sign in";
+  if (!signedIn) {
+    const buttons = providers.map(providerButton).join("");
+    els.accountDialogBody.innerHTML = `
+      <p class="account-copy">Use the account you record runs with. Run Trends creates your profile the first time you sign in.</p>
+      <div class="provider-list">${buttons || `<p class="account-error">${escapeHtml(state.account.error || "Sign-in is not available on this server.")}</p>`}</div>
+      ${buttons && state.account.error ? `<p class="account-error">${escapeHtml(state.account.error)}</p>` : ""}
+      <p class="account-fine-print">Run Trends only reads your activities. It never posts to your accounts. <a href="/privacy">Privacy policy</a></p>`;
+    return;
+  }
+  const rows = providers.map((provider) => {
+    const connection = connections.find((item) => item.provider === provider.id);
+    if (connection) {
+      const action = connections.length > 1
+        ? `<button class="link-action" type="button" data-action="disconnect" data-provider="${escapeHtml(provider.id)}">Disconnect</button>`
+        : `<span class="account-muted">Used to sign in</span>`;
+      return `<li><div><strong>${escapeHtml(provider.name)}</strong><span>${escapeHtml(connection.displayName || "Connected")}</span></div>${action}</li>`;
+    }
+    const connect = provider.configured
+      ? `<a class="link-action" href="/auth/${encodeURIComponent(provider.id)}/login">Connect</a>`
+      : `<span class="account-muted" title="${escapeHtml(provider.error || "")}">Not available yet</span>`;
+    return `<li><div><strong>${escapeHtml(provider.name)}</strong><span>Not connected</span></div>${connect}</li>`;
+  }).join("");
+  els.accountDialogBody.innerHTML = `
+    <h3 class="account-section-title">Connected accounts</h3>
+    <ul class="connection-list">${rows}</ul>
+    <div class="account-actions">
+      <a class="ghost-action" href="/auth/logout">Sign out</a>
+      <button class="link-action danger" type="button" data-action="delete-account">Delete account</button>
+    </div>`;
+}
+
+function openAccountDialog() {
+  renderAccountDialog();
+  if (!els.accountDialog.open) els.accountDialog.showModal();
+}
+
+async function loadAccount({ sync = true } = {}) {
   const response = await fetch("/api/status");
   const data = await readApiJson(response);
+  state.account.loaded = true;
   state.analysisService = data.analysisService || "Configured Ollama service";
   state.analysisModel = data.analysisModel || "Configured model";
   if (!response.ok) {
-    state.stravaReady = false;
-    state.stravaConnected = false;
-    state.stravaError = data.error || "Unable to reach the Strava API route.";
-    els.connectButton.disabled = false;
-    els.connectButton.textContent = "Connect Strava";
-    els.connectButton.title = state.stravaError;
-    setStatus(state.stravaError, true);
+    Object.assign(state.account, { signedIn: false, user: null, connections: [], providers: [], error: data.error || "Unable to reach the account service." });
+    renderAccountControls();
+    setStatus(state.account.error, true);
     return;
   }
-  if (!data.configured) {
-    state.stravaReady = false;
-    state.stravaConnected = false;
-    state.stravaError = data.error || "Add Strava credentials before connecting.";
-    els.connectButton.disabled = false;
-    els.connectButton.textContent = "Connect Strava";
-    els.connectButton.title = state.stravaError;
+  state.account.providers = Array.isArray(data.providers) ? data.providers : [];
+  state.account.error = data.configured ? "" : (data.error || "Sign-in is not configured on this server.");
+  state.account.signedIn = Boolean(data.signedIn);
+  state.account.user = null;
+  state.account.connections = [];
+  if (state.account.signedIn) {
+    const meResponse = await fetch("/api/me");
+    const me = await readApiJson(meResponse);
+    if (meResponse.ok) {
+      state.account.user = me.user;
+      state.account.connections = Array.isArray(me.connections) ? me.connections : [];
+    } else {
+      state.account.signedIn = false;
+    }
+  }
+  if (!isConnected(state.activeProvider)) state.activeProvider = state.account.connections[0]?.provider || "";
+  renderAccountControls();
+  if (els.accountDialog.open) renderAccountDialog();
+  if (!state.activeProvider) {
+    clearProviderCache();
     return;
   }
-  state.stravaReady = true;
-  state.stravaConnected = Boolean(data.connected);
-  state.stravaError = "";
-  els.connectButton.disabled = false;
-  els.connectButton.title = "";
-  if (data.connected) {
-    els.connectButton.textContent = "Refresh Strava";
-    let cached;
-    try { cached = JSON.parse(sessionStorage.getItem("run-trends-strava-session")); } catch { /* Ignore an unreadable cache. */ }
-    if (Array.isArray(cached?.activities) && cached.activities.every((run) => run && typeof run === "object" && Number.isFinite(parseActivityDate(run).valueOf())) && !new URLSearchParams(location.search).has("connected") && state.dataSource !== "import") {
-      state.rawActivities = cached.activities.map(normalizeActivity); state.dataSource = "strava"; state.lastSync = cached.lastSync; state.historyTruncated = cached.truncated; historyCoverage = cached.coverage;
-      syncRangeInputs(); render();
-      const age = Date.now() - new Date(cached.lastSync).valueOf();
-      if (!Number.isFinite(age) || age < 0 || age > 5 * 60 * 1000) await fetchActivities();
-    } else if (state.dataSource !== "import") await fetchActivities();
+  if (!sync || state.dataSource === "import") return;
+  let cached;
+  try { cached = JSON.parse(sessionStorage.getItem(PROVIDER_CACHE_KEY)); } catch { /* Ignore an unreadable cache. */ }
+  const usable = !state.freshAuth
+    && cached?.provider === state.activeProvider
+    && Array.isArray(cached.activities)
+    && cached.activities.every((run) => run && typeof run === "object" && Number.isFinite(parseActivityDate(run).valueOf()));
+  state.freshAuth = false;
+  if (usable) {
+    state.rawActivities = cached.activities.map(normalizeActivity); state.dataSource = cached.provider; state.lastSync = cached.lastSync; state.historyTruncated = cached.truncated; historyCoverage = cached.coverage;
+    syncRangeInputs(); render();
+    const age = Date.now() - new Date(cached.lastSync).valueOf();
+    if (!Number.isFinite(age) || age < 0 || age > 5 * 60 * 1000) await fetchActivities("recent", state.activeProvider);
   } else {
-    sessionStorage.removeItem("run-trends-strava-session");
-    setStatus("");
+    await fetchActivities("recent", state.activeProvider);
   }
-  const cleanUrl = new URL(location.href); cleanUrl.searchParams.delete("connected"); cleanUrl.searchParams.delete("disconnected"); history.replaceState(null, "", cleanUrl);
+}
+
+// OAuth callbacks return to /?signedin=… etc.; turn those into a status line
+// and remove them so a reload or copied view link does not repeat them.
+function consumeAuthResult() {
+  const url = new URL(window.location.href);
+  const keys = ["signedin", "connected", "signedout", "auth_error", "disconnected"];
+  const params = Object.fromEntries(keys.map((key) => [key, url.searchParams.get(key)]));
+  if (!keys.some((key) => params[key] !== null)) return;
+  keys.forEach((key) => url.searchParams.delete(key));
+  window.history.replaceState(null, "", url);
+  if (params.signedin || params.connected) state.freshAuth = true;
+  if (params.signedout !== null || params.disconnected !== null) clearProviderCache();
+  if (params.auth_error) setStatus(AUTH_MESSAGES[params.auth_error] || "Sign-in did not complete. Try again.", true);
+  else if (params.connected) state.activeProvider = params.connected;
+  else if (params.signedout !== null || params.disconnected !== null) setStatus("Signed out.");
+}
+
+async function disconnectProvider(providerId) {
+  const response = await fetch(`/api/connections/${encodeURIComponent(providerId)}`, { method: "DELETE" });
+  const data = await readApiJson(response);
+  if (!response.ok) throw new Error(data.error || "Unable to disconnect that account.");
+  if (state.dataSource === providerId) {
+    state.rawActivities = [];
+    state.dataSource = "";
+    state.lastSync = "";
+    clearProviderCache();
+    render();
+  }
+  if (state.activeProvider === providerId) state.activeProvider = "";
+  setStatus(`${providerName(providerId)} disconnected.`);
+  await loadAccount({ sync: false });
+}
+
+async function deleteAccount() {
+  if (!window.confirm("Delete your Run Trends account? This removes your profile and connected accounts from Run Trends. Your Strava and Garmin data are not affected.")) return;
+  const response = await fetch("/api/me", { method: "DELETE" });
+  const data = await readApiJson(response);
+  if (!response.ok) throw new Error(data.error || "Unable to delete the account.");
+  els.accountDialog.close();
+  clearProviderCache();
+  state.rawActivities = [];
+  state.dataSource = "";
+  state.activeProvider = "";
+  state.lastSync = "";
+  render();
+  setStatus("Your account was deleted.");
+  await loadAccount({ sync: false });
 }
 
 function parseCsv(text) {
@@ -2696,14 +2861,11 @@ function makeDemoData() {
   return activities;
 }
 
-function connectToStrava() {
-  if (!state.stravaReady) {
-    setStatus(state.stravaError || "Strava is not configured yet.", true);
-    if (!state.stravaError) window.location.href = "/auth/login";
-  } else if (state.stravaConnected || els.connectButton.textContent.includes("Refresh")) {
+function primaryAccountAction() {
+  if (state.account.signedIn && state.account.connections.length) {
     fetchActivities().catch((error) => setStatus(error.message, true));
   } else {
-    window.location.href = "/auth/login";
+    openAccountDialog();
   }
 }
 
@@ -2727,7 +2889,7 @@ function handleFileInput(event) {
 }
 
 [els.connectButton, els.emptyConnectButton].filter(Boolean).forEach((button) => {
-  button.addEventListener("click", connectToStrava);
+  button.addEventListener("click", primaryAccountAction);
 });
 
 [els.demoButton, els.emptyDemoButton].filter(Boolean).forEach((button) => {
@@ -2838,9 +3000,22 @@ document.querySelector("#exportButton").addEventListener("click", () => {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
   setStatus(`Exported ${state.filteredRuns.length} runs from the selected window. Distances and elevation use meters in the CSV.`);
 });
-document.querySelector("#disconnectButton").addEventListener("click", () => {
-  sessionStorage.removeItem("run-trends-strava-session");
-  window.location.href = "/auth/logout";
+els.accountButton.addEventListener("click", openAccountDialog);
+els.accountDialogClose.addEventListener("click", () => els.accountDialog.close());
+els.accountDialog.addEventListener("click", (event) => {
+  if (event.target === els.accountDialog) {
+    els.accountDialog.close();
+    return;
+  }
+  if (event.target.closest('a[href="/auth/logout"]')) {
+    clearProviderCache();
+    return;
+  }
+  const action = event.target.closest("[data-action]");
+  if (!action) return;
+  const pending = action.dataset.action === "disconnect" ? disconnectProvider(action.dataset.provider)
+    : action.dataset.action === "delete-account" ? deleteAccount() : null;
+  pending?.catch((error) => setStatus(error.message, true));
 });
 
 els.keyRuns.addEventListener("click", (event) => {
@@ -2901,7 +3076,8 @@ syncRangeInputs();
 syncCoachingInputs();
 bindTooltips();
 render();
-checkStatus().catch((error) => setStatus(error.message, true));
+consumeAuthResult();
+loadAccount().catch((error) => setStatus(error.message, true));
 
 let chartResizeTimer;
 let lastChartWidth = document.querySelector("#app").clientWidth;

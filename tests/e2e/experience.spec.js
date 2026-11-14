@@ -20,6 +20,15 @@ async function importHistory(page, activities = history()) {
 async function preferences(page) { await page.locator(".preferences-disclosure").evaluate((element) => element.open = true); }
 async function view(page, name) { await page.getByRole("link", { name, exact: true }).click(); }
 
+// Mocks a signed-in account with Strava connected. signedIn may change
+// during a test to simulate the session ending.
+async function mockStravaAccount(page, { signedIn = () => true, ...extra } = {}) {
+  const providers = [{ id: "strava", name: "Strava", configured: true, error: null }];
+  await page.route("**/api/status", (route) => route.fulfill({ json: { configured: true, signedIn: signedIn(), connected: signedIn(), providers, ...extra } }));
+  await page.route("**/api/me", (route) => signedIn()
+    ? route.fulfill({ json: { user: { id: "u1", displayName: "Test Runner" }, connections: [{ provider: "strava", displayName: "Test Runner" }] } })
+    : route.fulfill({ status: 401, json: { error: "Sign in first." } }));
+}
 test("secondary controls stay collapsed and the data menu supports keyboard dismissal", async ({ page }) => {
   await page.goto("/"); await importHistory(page);
   await expect(page.locator("#sourceStatus")).toHaveText("Imported history");
@@ -149,7 +158,7 @@ test("unknown comparison coverage is not reported as improvement", async ({ page
 });
 test("Strava sync merges recent changes, loads older history, caches the session, and reconnects after expiry", async ({ page }) => {
   const urls = []; let phase = 0;
-  await page.route("**/api/status", (route) => route.fulfill({ json: { configured: true, connected: true, analysisService: "https://analysis.test", analysisModel: "test" } }));
+  await mockStravaAccount(page, { signedIn: () => phase < 4, analysisService: "https://analysis.test", analysisModel: "test" });
   await page.route("**/api/activities?*", (route) => {
     const url = new URL(route.request().url()); urls.push(url); phase++;
     if (phase === 4) return route.fulfill({ status: 401, json: { error: "expired" } });
@@ -163,13 +172,13 @@ test("Strava sync merges recent changes, loads older history, caches the session
   await page.locator("#loadOlderButton").click(); await expect(page.locator("#syncInfo")).toContainText("3 activities");
   expect(urls[2].searchParams.has("before")).toBe(true);
   await page.reload(); await expect(page.locator("#syncInfo")).toContainText("3 activities"); expect(urls).toHaveLength(3);
-  await page.locator("#connectButton").click(); await expect(page.locator("#status")).toContainText("session expired"); await expect(page.locator("#connectButton")).toHaveText("Connect Strava");
+  await page.locator("#connectButton").click(); await expect(page.locator("#status")).toContainText("session expired"); await expect(page.locator("#connectButton")).toHaveText("Sign in");
 });
 test("run details fetch and cache splits, support comparisons and previous/next navigation", async ({ page }) => {
   let details = 0;
-  await page.route("**/api/status", (route) => route.fulfill({ json: { configured: true, connected: true } }));
+  await mockStravaAccount(page);
   await page.route("**/api/activities?*", (route) => route.fulfill({ json: { activities: history(), truncated: false } }));
-  await page.route(/\/api\/activities\/\d+$/, (route) => { details++; return route.fulfill({ json: { activity: { splits_metric: [{ distance: 1000, moving_time: 300, average_heartrate: 145 }] } } }); });
+  await page.route(/\/api\/activities\/\d+\?provider=strava$/, (route) => { details++; return route.fulfill({ json: { activity: { splits_metric: [{ distance: 1000, moving_time: 300, average_heartrate: 145 }] } } }); });
   await page.goto("/"); await expect(page.locator("#syncInfo")).toContainText("16 activities"); await view(page, "Runs");
   await page.locator(".row-detail-button").first().click(); await expect(page.locator("#enrichedRun")).toContainText("Recorded kilometer splits");
   await expect(page.locator(".workout-lead-metrics")).toBeVisible();

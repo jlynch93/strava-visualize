@@ -4,14 +4,19 @@ A web dashboard for runners to analyze Strava trends over a selected period.
 
 ## Local Development
 
-Create `.env` from `.env.example`, then run:
+Requires Node 22.5 or later. Create `.env` from `.env.example`, then run:
 
 ```powershell
 npm ci
 npm start
 ```
 
-Open `http://localhost:4173`.
+Open `http://localhost:4173`. `npm start` runs the production Worker
+(`src/worker.js`) in Node, using `public/` for static files and a SQLite file in
+`.data/` in place of Cloudflare D1. Migrations in `migrations/` are applied on
+startup. If `TOKEN_ENCRYPTION_KEY` is unset, a local key is generated in
+`.data/`. Add `http://localhost:4173/auth/strava/callback` to the Strava app's
+allowed callback domain (`localhost`) to sign in locally.
 
 Run the local regression checks with:
 
@@ -30,7 +35,7 @@ coach services are mocked in browser tests.
 
 ## Reviewing a training block
 
-Connect Strava, import a JSON/CSV activity export, or select **Demo data**. The
+Sign in with Strava, import a JSON/CSV activity export, or select **Demo data**. The
 overview combines the block comparison, mileage, pace, and run frequency with
 an interactive trend. Select a chart period to open its runs. Empty calendar
 periods remain visible; weekly metrics use the selected calendar window and
@@ -177,12 +182,90 @@ runs the regression suite, JavaScript syntax checks for all deployment targets,
 and a Git whitespace check. Node 22 is installed by the workflow; no local runner
 is required.
 
+## Accounts and providers
+
+People sign in with an activity provider; there are no passwords. The first
+sign-in creates a Run Trends profile, and signing in again with the same
+provider account returns to it. From **Account**, a signed-in user can connect
+another provider, disconnect one (the last one cannot be removed, because it is
+how they sign in), sign out, or delete the account.
+
+- Sessions are random tokens in an `HttpOnly` `sv_session` cookie. Only their
+  SHA-256 hash is stored, and signing out deletes the session server-side.
+- Provider access and refresh tokens are encrypted with AES-GCM using
+  `TOKEN_ENCRYPTION_KEY` before they reach the database. Tokens are refreshed
+  and re-saved when they are within a minute of expiry.
+- A provider account can belong to only one profile. Connecting one that is
+  already linked elsewhere is refused.
+- OAuth `state` is bound to the browser and to the provider that started
+  sign-in.
+
+The code is in `src/`: `auth.js` (sign-in, callbacks, account routes),
+`session.js`, `db.js`, `crypto.js`, and `providers/`. Each provider module
+implements the interface described in `src/providers/index.js` and returns
+activities in the field shape `normalizeActivity()` in `public/script.js`
+expects. Strava is the first provider. Garmin will be added as another module.
+
+| Route | Purpose |
+| --- | --- |
+| `GET /auth/:provider/login`, `/auth/:provider/callback` | Sign in, or connect a provider when already signed in |
+| `GET /auth/logout` | Sign out |
+| `GET /api/status` | Provider configuration and whether the browser is signed in |
+| `GET /api/me`, `DELETE /api/me` | Profile and connections; delete the account |
+| `DELETE /api/connections/:provider` | Disconnect a provider |
+| `GET /api/activities?provider=`, `/api/activities/:id?provider=` | Activities from a connected provider |
+| `POST /webhooks/garmin/:secret` | Garmin activity, deregistration and permission notifications |
+
+`/auth/login` and `/auth/callback` remain as aliases for Strava so existing
+Strava app settings keep working.
+
+### Garmin
+
+Garmin needs approval through the Garmin Connect Developer Program (Activity
+API). Unlike Strava, Garmin does not let apps list activities on demand: it
+pushes them to a webhook, so Garmin activities are stored in the D1
+`activities` table (`migrations/0002_activities.sql`) as summaries already
+mapped to Strava's field names. No GPS routes or samples are stored.
+
+- **Sign-in** uses OAuth 2.0 with PKCE. The code verifier is kept in a
+  10-minute `HttpOnly` cookie.
+- **Webhook:** in Garmin's developer portal, set the Activity, Activity
+  Details, Manually Updated Activities, Deregistration and User Permissions
+  endpoints to `https://<your-domain>/webhooks/garmin/<GARMIN_WEBHOOK_SECRET>`.
+  Both push (data in the body) and ping (callback URL) modes are handled. The
+  secret in the path is what authenticates Garmin's requests, so use a long
+  random value.
+- **Backfill:** connecting Garmin requests about a year of history in 90-day
+  windows. It arrives through the webhook over the following minutes.
+- **Disconnecting** Garmin, deleting the account, a Garmin deregistration, or
+  removing the `ACTIVITY_EXPORT` permission deletes the stored activities. A
+  deregistration also deletes the profile if Garmin was its only sign-in.
+
+The Garmin URLs in `src/providers/garmin.js` follow Garmin's published OAuth 2.0
+PKCE and Activity API documentation. Confirm them against the documentation you
+receive with your keys.
+
+### Privacy policy
+
+`public/privacy.html` (served at `/privacy`) describes exactly what the app
+stores and sends. Garmin requires one. Replace `[OPERATOR NAME]` and
+`[CONTACT EMAIL]` before submitting the app to Garmin, and update the policy
+whenever data handling changes.
+
 ## Cloudflare Workers
 
-The app deploys as a Cloudflare Worker with static assets. Static files live in `public/`; Strava API routes are handled by `src/worker.js`.
+The app deploys as a Cloudflare Worker with static assets and a D1 database.
+Static files live in `public/`; API and auth routes are handled by `src/worker.js`.
+
+The `DB` binding in `wrangler.jsonc` points at the `strava-visualize` D1
+database. Apply migrations whenever `migrations/` changes:
+
+```powershell
+npx wrangler d1 migrations apply strava-visualize --remote
+```
 
 Weather validation/normalization, analysis prompts and response normalization
-are shared with Node and Pages through `shared/services.cjs`. Request validation
+are shared by the Worker (and the local server, which runs it) through `shared/services.cjs`. Request validation
 and resource limits live in `shared/analysis-limits.cjs`. Running time uses moving
 minutes consistently; Relative Effort remains separate. The former distance/HR
 "efficiency" metric is replaced with heart-rate coverage. Ramp compares the
@@ -194,17 +277,28 @@ Set these Worker secrets or environment variables:
 ```text
 STRAVA_CLIENT_ID
 STRAVA_CLIENT_SECRET
+TOKEN_ENCRYPTION_KEY=<32 random bytes, base64>
+STRAVA_REDIRECT_URI=https://your-domain.example/auth/strava/callback   (optional)
 APP_BASE_URL=https://your-domain.example
 OLLAMA_BASE_URL=https://ollama.jeer.rest
 OLLAMA_MODEL=qwen3.5:0.8b
 ```
 
-Connect Strava uses `APP_BASE_URL/auth/callback` as its OAuth callback. Set
-`APP_BASE_URL` to your current public app URL (also supported in local `.env` and
-Cloudflare Pages). Without it, hosted deployments use the request origin and the
-local server uses localhost. `STRAVA_REDIRECT_URI`, if set, overrides this callback;
-update or remove an old value when changing domains. Update the Authorization
-Callback Domain in your Strava API application settings to match the new domain.
+For Garmin, also set `GARMIN_CLIENT_ID`, `GARMIN_CLIENT_SECRET` and
+`GARMIN_WEBHOOK_SECRET` (and optionally `GARMIN_REDIRECT_URI`). Garmin stays
+listed as "Not available yet" until all three are present.
+
+Generate the encryption key with
+`node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`.
+Keep it stable: changing it makes stored tokens unreadable, and users then need
+to reconnect.
+
+Strava and Garmin use `APP_BASE_URL/auth/<provider>/callback` as their OAuth
+callbacks. Set `APP_BASE_URL` to your current public app URL (also supported in
+local `.env`). Without it, the request origin is used. `STRAVA_REDIRECT_URI` and
+`GARMIN_REDIRECT_URI`, if set, override these; update or remove an old value when
+changing domains, and update the Authorization Callback Domain in your Strava
+API application settings to match.
 
 The dashboard metrics and SVG charts are calculated in the app. Ollama guides
 the on-demand selected-window training read and the focused run read shown when
@@ -223,9 +317,7 @@ Ollama variables only when you want to override them.
 
 The dashboard can also import Strava JSON or CSV exports, download the selected
 window as a normalized CSV, and preserve the run-browser filters in a copied
-view link. Use `Disconnect` to clear the local token or hosted session cookies.
-OAuth callbacks use a short-lived state cookie to prevent a login response from
-being attached to the wrong browser session.
+view link.
 
 `qwen3.5:0.8b` is the default workout-analysis model. The request keeps
 reasoning hidden and asks for concise schema-valid JSON so the UI receives only
@@ -262,16 +354,13 @@ Analysis bodies are capped at 64 KB while streaming, even without Content-Length
 The Worker rate-limit binding allows five requests per client IP per minute per
 Cloudflare location. Each running process/isolate also limits concurrent analysis
 to two requests. These are resource protections, not a global account quota.
-Node and Pages use the process/isolate fallback; Pages can use an equivalent
-`ANALYSIS_RATE_LIMITER` binding where configured. Cross-origin browser analysis
+The local server uses the process fallback; the Worker also uses the
+`ANALYSIS_RATE_LIMITER` binding. Cross-origin browser analysis
 requests are rejected. Client cancellation propagates to upstream analysis.
 
 If `/api/status` returns `404`, Cloudflare is only serving static assets. Redeploy from this repo with `wrangler deploy` so `src/worker.js` is included.
 
-If `/auth/login` loads the dashboard instead of redirecting to Strava, make sure `wrangler.jsonc` includes `assets.run_worker_first` for `/auth/*` and `/api/*`, then redeploy.
+If `/auth/strava/login` loads the dashboard instead of redirecting to Strava, make sure `wrangler.jsonc` includes `assets.run_worker_first` for `/auth/*` and `/api/*`, then redeploy.
 
-## Cloudflare Pages
-
-The repo also includes Pages Functions in `functions/` for Pages Git integration.
-Set the build command to `npm run build` and output directory to `.build/public`.
-For a CLI deployment use `npm run deploy:pages`; it builds automatically.
+If `/api/status` reports that the D1 database or `TOKEN_ENCRYPTION_KEY` is
+missing, sign-in stays disabled until both are configured.

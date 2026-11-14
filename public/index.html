@@ -36,16 +36,24 @@
         <div class="header-actions">
           <span id="heroStatus" class="live-indicator">Ready for training data</span>
           <div class="actions">
-            <button id="connectButton" class="primary">Connect Strava</button>
+            <button id="connectButton" class="primary">Sign in</button>
             <label class="file-button">
               <span>Import data</span>
               <input id="fileInput" type="file" accept=".json,.csv,text/csv,application/json">
             </label>
             <button id="demoButton" class="ghost-action">Demo data</button>
-            <button id="disconnectButton" class="ghost-action" hidden>Disconnect</button>
+            <button id="accountButton" class="ghost-action account-button" type="button" hidden aria-haspopup="dialog">Account</button>
           </div>
         </div>
       </header>
+
+      <dialog id="accountDialog" class="account-dialog" aria-labelledby="accountDialogTitle">
+        <div class="account-dialog-head">
+          <h2 id="accountDialogTitle">Sign in</h2>
+          <button id="accountDialogClose" class="modal-close" type="button" aria-label="Close">×</button>
+        </div>
+        <div id="accountDialogBody" class="account-dialog-body"></div>
+      </dialog>
 
       <section class="toolbar" aria-label="Time and metric filters">
         <div class="toolbar-intro">
@@ -89,16 +97,16 @@
       <section class="onboarding" aria-labelledby="onboardingTitle">
         <div class="onboarding-copy">
           <h1 id="onboardingTitle">Bring your training history into view.</h1>
-          <p>Connect Strava, import an activity export, or use a sample block to explore the dashboard before sharing any of your data.</p>
+          <p>Sign in with Strava or Garmin, import an activity export, or use a sample block to explore the dashboard before sharing any of your data.</p>
           <div class="onboarding-actions">
-            <button id="emptyConnectButton" class="primary" type="button">Connect Strava</button>
+            <button id="emptyConnectButton" class="primary" type="button">Sign in</button>
             <label class="file-button">
               <span>Import JSON or CSV</span>
               <input id="emptyFileInput" type="file" accept=".json,.csv,text/csv,application/json">
             </label>
             <button id="emptyDemoButton" class="link-action" type="button">Preview demo data</button>
           </div>
-          <p class="privacy-note">Imports stay in this browser tab. Coach analysis shares a compact summary only when you request it.</p>
+          <p class="privacy-note">Imports stay in this browser tab. Coach analysis shares a compact summary only when you request it. <a href="/privacy">Privacy policy</a></p>
         </div>
         <div class="onboarding-field" aria-hidden="true">
           <span class="field-label">What becomes visible</span>
@@ -205,7 +213,7 @@
               <span aria-hidden="true">→</span>
               <div>
                 <strong>Bring in a training block</strong>
-                <p>Connect Strava, import a file, or try the demo. Then choose a window and ask for an analysis.</p>
+                <p>Sign in with Strava or Garmin, import a file, or try the demo. Then choose a window and ask for an analysis.</p>
               </div>
             </div>
           </div>
@@ -395,7 +403,7 @@
 
       <footer class="app-footer">
         <span>Run Trends</span>
-        <p>Every run belongs to the larger block.</p>
+        <p>Every run belongs to the larger block. <a href="/privacy">Privacy policy</a></p>
       </footer>
     </main>
     <div id="chartTooltip" class="chart-tooltip" role="tooltip" aria-label="Chart values"></div>

@@ -40,8 +40,8 @@ jobs:
           node --check shared/services.cjs
           node --check shared/analysis-limits.cjs
           node --check server.js
-          node --input-type=module --check < src/worker.js
-          node --input-type=module --check < functions/api/insights.js
+          node --check scripts/d1-sqlite.js
+          for file in $(find src -name "*.js"); do node --check "$file"; done
       - name: Check patch whitespace
         run: |
           if git rev-parse --verify HEAD^ >/dev/null 2>&1; then

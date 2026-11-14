@@ -122,14 +122,14 @@ function renderSyncInfo() {
   const count = state.rawActivities.length;
   const dates = count ? getActivityBounds() : null;
   document.querySelector("#syncInfo").textContent = count
-    ? `${state.dataSource === "strava" ? "Strava" : state.dataSource === "demo" ? "Demo" : "Imported"} · ${count} activities · ${localDateValue(dates.start)} to ${localDateValue(dates.end)}${state.lastSync ? ` · Synced ${new Date(state.lastSync).toLocaleString()}` : ""}${state.historyTruncated ? " · Older history available" : ""}`
-    : "Connect Strava or import your history to get started.";
-  document.querySelector("#loadOlderButton").hidden = state.dataSource !== "strava" || !state.historyTruncated;
-  document.querySelector("#fullSyncButton").hidden = !state.stravaConnected;
+    ? `${isProviderSource() ? providerName(state.dataSource) : state.dataSource === "demo" ? "Demo" : "Imported"} · ${count} activities · ${localDateValue(dates.start)} to ${localDateValue(dates.end)}${state.lastSync ? ` · Synced ${new Date(state.lastSync).toLocaleString()}` : ""}${state.historyTruncated ? " · Older history available" : ""}`
+    : "Sign in with Strava or Garmin, or import your history, to get started.";
+  document.querySelector("#loadOlderButton").hidden = !isProviderSource() || !state.historyTruncated;
+  document.querySelector("#fullSyncButton").hidden = !hasProviderConnection();
   document.querySelector("#removeSavedButton").hidden = !preferences.rememberImports;
-  const source = state.dataSource === "strava" ? "Strava" : state.dataSource === "import" ? "Imported history" : state.dataSource === "demo" ? "Demo history" : "No history loaded";
+  const source = isProviderSource() ? providerName(state.dataSource) : state.dataSource === "import" ? "Imported history" : state.dataSource === "demo" ? "Demo history" : "No history loaded";
   document.querySelector("#sourceStatus").textContent = `${source}${state.lastSync ? ` · Synced ${new Date(state.lastSync).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : ""}`;
-  const demoParent = state.dataSource === "strava" || state.dataSource === "import" ? document.querySelector("#dataMenuActions") : document.querySelector(".header-actions .actions");
+  const demoParent = isProviderSource() || state.dataSource === "import" ? document.querySelector("#dataMenuActions") : document.querySelector(".header-actions .actions");
   if (els.demoButton.parentElement !== demoParent) demoParent.append(els.demoButton);
   const connectParent = state.dataSource === "import" ? document.querySelector("#dataMenuActions") : document.querySelector(".header-actions .actions");
   if (els.connectButton.parentElement !== connectParent) connectParent.prepend(els.connectButton);
@@ -274,7 +274,7 @@ async function hydrateRunDetail(run, session) {
     state.activityDetails ||= new Map();
     let activity = state.activityDetails.get(String(run.id));
     if (!activity) {
-      const response = await fetch(`/api/activities/${encodeURIComponent(run.id)}`);
+      const response = await fetch(`/api/activities/${encodeURIComponent(run.id)}?provider=strava`);
       const data = await readApiJson(response);
       if (!response.ok) throw new Error(data.error || "Run details are unavailable.");
       activity = data.activity; state.activityDetails.set(String(run.id), activity);
@@ -317,7 +317,7 @@ function initializeExperience() {
   document.querySelector("#heroStatus").hidden = true;
   const sourceStatus = document.createElement("span"); sourceStatus.id = "sourceStatus"; sourceStatus.className = "source-status";
   document.querySelector(".header-actions").prepend(sourceStatus);
-  document.querySelector("#dataMenuActions").append(els.fileInput.closest("label"), document.querySelector("#disconnectButton"));
+  document.querySelector("#dataMenuActions").append(els.fileInput.closest("label"));
   disclosure.querySelector(".data-menu-panel").append(settings);
   for (const type of ["click", "submit", "change"]) document.addEventListener(type, (event) => {
     const target = event.target instanceof Element ? event.target : null;

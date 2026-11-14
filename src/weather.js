@@ -1,8 +1,9 @@
-import { json } from "../_shared.js";
-import services from "../../shared/services.cjs";
+import { json } from "./http.js";
+import services from "../shared/services.cjs";
+
 const { weatherRequest, normalizeWeather } = services;
 
-export async function onRequestGet({ request }) {
+export async function handleWeather(request) {
   let config;
   try {
     config = weatherRequest(new URL(request.url));
