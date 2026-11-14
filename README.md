@@ -4,13 +4,18 @@ A web dashboard for runners to analyze Strava trends over a selected period.
 
 ## Local Development
 
-Create `.env` from `.env.example`, then run:
+Requires Node 22.5 or later. Create `.env` from `.env.example`, then run:
 
 ```powershell
 npm start
 ```
 
-Open `http://localhost:4173`.
+Open `http://localhost:4173`. `npm start` runs the production Worker
+(`src/worker.js`) in Node, using `public/` for static files and a SQLite file in
+`.data/` in place of Cloudflare D1. Migrations in `migrations/` are applied on
+startup. If `TOKEN_ENCRYPTION_KEY` is unset, a local key is generated in
+`.data/`. Add `http://localhost:4173/auth/strava/callback` to the Strava app's
+allowed callback domain (`localhost`) to sign in locally.
 
 Run the local regression checks with:
 
@@ -26,7 +31,7 @@ server without Strava credentials.
 
 ## Reviewing a training block
 
-Connect Strava, import a JSON/CSV activity export, or select **Demo data**. The
+Sign in with Strava, import a JSON/CSV activity export, or select **Demo data**. The
 overview combines the block comparison, mileage, pace, and run frequency with
 an interactive trend. Select a chart period to open its runs. Empty calendar
 periods remain visible; weekly metrics use the selected calendar window and
@@ -74,21 +79,73 @@ guidance or an autonomous training prescription.
 `Validate dashboard` runs on branch pushes using a self-hosted runner. The workflow
 runs the regression suite, JavaScript syntax checks for all deployment targets,
 and a Git whitespace check. Ensure the runner is labeled `self-hosted` and has
-Node 20 available.
+Node 22 available.
+
+## Accounts and providers
+
+People sign in with an activity provider; there are no passwords. The first
+sign-in creates a Run Trends profile, and signing in again with the same
+provider account returns to it. From **Account**, a signed-in user can connect
+another provider, disconnect one (the last one cannot be removed, because it is
+how they sign in), sign out, or delete the account.
+
+- Sessions are random tokens in an `HttpOnly` `sv_session` cookie. Only their
+  SHA-256 hash is stored, and signing out deletes the session server-side.
+- Provider access and refresh tokens are encrypted with AES-GCM using
+  `TOKEN_ENCRYPTION_KEY` before they reach the database. Tokens are refreshed
+  and re-saved when they are within a minute of expiry.
+- A provider account can belong to only one profile. Connecting one that is
+  already linked elsewhere is refused.
+- OAuth `state` is bound to the browser and to the provider that started
+  sign-in.
+
+The code is in `src/`: `auth.js` (sign-in, callbacks, account routes),
+`session.js`, `db.js`, `crypto.js`, and `providers/`. Each provider module
+implements the interface described in `src/providers/index.js` and returns
+activities in the field shape `normalizeActivity()` in `public/script.js`
+expects. Strava is the first provider. Garmin will be added as another module.
+
+| Route | Purpose |
+| --- | --- |
+| `GET /auth/:provider/login`, `/auth/:provider/callback` | Sign in, or connect a provider when already signed in |
+| `GET /auth/logout` | Sign out |
+| `GET /api/status` | Provider configuration and whether the browser is signed in |
+| `GET /api/me`, `DELETE /api/me` | Profile and connections; delete the account |
+| `DELETE /api/connections/:provider` | Disconnect a provider |
+| `GET /api/activities?provider=`, `/api/activities/:id?provider=` | Activities from a connected provider |
+
+`/auth/login` and `/auth/callback` remain as aliases for Strava so existing
+Strava app settings keep working.
 
 ## Cloudflare Workers
 
-The app deploys as a Cloudflare Worker with static assets. Static files live in `public/`; Strava API routes are handled by `src/worker.js`.
+The app deploys as a Cloudflare Worker with static assets and a D1 database.
+Static files live in `public/`; API and auth routes are handled by `src/worker.js`.
+
+Create the database once, put its ID in `wrangler.jsonc` in place of
+`REPLACE_WITH_D1_DATABASE_ID`, then apply migrations (repeat the last command
+whenever `migrations/` changes):
+
+```powershell
+npx wrangler d1 create strava-visualize
+npx wrangler d1 migrations apply strava-visualize --remote
+```
 
 Set these Worker secrets or environment variables:
 
 ```text
 STRAVA_CLIENT_ID
 STRAVA_CLIENT_SECRET
-STRAVA_REDIRECT_URI=https://your-domain.example/auth/callback
+TOKEN_ENCRYPTION_KEY=<32 random bytes, base64>
+STRAVA_REDIRECT_URI=https://your-domain.example/auth/strava/callback   (optional)
 OLLAMA_BASE_URL=https://ollama.jeer.rest
 OLLAMA_MODEL=qwen3.5:0.8b
 ```
+
+Generate the encryption key with
+`node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`.
+Keep it stable: changing it makes stored tokens unreadable, and users then need
+to reconnect.
 
 The dashboard metrics and SVG charts are calculated in the app. Ollama guides
 the on-demand selected-window training read and the focused run read shown when
@@ -107,9 +164,7 @@ Ollama variables only when you want to override them.
 
 The dashboard can also import Strava JSON or CSV exports, download the selected
 window as a normalized CSV, and preserve the run-browser filters in a copied
-view link. Use `Disconnect` to clear the local token or hosted session cookies.
-OAuth callbacks use a short-lived state cookie to prevent a login response from
-being attached to the wrong browser session.
+view link.
 
 `qwen3.5:0.8b` is the default workout-analysis model. The request keeps
 reasoning hidden and asks for concise schema-valid JSON so the UI receives only
@@ -137,8 +192,7 @@ npx wrangler deploy
 
 If `/api/status` returns `404`, Cloudflare is only serving static assets. Redeploy from this repo with `wrangler deploy` so `src/worker.js` is included.
 
-If `/auth/login` loads the dashboard instead of redirecting to Strava, make sure `wrangler.jsonc` includes `assets.run_worker_first` for `/auth/*` and `/api/*`, then redeploy.
+If `/auth/strava/login` loads the dashboard instead of redirecting to Strava, make sure `wrangler.jsonc` includes `assets.run_worker_first` for `/auth/*` and `/api/*`, then redeploy.
 
-## Cloudflare Pages
-
-The repo also includes Pages Functions in `functions/` if you prefer a Pages project through Git integration. Use `public` as the output directory and leave the build command blank.
+If `/api/status` reports that the D1 database or `TOKEN_ENCRYPTION_KEY` is
+missing, sign-in stays disabled until both are configured.

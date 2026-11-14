@@ -205,3 +205,43 @@ body.has-history .onboarding { display: none; }
   .onboarding-copy h1 { font-size: 2.1rem; }
   .onboarding-field { display: none; }
 }
+
+/* Account sign-in and connected accounts */
+.account-dialog {
+  width: min(440px, calc(100vw - 32px));
+  padding: 0;
+  border: 1px solid var(--rule-strong);
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--shadow-sheet);
+}
+.account-dialog::backdrop { background: rgba(19, 37, 47, 0.42); }
+.account-dialog-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 18px 20px 0; }
+.account-dialog-head h2 { margin: 0; font-size: 1.2rem; }
+.account-dialog-head .modal-close { position: static; float: none; margin: 0; }
+.account-dialog-body { padding: 12px 20px 22px; }
+.account-copy, .account-fine-print { margin: 0 0 16px; color: var(--ink-soft); font-size: .9rem; line-height: 1.45; }
+.account-fine-print { margin: 16px 0 0; color: var(--ink-faint); font-size: .78rem; }
+.account-error { margin: 12px 0 0; color: var(--red); font-size: .85rem; }
+.account-muted { color: var(--ink-faint); font-size: .8rem; }
+.provider-list { display: grid; gap: 10px; }
+.provider-button {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  min-height: 46px; padding: 10px 16px;
+  border: 1px solid var(--rule-strong); background: var(--surface-muted); color: var(--ink-strong);
+  font: inherit; font-weight: 700; text-decoration: none; cursor: pointer;
+}
+.provider-button:hover:not(:disabled) { border-color: var(--ink-strong); }
+.provider-button:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.provider-button:disabled { cursor: not-allowed; color: var(--ink-faint); }
+.provider-button small { font-weight: 400; font-size: .72rem; }
+.provider-strava { border-color: var(--orange); }
+.account-section-title { margin: 6px 0 8px; font-size: .78rem; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-faint); }
+.connection-list { margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--rule); }
+.connection-list li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--rule); }
+.connection-list li div { display: grid; gap: 2px; min-width: 0; }
+.connection-list li span { color: var(--ink-soft); font-size: .85rem; overflow-wrap: anywhere; }
+.account-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 18px; }
+.account-actions a.ghost-action { text-decoration: none; }
+.link-action.danger { color: var(--red); }
+.account-button { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

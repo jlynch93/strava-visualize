@@ -1,4 +1,4 @@
-import { json } from "../_shared.js";
+import { json } from "./http.js";
 
 const WEATHER_HOURLY = [
   "temperature_2m",
@@ -78,7 +78,7 @@ function normalizeWeather(data, request) {
   };
 }
 
-export async function onRequestGet({ request }) {
+export async function handleWeather(request) {
   let config;
   try {
     config = weatherRequest(new URL(request.url));
