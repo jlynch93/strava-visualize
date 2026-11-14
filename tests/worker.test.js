@@ -84,8 +84,23 @@ test("Worker reports an actionable configuration state", async () => {
   const missingStrava = await worker.fetch(request("/api/status"), configuredEnv({ STRAVA_CLIENT_ID: "" }));
   assert.match((await missingStrava.json()).error, /STRAVA_CLIENT_ID/);
 
-  const ready = await worker.fetch(request("/api/status"), configuredEnv());
-  assert.equal((await ready.json()).configured, true);
+  const ready = await (await worker.fetch(request("/api/status"), configuredEnv())).json();
+  assert.equal(ready.configured, true);
+  assert.equal(ready.analysisService, "https://ollama.jeer.rest");
+  assert.equal(ready.analysisModel, "qwen3.5:0.8b");
+});
+
+test("Worker uses the configured app base URL for provider callbacks and respects overrides", async () => {
+  const worker = await workerPromise;
+  for (const trailingSlash of ["", "/"]) {
+    const env = configuredEnv({ APP_BASE_URL: `https://new.example${trailingSlash}`, GARMIN_CLIENT_ID: "g", GARMIN_CLIENT_SECRET: "g", GARMIN_WEBHOOK_SECRET: "w" });
+    for (const provider of ["strava", "garmin"]) {
+      const login = await worker.fetch(new Request(`https://old.example/auth/${provider}/login`), env);
+      assert.equal(new URL(login.headers.get("location")).searchParams.get("redirect_uri"), `https://new.example/auth/${provider}/callback`);
+    }
+    const overridden = await worker.fetch(new Request("https://old.example/auth/login"), { ...env, STRAVA_REDIRECT_URI: "https://override.example/auth/callback" });
+    assert.equal(new URL(overridden.headers.get("location")).searchParams.get("redirect_uri"), "https://override.example/auth/callback");
+  }
 });
 
 test("Worker prevents stale HTML while preserving static asset caching", async () => {
@@ -312,4 +327,20 @@ test("Worker returns JSON for unknown routes and tolerates malformed cookies", a
   assert.match(malformedCookie.headers.get("cache-control"), /no-store/);
   const withoutDb = await worker.fetch(request("/auth/strava/login"), { STRAVA_CLIENT_ID: "a", STRAVA_CLIENT_SECRET: "b", ASSETS: assetBinding() });
   assert.equal(withoutDb.status, 503);
+});
+
+test("Worker applies streamed input limits and shared analysis normalization", async (t) => {
+  const worker = await workerPromise;
+  let called = 0;
+  t.mock.method(globalThis, "fetch", async () => { called++; return Response.json({ message: { content: JSON.stringify({ summary: "A measured block.", observations: Array(3).fill({ detail: "Distance recorded.", tone: "neutral" }) }) } }); });
+  const analysisEnv = configuredEnv();
+  const request = (body, headers = {}) => new Request("https://example.test/api/insights", { method: "POST", body, headers });
+  assert.equal((await worker.fetch(request("x".repeat(64001)), analysisEnv)).status, 413);
+  assert.equal((await worker.fetch(request("{"), analysisEnv)).status, 400);
+  const input = JSON.stringify({ recentRuns: [{ distanceMiles: 5 }], summary: { runCount: 1 } });
+  assert.equal((await worker.fetch(request(input, { origin: "https://foreign.test" }), analysisEnv)).status, 403);
+  assert.equal(called, 0);
+  const valid = await worker.fetch(request(input), analysisEnv);
+  assert.equal(valid.status, 200); const result = await valid.json();
+  assert.equal(result.model, "qwen3.5:0.8b"); assert.match(result.insight.nextStep, /Plan view/);
 });

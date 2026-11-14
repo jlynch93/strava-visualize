@@ -1,6 +1,60 @@
 /* The review flow: read the block, inspect a run, then plan the next week.
    Extends the existing paper, ink and lime design system. */
 :root { --ink-faint: oklch(43% 0.024 226); }
+/* Task views share the same data, selected range, and visual language. */
+.settings-bar { margin-bottom: 12px; padding: 10px 0; border-bottom: 1px solid var(--rule); font-size: .85rem; }
+.settings-bar > summary { font-weight: 700; }
+.preferences-disclosure > summary { font-size: .85rem; color: var(--ink-soft); padding: 8px 0; }
+.metric-explanations { margin-top: 16px; font-size: .88rem; line-height: 1.6; }
+.metric-explanations dt { font-weight: 700; margin-top: 12px; }
+.metric-explanations dd { margin: 0; color: var(--ink-soft); }
+body.has-history #planning:not([hidden]) { display: block; }
+.settings-bar label { display: inline-flex; align-items: center; gap: 8px; margin: 8px 16px 8px 0; }
+.settings-bar input[type="checkbox"], .day-toggles input { min-height: 20px; width: 20px; accent-color: var(--teal); }
+.sync-bar, .plan-controls, .workout-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin: 12px 0 20px; }
+.sync-bar { font-size: .85rem; color: var(--ink-soft); }
+.sync-bar span { flex: 1 1 300px; }
+.toolbar { position: sticky; top: 0; z-index: 8; background: var(--paper); box-shadow: 0 1px 0 var(--rule); }
+body[data-view="planning"] .toolbar { display: none; }
+.exploration { margin-top: 24px; }
+.exploration > summary { padding: 16px; font-weight: 700; }
+.exploration > .dashboard { grid-template-columns: 1fr; }
+.exploration .chart-panel { width: 100%; }
+.exploration #heatmapChart { overflow-x: auto; }
+.day-toggles { display: flex; flex-wrap: wrap; gap: 10px; border: 0; padding: 8px 0; }
+.day-toggles label { display: inline-flex; align-items: center; gap: 6px; }
+.day-toggles legend { font-size: .85rem; }
+#planningHistoryNote, #checkinAge { padding: 12px; background: var(--surface-muted); color: var(--ink-soft); font-size: .9rem; }
+#acceptedPlan:not(:empty) { border: 1px solid var(--rule); padding: 16px; margin: 16px 0 24px; }
+.saved-session { display: grid; grid-template-columns: 1fr 145px 85px 30px 130px minmax(180px, 1.5fr); gap: 8px; padding: 12px 0; align-items: center; border-top: 1px solid var(--rule); }
+.saved-session input, .saved-session select { min-width: 0; width: 100%; }
+.analysis-progress { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; font-size: .85rem; margin-top: 12px; }
+dialog { max-width: min(560px, calc(100vw - 32px)); max-height: 85vh; overflow: auto; padding: 24px; color: var(--ink); background: var(--surface); border: 1px solid var(--rule-strong); border-radius: 8px; }
+dialog::backdrop { background: rgb(15 30 35 / .55); }
+dialog p { margin: 16px 0; line-height: 1.6; }
+dialog button { margin: 12px 8px 0 0; }
+#enrichedRun:not(:empty) { margin: 16px 0; padding: 16px; border: 1px solid var(--rule); overflow-x: auto; }
+.workout-toolbar { padding-right: 35px; }
+.workout-toolbar a { text-decoration: underline; }
+.workout-toolbar label { display: grid; gap: 5px; }
+body:not(.has-history) .exploration { display: none; }
+.metric-help { cursor: help; }
+#planDraftReview > summary { padding: 16px 0; font-weight: 700; font-size: .9rem; }
+.plan-controls .context-save { margin: 0; }
+@media (max-width: 1100px) { .saved-session { grid-template-columns: 1fr 145px 85px 30px; } .saved-session select { grid-column: span 2; } }
+@media (max-width: 700px) {
+  .app-nav { width: 100%; justify-content: space-between; }
+  .app-nav a { flex: 1; text-align: center; min-height: 44px; }
+  .settings-bar label { display: flex; }
+  .toolbar { padding: 10px 0; }
+  .toolbar-intro { display: none; }
+  .toolbar-controls { width: 100%; }
+  .saved-session { grid-template-columns: minmax(0, 1fr) 80px 30px; }
+  .saved-session strong { grid-column: 1 / -1; }
+  .saved-session select { grid-column: 1 / -1; }
+  .plan-controls strong { order: -1; width: 100%; }
+  .plan-controls button { flex: 1; }
+}
 [hidden] { display: none !important; }
 html { scroll-padding-top: 90px; }
 body { caret-color: var(--teal); }
@@ -55,7 +109,6 @@ button:disabled { cursor: default; opacity: .48; }
 .chart-controls .control:last-child { width: 100px; }
 .primary-chart .chart { height: 270px; }
 .primary-chart .bar { fill: var(--teal); opacity: .85; }
-.primary-chart .bar:hover, .primary-chart .bar:focus { fill: var(--ink); opacity: 1; }
 .primary-chart .empty-period { fill: var(--rule); }
 .primary-chart .line { stroke: var(--ink); }
 .primary-chart .chart svg { overflow: visible; width: 100%; height: 100%; }
@@ -245,3 +298,82 @@ body.has-history .onboarding { display: none; }
 .account-actions a.ghost-action { text-decoration: none; }
 .link-action.danger { color: var(--red); }
 .account-button { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.recommended-day, .recommended-day small, .recommended-day strong, .recommended-day em { white-space: normal; overflow-wrap: anywhere; min-width: 0; }
+.key-runs-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); }
+#signals .intel-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@media (max-width: 700px) { #signals .intel-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* Progressive disclosure: keep the review and saved week in front. */
+.header-actions { display: grid; justify-items: end; position: relative; }
+.source-status { font-size: .78rem; color: var(--ink-soft); }
+.data-menu { position: relative; }
+.data-menu > summary { list-style: none; border: 1px solid var(--rule-strong); border-radius: 6px; padding: 9px 12px; min-height: 40px; color: var(--ink); background: var(--surface); font-size: .85rem; font-weight: 650; }
+.data-menu > summary::-webkit-details-marker { display: none; }
+.data-menu[open] > summary { background: var(--paper-deep); }
+.data-menu-panel { position: absolute; z-index: 30; top: calc(100% + 10px); right: 0; width: min(400px, calc(100vw - 32px)); max-height: min(75vh, 650px); overflow-y: auto; padding: 20px; border: 1px solid var(--rule-strong); border-radius: 8px; background: var(--surface); box-shadow: var(--shadow-sheet); text-align: left; }
+.data-menu-panel h2 { font-size: 1rem; margin: 0 0 8px; }
+.data-menu-actions { display: grid; gap: 10px; }
+.data-menu-actions > p { margin: 0; font-size: .8rem; line-height: 1.5; color: var(--ink-soft); }
+.data-menu-panel .settings-bar { display: grid; gap: 12px; border: 0; border-top: 1px solid var(--rule); margin: 18px 0 0; padding-top: 18px; }
+.data-menu-panel .settings-bar label { display: flex; gap: 10px; margin: 0; line-height: 1.5; }
+.data-menu-panel .settings-bar label:has(select) { justify-content: space-between; }
+.data-menu-panel input[type="checkbox"] { flex: 0 0 20px; }
+.data-menu-panel .file-button { display: flex; align-items: center; justify-content: center; }
+.action-feedback { font-size: .85rem; line-height: 1.5; color: var(--teal); margin: 10px 0 0; }
+.action-feedback.error { color: var(--red); }
+.header-actions > .action-feedback { max-width: 420px; text-align: right; }
+.analysis-row { gap: 12px; }
+.secondary-disclosure { border: 1px solid var(--rule); background: var(--surface); margin-top: 12px; }
+.secondary-disclosure > summary { padding: 16px 20px; display: flex; align-items: center; justify-content: space-between; gap: 16px; font-weight: 700; font-size: .95rem; }
+.secondary-disclosure > summary::before { content: "+"; font-size: 1.1rem; color: var(--teal); }
+.secondary-disclosure[open] > summary::before { content: "−"; }
+.secondary-disclosure > summary span { margin-left: auto; font-size: .8rem; font-weight: 400; color: var(--ink-soft); }
+.secondary-disclosure > .data-panel { margin: 0; border: 0; border-top: 1px solid var(--rule); }
+.secondary-disclosure .ai-insights { margin: 0; }
+.plan-progress { color: var(--ink-soft); font-size: .9rem; margin: 0 0 16px; }
+.plan-start { padding: 20px; margin-bottom: 20px; background: var(--teal-soft); border-left: 3px solid var(--teal); }
+.plan-start p { margin: 6px 0 12px; font-size: .9rem; }
+.plan-history-warning { padding: 12px; font-size: .85rem; background: var(--surface-muted); color: var(--ink-soft); }
+.coaching-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+#planningContext { margin-top: 24px; }
+#planningContext .readiness-card { padding: 20px; }
+#planningContext #planningHistoryNote { margin: 0; }
+#acceptedPlan { margin-bottom: 20px; }
+.saved-session { display: block; padding: 0; }
+.saved-session > summary { display: grid; grid-template-columns: 135px minmax(120px, 1fr) 100px 95px 40px; align-items: center; gap: 12px; min-height: 65px; padding: 12px 0; list-style: none; font-size: .9rem; }
+.saved-session > summary::-webkit-details-marker { display: none; }
+.saved-session > summary time { color: var(--ink-soft); font-size: .85rem; }
+.saved-session > summary strong { grid-column: auto; }
+.session-status { font-size: .78rem; color: var(--ink-soft); }
+.session-status.completed { color: var(--teal); }
+.session-edit-label { color: var(--teal); text-decoration: underline; font-size: .8rem; }
+.session-editor { display: grid; grid-template-columns: 145px 110px 125px minmax(180px, 1fr); gap: 12px; padding: 8px 0 20px; }
+.session-editor > label { display: grid; gap: 6px; font-size: .8rem; color: var(--ink-soft); }
+.session-editor select { grid-column: auto; }
+.session-editor > button { justify-self: start; }
+.workout-lead { display: block; }
+.workout-lead-metrics { width: 100%; }
+.workout-more { margin-top: 20px; display: grid; gap: 10px; }
+.workout-disclosure { border: 1px solid var(--rule); }
+.workout-disclosure > summary { padding: 16px; font-weight: 650; font-size: .92rem; }
+.workout-disclosure > .workout-section, .workout-disclosure > .workout-read { margin: 0; padding: 18px; border: 0; border-top: 1px solid var(--rule); }
+.workout-disclosure > label { display: grid; gap: 6px; margin: 0 18px 18px; font-size: .85rem; }
+#enrichedRun:not(:empty) { margin: 20px 0 0; }
+@media (max-width: 1100px) { .session-editor { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 700px) {
+  .header-actions { justify-items: start; width: 100%; }
+  .header-actions > .action-feedback { text-align: left; }
+  .data-menu-panel { position: fixed; top: 110px; right: 16px; }
+  .secondary-disclosure > summary { padding: 16px; flex-wrap: wrap; gap: 8px; }
+  .secondary-disclosure > summary span { display: none; }
+  .coaching-grid { grid-template-columns: 1fr; }
+  .saved-session > summary { grid-template-columns: minmax(0, 1fr) auto auto; gap: 5px 12px; }
+  .saved-session > summary time { grid-column: 1; grid-row: 2; }
+  .saved-session > summary strong { grid-column: 1; grid-row: 1; }
+  .saved-session .session-distance { grid-column: 2; grid-row: 1; }
+  .saved-session .session-status { grid-column: 2; grid-row: 2; }
+  .saved-session .session-edit-label { grid-column: 3; grid-row: 1 / 3; }
+  .session-editor { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .session-editor > label:last-of-type { grid-column: 1 / -1; }
+  .session-editor select { grid-column: auto; }
+}

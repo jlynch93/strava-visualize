@@ -1,0 +1,85 @@
+/*
+ * Dark theme. Follows the system setting unless the runner picks Light or Dark
+ * in Data & settings (stored as data-theme on <html>). Loads last.
+ * Chart series steps are validated for the dark surface separately from light.
+ */
+:root { --panel-ink: var(--ink-strong); --panel-text: var(--surface); }
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --paper: oklch(16% 0.015 226);
+    --paper-deep: oklch(13% 0.015 226);
+    --surface: oklch(20% 0.018 226);
+    --surface-muted: oklch(25.5% 0.02 226);
+    --ink: oklch(90% 0.01 135);
+    --ink-strong: oklch(97% 0.008 135);
+    --ink-soft: oklch(79% 0.015 200);
+    --ink-faint: oklch(70% 0.015 200);
+    --rule: oklch(33% 0.02 210);
+    --rule-strong: oklch(48% 0.025 200);
+    --accent-ink: oklch(17% 0.04 140);
+    --teal: oklch(66% 0.11 188);
+    --teal-soft: oklch(30% 0.05 190);
+    --blue: oklch(70% 0.11 258);
+    --blue-soft: oklch(28% 0.05 258);
+    --orange: oklch(70% 0.16 45);
+    --orange-soft: oklch(30% 0.06 42);
+    --red: oklch(68% 0.17 26);
+    --red-soft: oklch(30% 0.07 26);
+    --green: oklch(70% 0.15 153);
+    --series-a: #1f9c8f;
+    --series-b: #8178de;
+    --series-c: #e06a2c;
+    --panel-ink: oklch(11% 0.02 226);
+    --panel-text: oklch(96% 0.008 135);
+    --shadow-sheet: 0 22px 50px rgba(0, 0, 0, 0.5);
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --paper: oklch(16% 0.015 226);
+  --paper-deep: oklch(13% 0.015 226);
+  --surface: oklch(20% 0.018 226);
+  --surface-muted: oklch(25.5% 0.02 226);
+  --ink: oklch(90% 0.01 135);
+  --ink-strong: oklch(97% 0.008 135);
+  --ink-soft: oklch(79% 0.015 200);
+  --ink-faint: oklch(70% 0.015 200);
+  --rule: oklch(33% 0.02 210);
+  --rule-strong: oklch(48% 0.025 200);
+  --accent-ink: oklch(17% 0.04 140);
+  --teal: oklch(66% 0.11 188);
+  --teal-soft: oklch(30% 0.05 190);
+  --blue: oklch(70% 0.11 258);
+  --blue-soft: oklch(28% 0.05 258);
+  --orange: oklch(70% 0.16 45);
+  --orange-soft: oklch(30% 0.06 42);
+  --red: oklch(68% 0.17 26);
+  --red-soft: oklch(30% 0.07 26);
+  --green: oklch(70% 0.15 153);
+  --series-a: #1f9c8f;
+  --series-b: #8178de;
+  --series-c: #e06a2c;
+  --panel-ink: oklch(11% 0.02 226);
+  --panel-text: oklch(96% 0.008 135);
+  --shadow-sheet: 0 22px 50px rgba(0, 0, 0, 0.5);
+}
+
+/* Panels that are deliberately dark in both themes keep a dark ground. */
+.brand-mark, .ai-insights-intro, .plan-draft, .chart-tooltip, .modal-close, .workout-header { background: var(--panel-ink); }
+.plan-draft, .plan-draft h3, .modal-close, .workout-header { color: var(--panel-text); }
+
+/* Dark-theme specifics that tokens alone cannot express. */
+:root[data-theme="dark"] .heat-level-1 { fill: oklch(33% 0.05 190); background: oklch(33% 0.05 190); }
+:root[data-theme="dark"] .heat-level-2 { fill: oklch(46% 0.08 190); background: oklch(46% 0.08 190); }
+:root[data-theme="dark"] .heat-level-3 { fill: oklch(60% 0.1 188); background: oklch(60% 0.1 188); }
+:root[data-theme="dark"] .heat-level-4 { fill: oklch(76% 0.11 185); background: oklch(76% 0.11 185); }
+:root[data-theme="dark"] input, :root[data-theme="dark"] select, :root[data-theme="dark"] textarea { background-color: var(--surface); color: var(--ink-strong); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .heat-level-1 { fill: oklch(33% 0.05 190); background: oklch(33% 0.05 190); }
+  :root:not([data-theme="light"]) .heat-level-2 { fill: oklch(46% 0.08 190); background: oklch(46% 0.08 190); }
+  :root:not([data-theme="light"]) .heat-level-3 { fill: oklch(60% 0.1 188); background: oklch(60% 0.1 188); }
+  :root:not([data-theme="light"]) .heat-level-4 { fill: oklch(76% 0.11 185); background: oklch(76% 0.11 185); }
+  :root:not([data-theme="light"]) input, :root:not([data-theme="light"]) select, :root:not([data-theme="light"]) textarea { background-color: var(--surface); color: var(--ink-strong); }
+}

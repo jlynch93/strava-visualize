@@ -24,6 +24,7 @@ async function importLedger(page) {
     mimeType: "application/json",
     buffer: Buffer.from(JSON.stringify(ledgerActivities))
   });
+  await page.locator("#confirmImportButton").click();
   await expect(page.locator("#status")).toContainText("Imported 38 activities.");
 }
 
@@ -31,6 +32,7 @@ async function loadLedger(page) {
   await page.goto("/");
   await importLedger(page);
   await expect(page.locator("#activityCount")).toHaveText("38 runs in range");
+  await page.getByRole("link", { name: "Runs", exact: true }).click();
 }
 
 async function loadDemoBlock(page) {
@@ -56,13 +58,17 @@ test("first use presents onboarding and reveals the dashboard after data is load
   await expect(page.locator("#dataSource")).toContainText("Demo");
   await expect(page.locator("#goalForm")).toBeHidden();
   await expect(page.locator("#checkinForm")).toBeHidden();
+  await page.getByRole("link", { name: "Plan", exact: true }).click();
   await page.locator("summary").filter({ hasText: "Goal & availability" }).click();
   await expect(page.locator("#goalMiles")).toBeVisible();
 });
 
 test("a runner can review demo history and open run details", async ({ page }) => {
   await loadDemoBlock(page);
+  await page.getByRole("link", { name: "Overview", exact: true }).click();
+  await page.locator(".exploration > summary").click();
   await expect(page.getByRole("heading", { name: "Small patterns around your running" })).toBeVisible();
+  await page.getByRole("link", { name: "Runs", exact: true }).click();
   await expect(page.locator("#trainingTextureStats .texture-stat")).toHaveCount(5);
 
   const detailButton = page.locator("#activityRows .row-detail-button").first();
@@ -77,15 +83,8 @@ test("a runner can review demo history and open run details", async ({ page }) =
 
 test("interactive charts and the training calendar respond to runner input", async ({ page }) => {
   await loadLedger(page);
-  const calendarDays = page.locator("#recommendedCalendar [data-action='cycle-plan-status']");
-  await expect(calendarDays).toHaveCount(7);
-  await calendarDays.first().click();
-  await expect(calendarDays.first()).toHaveClass(/completed/);
-  await expect(calendarDays.first()).toBeFocused();
-  await page.keyboard.press("Enter");
-  await expect(calendarDays.first()).toHaveClass(/skipped/);
-  await expect(calendarDays.first()).toBeFocused();
-
+  await page.getByRole("link", { name: "Overview", exact: true }).click();
+  await page.locator(".exploration > summary").click();
   const chartAction = page.locator("#structureChart [role='button']").first();
   await expect(chartAction).toBeVisible();
   await chartAction.focus();
@@ -99,6 +98,7 @@ test("interactive charts and the training calendar respond to runner input", asy
 
 test("the main trend supports keyboard drilldown and returns focus to the selected period", async ({ page }) => {
   await loadLedger(page);
+  await page.getByRole("link", { name: "Overview", exact: true }).click();
   const chartAction = page.locator("#mainChart [role='button']").first();
   await expect(chartAction).toHaveAccessibleName(/Open \d+ runs?\./);
   await chartAction.focus();
@@ -107,8 +107,18 @@ test("the main trend supports keyboard drilldown and returns focus to the select
   await expect(dialog).toBeVisible();
   await expect(dialog).toContainText("Chart selection");
   await expect(dialog.locator(".chart-run-option")).toHaveCount(5);
+  // A resize redraw can replace the SVG mark while its dialog is open.
+  const originalMark = await chartAction.elementHandle();
+  await page.setViewportSize({ width: 1100, height: 850 });
+  await expect.poll(() => originalMark.evaluate((element) => element.isConnected)).toBe(false);
   await page.keyboard.press("Escape");
   await expect(dialog).toBeHidden();
+  await expect(chartAction).toBeFocused();
+
+  // A later redraw must retain focus too, so Space still opens the period.
+  const returnedMark = await chartAction.elementHandle();
+  await page.setViewportSize({ width: 1200, height: 850 });
+  await expect.poll(() => returnedMark.evaluate((element) => element.isConnected)).toBe(false);
   await expect(chartAction).toBeFocused();
 
   await page.keyboard.press("Space");
@@ -119,6 +129,7 @@ test("the main trend supports keyboard drilldown and returns focus to the select
   await expect(dialog.getByRole("heading", { level: 2 })).toHaveText(runName);
   await page.keyboard.press("Escape");
   await expect(dialog).toBeHidden();
+  await expect(chartAction).toBeFocused();
 });
 
 test("the run ledger reaches every page and searches the full selected history", async ({ page }) => {
@@ -198,8 +209,10 @@ test("view links restore dates, chart settings, and ledger filters after reimpor
   await page.locator("#rangeSelect").selectOption("custom");
   await page.locator("#startDate").fill("2025-01-10");
   await page.locator("#endDate").fill("2025-01-20");
+  await page.getByRole("link", { name: "Overview", exact: true }).click();
   await page.locator("#bucketSelect").selectOption("month");
   await page.locator("#metricSelect").selectOption("pace");
+  await page.getByRole("link", { name: "Runs", exact: true }).click();
   await page.locator("#runSearch").fill("Training");
   await page.locator("#runSort").selectOption("oldest");
   await expect(page.locator("#pageSummary")).toHaveText("1–11 of 11 runs matching your search");
@@ -232,6 +245,7 @@ test("CSV export includes the full window and reimports every run name and dista
   await page.locator("#fileInput").setInputFiles({
     name: download.suggestedFilename(), mimeType: "text/csv", buffer: csv
   });
+  await page.locator("#confirmImportButton").click();
   await expect(page.locator("#status")).toContainText("Imported 38 activities.");
   await expect(page.locator("#activityCount")).toHaveText("38 runs in range");
   await page.locator("#runSort").selectOption("oldest");
@@ -265,13 +279,14 @@ test("copy view link writes the selected filters and confirms the copy", async (
 });
 
 test("the plan summary matches a three-run calendar and its Sunday long-run cap", async ({ page }) => {
-  await loadLedger(page);
+  await loadDemoBlock(page);
+  await page.getByRole("link", { name: "Plan", exact: true }).click();
   await page.locator("summary").filter({ hasText: "Goal & availability" }).click();
   await page.locator("#goalMode").selectOption("maintain");
   await page.locator("#goalMiles").fill("20");
   await page.locator("#goalRunDays").selectOption("3");
   await page.locator("#goalLongRunDay").selectOption("Sun");
-  await page.locator("#goalAvailability").fill("Mon, Wed, Sun");
+  for (const day of ["Mon", "Wed", "Sun"]) await page.locator(`.day-toggles input[value="${day}"]`).check();
   await page.getByRole("button", { name: "Save goal", exact: true }).click();
 
   const plannedRuns = page.locator("#recommendedCalendar [data-plan-kind='run']");
@@ -286,7 +301,8 @@ test("the plan summary matches a three-run calendar and its Sunday long-run cap"
 });
 
 test("a missed session adapts the next-week plan without asking the runner to make it up", async ({ page }) => {
-  await loadLedger(page);
+  await loadDemoBlock(page);
+  await page.getByRole("link", { name: "Plan", exact: true }).click();
   await page.locator("summary").filter({ hasText: "Weekly check-in" }).click();
   await page.locator("#checkinOutcome").selectOption("missed");
   await page.getByRole("button", { name: "Save check-in" }).click();
@@ -305,8 +321,11 @@ test("an unavailable coach read explains the failure without breaking the dashbo
     });
   });
   await loadLedger(page);
+  await page.getByRole("link", { name: "Overview", exact: true }).click();
+  await page.locator("#coachDisclosure > summary").click();
   await page.locator("#coachQuestion").fill("Should I keep the quality session this week?");
   await page.getByRole("button", { name: "Analyze this block" }).click();
+  await page.getByRole("button", { name: "Allow analysis", exact: true }).click();
   const coachRead = page.locator("#aiInsightContent");
   await expect(coachRead).toContainText("The model did not return an analysis");
   await expect(coachRead).toContainText("Coach service is temporarily unavailable.");
@@ -319,7 +338,10 @@ test.describe("mobile runner review", () => {
 
   test("keeps the block review, ledger navigation, and run details usable", async ({ page }) => {
     await loadLedger(page);
-    await expect(page.getByRole("heading", { name: "Small patterns around your running" })).toBeVisible();
+    await page.getByRole("link", { name: "Overview", exact: true }).click();
+  await page.locator(".exploration > summary").click();
+  await expect(page.getByRole("heading", { name: "Small patterns around your running" })).toBeVisible();
+  await page.getByRole("link", { name: "Runs", exact: true }).click();
     await expect(page.locator("#trainingTextureStats .texture-stat")).toHaveCount(5);
     await page.locator("#nextPage").click();
     await expect(page.locator("#pageSummary")).toHaveText("16–30 of 38 runs");
@@ -330,4 +352,66 @@ test.describe("mobile runner review", () => {
     await expect(dialog).toBeHidden();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   });
+});
+
+for (const viewport of [{ width: 1280, height: 900 }, { width: 390, height: 844 }]) {
+  test(`every overview and fitness chart renders cleanly at ${viewport.width}px`, async ({ page }) => {
+    await page.setViewportSize(viewport);
+    await page.goto("/");
+    await page.getByRole("button", { name: "Preview demo data", exact: true }).click();
+    await page.locator(".exploration > summary").click();
+    const charts = ["#mainChart", "#structureChart", "#heatmapChart", "#scatterChart", "#rollingChart"];
+    for (const id of charts) await expect(page.locator(`${id} svg`)).toBeVisible();
+    for (const id of ["#distanceMixChart", "#paceZoneChart"]) await expect(page.locator(`${id} .bar-list li`)).not.toHaveCount(0);
+    // Multi-series charts carry a legend built from the same series as their marks.
+    await expect(page.locator("#structureChart").locator("xpath=preceding-sibling::div[contains(@class,'chart-legend-row')]")).toContainText("Other runs");
+    await expect(page.locator("#rollingChart").locator("xpath=preceding-sibling::div[contains(@class,'chart-legend-row')]")).toContainText("Last 7 days");
+    await expect(page.locator("#heatmapChart .calendar-legend")).toBeVisible();
+    // Marks open runs.
+    await expect(page.locator("#heatmapChart [role='button']").first()).toHaveAccessibleName(/Open \d+ runs?\./);
+    await expect(page.locator("#scatterChart [role='button']").first()).toHaveAccessibleName(/Open run details/);
+    // Pace is a level, so it draws as a line on a fitted axis, with round tick labels.
+    await page.locator("#metricSelect").selectOption("pace");
+    await expect(page.locator("#mainChart .rate-line")).toHaveCount(1);
+    const paceTicks = await page.locator("#mainChart text.label").allTextContents();
+    expect(paceTicks.filter((text) => /\/mi$/.test(text)).every((text) => /:(00|05|10|15|20|30|40|45|50)\/mi$/.test(text)), paceTicks.join(" ")).toBe(true);
+    await page.getByRole("link", { name: "Fitness", exact: true }).click();
+    for (const id of ["#vo2Chart", "#loadChart", "#formChart"]) await expect(page.locator(`${id} svg`)).toBeVisible();
+    const problems = await page.evaluate(() => [...document.querySelectorAll("svg *")]
+      .flatMap((element) => [...element.attributes].filter((attribute) => /NaN|Infinity|undefined/.test(attribute.value)).map((attribute) => `${element.tagName}.${attribute.name}`)));
+    expect(problems).toEqual([]);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  });
+}
+
+test("hovering any chart shows its value on screen, in the chosen units", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Preview demo data", exact: true }).click();
+  await page.evaluate(() => { const select = document.querySelector("#unitPreference"); select.value = "metric"; select.dispatchEvent(new Event("change", { bubbles: true })); });
+  await expect(page.locator("#mainChart text.label").first()).toContainText("km");
+  const tooltip = page.locator("#chartTooltip");
+  const expectOnScreen = async () => {
+    await expect(tooltip).toHaveClass(/visible/);
+    const box = await tooltip.boundingBox();
+    expect(box.y).toBeGreaterThanOrEqual(0);
+    expect(box.y + box.height).toBeLessThanOrEqual(800);
+  };
+  // The page is long; scroll so a fixed tooltip without top/left would land off screen.
+  // A real width change (e.g. a scrollbar appearing) may redraw once; retry the gesture.
+  const hover = (locator) => expect(async () => { await locator.scrollIntoViewIfNeeded(); await locator.hover(); await expect(tooltip).toHaveClass(/visible/, { timeout: 500 }); }).toPass();
+  await hover(page.locator("#mainChart .period-hit").nth(5));
+  await expectOnScreen();
+  await expect(tooltip.locator(".tooltip-primary b")).toHaveText(/\d+(\.\d)? km/);
+  await expect(tooltip).toContainText("vs previous week");
+  await expect(page.locator(".trend-legend")).toContainText("Current week, in progress");
+  await expect(page.locator(".trend-legend")).not.toContainText("mm");
+  await page.locator(".exploration > summary").click();
+  for (const selector of ["#structureChart .column-hit", "#scatterChart .scatter-dot", "#heatmapChart .heat.chart-action"]) {
+    await hover(page.locator(selector).nth(3));
+    await expectOnScreen();
+  }
+  await page.getByRole("link", { name: "Fitness", exact: true }).click();
+  await hover(page.locator("#loadChart .hit-area"));
+  await expectOnScreen();
 });

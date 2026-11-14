@@ -13,6 +13,7 @@ import {
 } from "./db.js";
 import { createSession, currentUserId, destroySession } from "./session.js";
 import { getProvider, providers } from "./providers/index.js";
+import services from "../shared/services.cjs";
 
 const STATE_COOKIE = "sv_oauth_state";
 const VERIFIER_COOKIE = "sv_oauth_verifier";
@@ -54,6 +55,8 @@ export async function handleStatus(env, request) {
     signedIn: Boolean(userId),
     connected: connections.length > 0,
     providers: providerList,
+    analysisService: new URL(env.OLLAMA_BASE_URL || services.DEFAULT_OLLAMA_URL).origin,
+    analysisModel: env.OLLAMA_MODEL || services.DEFAULT_OLLAMA_MODEL,
     error: configured ? null : providerList[0]?.error || "No activity provider is configured."
   });
 }

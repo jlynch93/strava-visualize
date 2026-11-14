@@ -6,6 +6,7 @@ test("Strava CSV import preserves empty columns, quoted lines, exact distance, a
   await page.goto("/");
   const csv = '\uFEFFActivity ID,Activity Date,Activity Name,Activity Type,Activity Description,Elapsed Time,Distance,Moving Time,Distance,Average Heart Rate\r\n42,"Sep 5, 2026, 07:30:00","Morning, easy",Run,"First line\nSecond ""quoted"" line",,5.00,00:25:00,5000,\r\n43,"Sep 4, 2026, 07:30:00",Bike commute,Ride,,,10,1800,10000,130\r\n';
   await page.locator("#fileInput").setInputFiles({ name: "activities.csv", mimeType: "text/csv", buffer: Buffer.from(csv) });
+  await page.locator("#confirmImportButton").click();
   await expect(page.locator("#status")).toContainText("Imported 2 activities");
   const imported = await page.evaluate(() => ({ raw: state.rawActivities, runs: state.filteredRuns, source: state.dataSource }));
   expect(imported.source).toBe("import");
@@ -18,6 +19,7 @@ test("an invalid import explains the problem and keeps the existing history", as
   await page.goto("/");
   const valid = [{ id: "kept", name: "Morning run", start_date_local: "2026-09-05T07:00:00Z", distance: 5000, moving_time: 1500 }];
   await page.locator("#fileInput").setInputFiles({ name: "runs.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(valid)) });
+  await page.locator("#confirmImportButton").click();
   await expect(page.locator("#status")).toContainText("Imported 1 activities");
   await page.locator("#fileInput").setInputFiles({ name: "invalid.json", mimeType: "application/json", buffer: Buffer.from('{"activities": {}}') });
   await expect(page.locator("#status")).toContainText("Expected an activities array");
@@ -96,7 +98,7 @@ test("a three-run draft protects the chosen long-run day before allocating other
 test("saved availability and a missed check-in constrain a manually selected build week", async ({ page }) => {
   await page.goto("/");
   const plan = await page.evaluate(() => {
-    coachingContext = { goal: { runDays: "3", longRunDay: "Sat", availability: "Tuesday and Thursday" }, checkin: { outcome: "missed" }, plan: {} };
+    coachingContext = { goal: { runDays: "3", longRunDay: "Sat", availability: "Tuesday and Thursday" }, checkin: { outcome: "missed", savedAt: new Date().toISOString() }, plan: {} };
     return renderRecommendedCalendar("build", { averageRunsPerWeek: 5, longRun: 12 }, 30, null);
   });
   expect(plan).toMatchObject({ plannedRuns: 2, maxRuns: 3, longRunDay: null, longRunMiles: 0, availabilityLimited: true });

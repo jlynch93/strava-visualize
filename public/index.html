@@ -3,10 +3,14 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="theme-color" content="#eef2ec">
+    <meta name="theme-color" content="#eef2ec" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#0d181c" media="(prefers-color-scheme: dark)">
     <title>Strava Run Trends</title>
-    <link rel="stylesheet" href="/styles.css?v=review-20260905">
-    <link rel="stylesheet" href="/dashboard.css?v=review-20260905">
+    <link rel="stylesheet" href="/styles.css">
+    <link rel="stylesheet" href="/dashboard.css">
+    <link rel="stylesheet" href="/charts.css">
+    <link rel="stylesheet" href="/fitness.css">
+    <link rel="stylesheet" href="/theme.css">
   </head>
   <body>
     <!--
@@ -25,7 +29,7 @@
         </a>
         <nav class="app-nav" aria-label="Dashboard sections">
           <a href="#overview">Overview</a>
-          <a href="#signals">Signals</a>
+          <a href="#fitness">Fitness</a>
           <a href="#planning">Plan</a>
           <a href="#runs">Runs</a>
         </nav>
@@ -125,6 +129,9 @@
           <span id="dataSource" class="source-label">Training history</span>
         </div>
 
+        <section id="todayStrip" class="today-strip" aria-label="Readiness today" data-native-units hidden></section>
+        <section id="thisWeek" class="this-week" aria-label="This week" data-native-units hidden></section>
+
         <section class="block-review" aria-labelledby="blockReviewTitle">
           <div class="block-review-lead">
             <h2 id="blockReviewTitle">Load training data to review your block</h2>
@@ -135,21 +142,19 @@
 
         <section class="chart-panel chart-panel-featured primary-chart" aria-labelledby="mainChartTitle">
           <div class="panel-heading">
-            <div><h2 id="mainChartTitle">Mileage trend</h2><span id="mainChartSubtitle"></span></div>
+            <div><h2 id="mainChartTitle">Distance trend</h2><span id="mainChartSubtitle"></span></div>
             <div id="chartControls" class="chart-controls">          <div class="control metric-control">
             <label for="metricSelect">Trend</label>
             <select id="metricSelect">
-              <option value="distance" selected>Mileage</option>
+              <option value="distance" selected>Distance</option>
               <option value="runs">Run count</option>
               <option value="avgRun">Average run</option>
               <option value="longRun">Long run</option>
               <option value="pace">Pace</option>
               <option value="elevation">Elevation</option>
-              <option value="elevationDensity">Elevation density</option>
+              <option value="elevationDensity">Climb per mile</option>
               <option value="heartrate">Heart rate</option>
-              <option value="load">Training load</option>
-              <option value="loadPerMile">Load per mile</option>
-              <option value="efficiency">Aerobic efficiency</option>
+              <option value="load">Running time</option>
             </select>
           </div>          <div class="control">
             <label for="bucketSelect">Group by</label>
@@ -215,13 +220,83 @@
         </section>
       </div>
 
+
+      <section id="fitness" class="fitness-view" aria-labelledby="fitnessTitle" data-view-section="fitness" data-native-units hidden>
+        <div class="overview-head">
+          <div>
+            <h1 id="fitnessTitle">Fitness &amp; readiness</h1>
+            <p>Readiness and today's numbers use your full history. Charts follow the review window.</p>
+          </div>
+        </div>
+        <div id="fitnessEmpty" class="fitness-empty">
+          <h2>Load runs to see your fitness</h2>
+          <p>Connect Strava, import an export, or try the demo data. Runs with heart rate give the best VO2 max estimate.</p>
+        </div>
+        <div id="fitnessBody" hidden>
+          <section id="readinessHero" class="readiness-hero" aria-label="Readiness to train"></section>
+          <ul id="fitnessNotes" class="fitness-notes" hidden></ul>
+          <div id="fitnessKpis" class="fitness-kpis" aria-label="Current fitness metrics"></div>
+
+          <section class="fitness-panel" aria-labelledby="vo2Title">
+            <div class="fitness-panel-head">
+              <div><h2 id="vo2Title">Estimated VO2 max</h2><p>Your aerobic ceiling in ml/kg/min. Rolling 6-week estimate from pace and heart rate; VDOT comes from your best effort.</p></div>
+              <div id="vo2Legend" class="chart-legend"></div>
+            </div>
+            <div id="vo2Chart" class="fitness-chart"></div>
+          </section>
+
+          <section class="fitness-panel" aria-labelledby="loadTitle">
+            <div class="fitness-panel-head">
+              <div><h2 id="loadTitle">Fitness, fatigue &amp; form</h2><p>Fitness is your 6-week load, fatigue your last week. Form is the gap: positive is fresh, negative means you're carrying fatigue.</p></div>
+              <div class="chart-legend"><span class="legend-item"><i class="key fitness-line"></i>Fitness (42-day)</span><span class="legend-item"><i class="key fatigue-line"></i>Fatigue (7-day)</span></div>
+            </div>
+            <div id="loadChart" class="fitness-chart"></div>
+            <h3 class="form-chart-title">Form <span>fitness − fatigue</span></h3>
+            <div id="formChart" class="fitness-chart fitness-chart-short"></div>
+          </section>
+
+          <div class="fitness-columns">
+            <section class="fitness-panel" aria-labelledby="predictionsTitle">
+              <div class="fitness-panel-head"><div><h2 id="predictionsTitle">Race predictions</h2><p>What your current fitness supports with good pacing and a taper.</p></div></div>
+              <div id="racePredictions"></div>
+            </section>
+            <section class="fitness-panel" aria-labelledby="pacesTitle">
+              <div class="fitness-panel-head"><div><h2 id="pacesTitle">Training paces</h2><p>Targets for each kind of session at today's fitness.</p></div></div>
+              <div id="trainingPaces"></div>
+            </section>
+          </div>
+
+          <section class="fitness-panel" aria-labelledby="metricsTitle">
+            <div class="fitness-panel-head"><div><h2 id="metricsTitle">Running metrics</h2><p>Weekly values across the review window.</p></div></div>
+            <div id="runningMetrics" class="running-metrics"></div>
+          </section>
+
+          <details class="secondary-disclosure fitness-profile">
+            <summary>Heart-rate profile &amp; method<span id="profileSummary"></span></summary>
+            <div class="fitness-profile-body">
+              <form id="athleteForm" class="athlete-form" data-feedback-scope>
+                <label for="maxHr">Max heart rate (bpm)</label><input id="maxHr" name="maxHr" type="number" min="120" max="225" inputmode="numeric">
+                <label for="restHr">Resting heart rate (bpm)</label><input id="restHr" name="restHr" type="number" min="30" max="100" inputmode="numeric">
+                <button type="submit" class="context-save">Save profile</button>
+              </form>
+              <div class="method-notes">
+                <h3>How these are calculated</h3>
+                <p><strong>VO2 max</strong> compares the oxygen cost of each run's pace (Daniels' equation, with a hill correction) with the share of your heart-rate reserve it took. The chart shows the upper quartile of the last six weeks, since heat, hills and fatigue only drag single runs down. <strong>VDOT</strong> is the same scale computed from your best performance alone.</p>
+                <p><strong>Training load</strong> uses heart rate (Banister TRIMP) when available and pace relative to threshold otherwise; one hour at threshold is about 100 points. <strong>Fitness</strong> and <strong>fatigue</strong> are 42- and 7-day weighted averages of daily load.</p>
+                <p><strong>Readiness</strong> weighs form (40%), the load ramp (25%), time since your last hard run (20%) and your weekly check-in (15%). These are models for planning, not medical measurements.</p>
+              </div>
+            </div>
+          </details>
+        </div>
+      </section>
+
       <section id="planning" class="coaching-workspace data-panel" aria-labelledby="coachingWorkspaceTitle">
         <div class="panel-heading"><h2 id="coachingWorkspaceTitle">Make room for your next week</h2><span>Goals and check-ins stay in this browser</span></div>
         <div class="coaching-grid">
           <details class="context-disclosure"><summary>Goal &amp; availability<span>Personalize your week</span></summary><form id="goalForm" class="context-card">
 
             <label for="goalMode">Block intent</label><select id="goalMode"><option value="auto">Auto — use my context</option><option value="build">Build</option><option value="maintain">Maintain</option><option value="recover">Recover</option></select><p id="intentRecommendation" class="context-muted"></p>
-            <label for="goalMiles">Weekly mileage target</label><input id="goalMiles" type="number" min="0" step="1" placeholder="Optional">
+            <label for="goalMiles">Weekly distance target</label><input id="goalMiles" type="number" min="0" step="0.1" placeholder="Optional">
             <label for="goalRaceName">Race name</label><input id="goalRaceName" type="text" maxlength="48" placeholder="e.g. City Marathon">
             <div class="goal-race-fields"><div><label for="goalRaceDistance">Race distance</label><select id="goalRaceDistance"><option value="">Not set</option><option value="5K">5K</option><option value="10K">10K</option><option value="Half marathon">Half marathon</option><option value="Marathon">Marathon</option><option value="Other">Other</option></select></div><div><label for="goalRaceDate">Race date</label><input id="goalRaceDate" type="date"></div></div>
             <div class="goal-race-fields"><div><label for="goalRunDays">Max runs / week</label><select id="goalRunDays"><option value="">Use recent pattern</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option></select></div><div><label for="goalLongRunDay">Long-run day</label><select id="goalLongRunDay"><option value="Sat">Saturday</option><option value="Sun">Sunday</option><option value="Fri">Friday</option></select></div></div>
@@ -241,6 +316,51 @@
         <section class="plan-draft" aria-labelledby="planDraftTitle"><div><h3 id="planDraftTitle">Next-week plan</h3><p id="planDraftCopy">Load a block to create a transparent draft.</p><p id="planAdaptation" class="plan-adaptation"></p><div id="recommendedCalendar" class="recommended-calendar" aria-label="Recommended training calendar"></div></div><button id="copyPlanButton" type="button" class="context-save" disabled>Copy draft</button></section>
       </section>
 
+      <section class="dashboard chart-board" aria-label="Training visuals">
+        <section class="chart-panel wide" aria-labelledby="structureTitle">
+          <div class="panel-heading">
+            <h2 id="structureTitle">Volume mix</h2>
+            <span>Long run vs everything else · select a period</span>
+          </div>
+          <div id="structureChart" class="chart"></div>
+        </section>
+        <section class="chart-panel wide" aria-labelledby="calendarTitle">
+          <div class="panel-heading">
+            <h2 id="calendarTitle">Training calendar</h2>
+            <span id="heatmapSubtitle">Daily distance</span>
+          </div>
+          <div id="heatmapChart" class="chart calendar-chart"></div>
+        </section>
+        <section class="chart-panel" aria-labelledby="volumePaceTitle">
+          <div class="panel-heading">
+            <h2 id="volumePaceTitle">Pace vs distance</h2>
+            <span>Every run · select a dot to open it</span>
+          </div>
+          <div id="scatterChart" class="chart"></div>
+        </section>
+        <section class="chart-panel" aria-labelledby="workloadTitle">
+          <div class="panel-heading">
+            <h2 id="workloadTitle">Rolling distance</h2>
+            <span>Last 7 days vs 28-day weekly average</span>
+          </div>
+          <div id="rollingChart" class="chart"></div>
+        </section>
+        <section class="chart-panel" aria-labelledby="distanceMixTitle">
+          <div class="panel-heading">
+            <h2 id="distanceMixTitle">Where your distance comes from</h2>
+            <span>Share of total by run length</span>
+          </div>
+          <div id="distanceMixChart" class="chart chart-auto"></div>
+        </section>
+        <section class="chart-panel" aria-labelledby="paceZoneTitle">
+          <div class="panel-heading">
+            <h2 id="paceZoneTitle">Pace spread</h2>
+            <span>Runs by average pace, binned to your range</span>
+          </div>
+          <div id="paceZoneChart" class="chart chart-auto"></div>
+        </section>
+      </section>
+
       <section class="training-texture" aria-labelledby="trainingTextureTitle">
         <div class="training-texture-heading">
           <div><h2 id="trainingTextureTitle">Small patterns around your running</h2></div>
@@ -248,60 +368,6 @@
         </div>
         <div id="trainingTextureStats" class="training-texture-grid" aria-live="polite"></div>
       </section>
-      <section class="training-texture milestones" aria-labelledby="milestoneTitle"><div class="training-texture-heading"><div><h2 id="milestoneTitle">What this block is building</h2></div><p>Milestones are evidence, not a score.</p></div><div id="milestoneStats" class="training-texture-grid" aria-live="polite"></div></section>
-
-      <section class="dashboard" aria-label="Training visuals">
-        <section class="chart-panel" aria-labelledby="structureTitle">
-          <div class="panel-heading">
-            <h2 id="structureTitle">Weekly rhythm</h2>
-            <span>Runs and long-run share · click a week</span>
-          </div>
-          <div id="structureChart" class="chart"></div>
-        </section>
-        <section class="chart-panel wide" aria-labelledby="calendarTitle">
-          <div class="panel-heading">
-            <h2 id="calendarTitle">Training calendar</h2>
-            <span id="heatmapSubtitle">Daily miles by week</span>
-          </div>
-          <div id="heatmapChart" class="chart compact-chart"></div>
-        </section>
-      </section>
-
-
-
-      <details class="advanced-exploration">
-        <summary><span>Explore supporting data</span><small>Distributions, workload, and volume–pace patterns</small></summary>
-        <section class="dashboard" aria-label="Supporting training visuals">
-          <section class="chart-panel" aria-labelledby="volumePaceTitle">
-            <div class="panel-heading">
-              <h2 id="volumePaceTitle">Training volume & pace</h2>
-              <span>Click a period to explore its runs</span>
-            </div>
-            <div id="scatterChart" class="chart"></div>
-          </section>
-        <section class="chart-panel wide" aria-labelledby="workloadTitle">
-          <div class="panel-heading">
-            <h2 id="workloadTitle">Rolling workload</h2>
-            <span>7-day volume vs 28-day baseline</span>
-          </div>
-          <div id="rollingChart" class="chart compact-chart"></div>
-        </section>
-        <section class="chart-panel" aria-labelledby="distanceMixTitle">
-          <div class="panel-heading">
-            <h2 id="distanceMixTitle">Run distance mix</h2>
-            <span>Easy volume vs long-run load</span>
-          </div>
-          <div id="distanceMixChart" class="chart"></div>
-        </section>
-        <section class="chart-panel" aria-labelledby="paceZoneTitle">
-          <div class="panel-heading">
-            <h2 id="paceZoneTitle">Pace zones</h2>
-            <span>Distribution of run paces</span>
-          </div>
-          <div id="paceZoneChart" class="chart"></div>
-        </section>
-        </section>
-      </details>
 
       <section id="runs" class="table-section data-panel" aria-labelledby="runsTitle">
         <div class="panel-heading">
@@ -326,7 +392,7 @@
                 <th>Pace</th>
                 <th>Elev.</th>
                 <th>HR</th>
-                <th>Load</th>
+                <th>Time</th>
               </tr>
             </thead>
             <tbody id="activityRows"></tbody>
@@ -340,13 +406,18 @@
         <p>Every run belongs to the larger block. <a href="/privacy">Privacy policy</a></p>
       </footer>
     </main>
-    <div id="chartTooltip" class="chart-tooltip" role="tooltip"></div>
+    <div id="chartTooltip" class="chart-tooltip" role="tooltip" aria-label="Chart values"></div>
     <div id="workoutModal" class="modal-backdrop" hidden>
       <section class="workout-modal" role="dialog" aria-modal="true" aria-labelledby="workoutModalTitle" aria-describedby="workoutModalMeta">
         <button id="workoutModalClose" class="modal-close" type="button" aria-label="Close workout details">&times;</button>
         <div id="workoutModalContent"></div>
       </section>
     </div>
-    <script src="/script.js?v=review-20260905"></script>
+    <script src="/training-core.js"></script>
+    <script src="/fitness-core.js"></script>
+    <script src="/experience.js"></script>
+    <script src="/charts.js"></script>
+    <script src="/fitness.js"></script>
+    <script src="/script.js"></script>
   </body>
 </html>
