@@ -1,0 +1,432 @@
+/*
+ * Runlore design layer: "Contour".
+ * Loads last. Gives the dashboard the Runlore identity without changing the
+ * markup contracts the scripts rely on: a characterful display face for
+ * headings and numbers, map-paper and night-trail palettes, rounded cards that
+ * echo the mark's tile, pill controls, a left sidebar on wide screens, and the
+ * contour motif with a lime "summit" marking where you are.
+ */
+
+@font-face {
+  font-family: "Bricolage Grotesque";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 200 800;
+  src: url("/fonts/bricolage-grotesque-latin-wght.woff2") format("woff2-variations"), url("/fonts/bricolage-grotesque-latin-wght.woff2") format("woff2");
+}
+
+/* ---------- Tokens ---------- */
+:root {
+  --font-display: "Bricolage Grotesque", Aptos, "Segoe UI Variable", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+  --font-body: Aptos, "Segoe UI Variable", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+  --radius-card: 18px;
+  --radius-inner: 12px;
+  --radius-control: 10px;
+  --radius-pill: 999px;
+  --sidebar-width: 248px;
+  --summit: #c8f04a;
+  --contour: #3d8f86;
+  /* Map paper: warm, quiet, readable. */
+  --paper: oklch(96.2% 0.012 95);
+  --paper-deep: oklch(92.6% 0.016 95);
+  --surface: oklch(99.1% 0.006 95);
+  --surface-muted: oklch(95.4% 0.012 95);
+  --ink: oklch(22% 0.03 215);
+  --ink-strong: oklch(15% 0.03 215);
+  --ink-soft: oklch(40% 0.025 210);
+  --ink-faint: oklch(46% 0.02 205);
+  --rule: oklch(86% 0.018 95);
+  --rule-strong: oklch(70% 0.022 120);
+  --teal: oklch(50% 0.095 185);
+  --teal-soft: oklch(92% 0.035 185);
+  --card-shadow: 0 1px 0 rgba(20, 34, 39, 0.04), 0 10px 30px -18px rgba(20, 34, 39, 0.18);
+  --sidebar-bg: oklch(18% 0.025 215);
+  --sidebar-ink: oklch(96% 0.008 120);
+  --sidebar-soft: oklch(78% 0.02 190);
+}
+
+/* Night trail: the mark's ink, a touch deeper. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: oklch(15% 0.018 215);
+    --paper-deep: oklch(12.5% 0.016 215);
+    --surface: oklch(19.5% 0.02 212);
+    --surface-muted: oklch(24% 0.022 210);
+    --rule: oklch(30% 0.022 205);
+    --rule-strong: oklch(44% 0.028 195);
+    --card-shadow: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 14px 34px -22px rgba(0, 0, 0, 0.7);
+    --sidebar-bg: oklch(12% 0.016 215);
+  }
+}
+:root[data-theme="dark"] {
+  --paper: oklch(15% 0.018 215);
+  --paper-deep: oklch(12.5% 0.016 215);
+  --surface: oklch(19.5% 0.02 212);
+  --surface-muted: oklch(24% 0.022 210);
+  --rule: oklch(30% 0.022 205);
+  --rule-strong: oklch(44% 0.028 195);
+  --card-shadow: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 14px 34px -22px rgba(0, 0, 0, 0.7);
+  --sidebar-bg: oklch(12% 0.016 215);
+}
+
+/* ---------- Base type ---------- */
+body { font-family: var(--font-body); background: var(--paper); }
+body::before { display: none; }
+h1, h2, h3,
+.brand-wordmark,
+.features-title,
+.panel-heading h2,
+.fitness-panel-head h2,
+.today-strip strong,
+.workout-lead-metric strong,
+.kpi-card strong,
+.fitness-kpis strong,
+.block-evidence strong,
+.recommended-day strong {
+  font-family: var(--font-display);
+  font-optical-sizing: auto;
+}
+h1 { font-weight: 720; letter-spacing: -0.035em; }
+h2 { font-weight: 680; letter-spacing: -0.02em; }
+h3 { font-weight: 650; letter-spacing: -0.01em; }
+.brand-wordmark { font-weight: 760; letter-spacing: -0.04em; }
+:is(.block-evidence, .fitness-kpis, .today-strip, .this-week, .readiness-hero, .kpis) strong { font-variant-numeric: tabular-nums; }
+
+/* ---------- Controls ---------- */
+button,
+.file-button,
+.data-menu > summary {
+  border-radius: var(--radius-pill);
+  font-weight: 650;
+  transition: background-color .16s ease, border-color .16s ease, color .16s ease, transform .16s ease;
+}
+.primary,
+#acceptPlanButton,
+#setupPlanButton,
+.ai-action {
+  border-color: var(--summit);
+  background: var(--summit);
+  color: #10200a;
+  box-shadow: 0 6px 16px -10px rgba(140, 180, 30, 0.9);
+}
+.primary:hover:not(:disabled),
+#acceptPlanButton:hover:not(:disabled),
+#setupPlanButton:hover:not(:disabled) { background: #b9e43a; border-color: #b9e43a; }
+.control select,
+.control input,
+.context-card input,
+.context-card select,
+.ai-controls select,
+.ai-controls input,
+.athlete-form input { border-radius: var(--radius-control); }
+.context-save { border-radius: var(--radius-pill); }
+:focus-visible { outline-color: var(--teal); }
+
+/* ---------- Cards ---------- */
+:is(.chart-panel, .data-panel, .context-card, .key-run-card, .status, .empty-window, .secondary-disclosure,
+    .today-strip, .this-week, .fitness-empty, .readiness-hero, .fitness-kpis, .fitness-panel, .training-texture-grid,
+    .kpis, .advanced-exploration, .block-review, .onboarding, .ai-insights, .plan-draft, .exploration) {
+  border-radius: var(--radius-card);
+}
+:is(.chart-panel, .data-panel, .today-strip, .this-week, .readiness-hero, .fitness-panel, .block-review, .exploration,
+    .secondary-disclosure, .key-run-card, .fitness-kpis) {
+  box-shadow: var(--card-shadow);
+}
+:is(.workout-stat, .workout-weather-content, .workout-run-digest, .chart-run-option, .provider-button, .data-menu-panel,
+    .recommended-day, .saved-session) {
+  border-radius: var(--radius-inner);
+}
+.key-run-card { transition: transform .18s ease, border-color .18s ease; }
+.key-run-card:hover { transform: translateY(-2px); border-color: var(--teal); }
+/* The block review and its trend read as one card. */
+.block-review { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+.block-review + .primary-chart, .overview .primary-chart { border-top-left-radius: 0; border-top-right-radius: 0; }
+dialog, .workout-modal, .account-dialog { border-radius: 22px; overflow: hidden; }
+/* Sign-in is a decision, so centre it rather than pinning it to the top. */
+.account-dialog[open] { margin: auto; inset: 0; max-height: calc(100vh - 32px); overflow: auto; }
+.account-dialog-head h2 { font-size: 1.45rem; letter-spacing: -0.03em; }
+.provider-button { min-height: 50px; border-radius: var(--radius-pill); font-size: 1rem; }
+.provider-strava:not(:disabled) { border-color: #fc4c02; }
+.provider-strava:not(:disabled):hover { background: color-mix(in oklch, #fc4c02 10%, var(--surface-muted)); }
+.chart-tooltip { border-radius: var(--radius-inner); }
+
+/* ---------- View headers ---------- */
+.overview-head {
+  position: relative;
+  padding: 6px 0 10px;
+}
+.overview-head h1 {
+  font-size: clamp(2rem, 1.2rem + 2.2vw, 2.9rem);
+  line-height: 1.02;
+}
+.overview-head p { font-size: 1rem; }
+#coachingWorkspaceTitle,
+#runsTitle {
+  font-size: clamp(1.7rem, 1.1rem + 1.6vw, 2.3rem);
+  font-weight: 720;
+  letter-spacing: -0.03em;
+}
+
+/* Review window: a quiet bar of pill selects. */
+.toolbar {
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  padding: 12px 16px;
+  box-shadow: var(--card-shadow);
+}
+.toolbar-intro strong { font-family: var(--font-display); font-size: 1rem; font-weight: 680; }
+
+/* ---------- Welcome ---------- */
+.onboarding {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--rule);
+  border-top: 1px solid var(--rule);
+  background: var(--surface);
+  box-shadow: var(--card-shadow);
+}
+.onboarding::after {
+  content: "";
+  position: absolute;
+  inset: -30% -20% auto auto;
+  width: 760px;
+  height: 760px;
+  background: url("/brand/contours.svg") center / contain no-repeat;
+  opacity: .22;
+  pointer-events: none;
+}
+.onboarding-copy { position: relative; z-index: 1; }
+.onboarding-copy h1 {
+  max-width: 13ch;
+  font-size: clamp(2.6rem, 1.6rem + 3.4vw, 4.4rem);
+  line-height: .98;
+  letter-spacing: -0.045em;
+}
+.onboarding-copy h1::after {
+  content: "";
+  display: inline-block;
+  width: .22em;
+  height: .22em;
+  margin-left: .08em;
+  border-radius: 50%;
+  background: var(--summit);
+  vertical-align: .08em;
+}
+.onboarding-features {
+  position: relative;
+  z-index: 1;
+  border-left: 1px solid var(--rule);
+  background: color-mix(in oklch, var(--paper-deep) 82%, transparent);
+  backdrop-filter: blur(2px);
+}
+.feature-list li { border-left: 0; padding-left: 26px; position: relative; }
+.feature-list li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: .38em;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid var(--teal);
+}
+.feature-list li:first-child::before { border-color: var(--summit); background: var(--summit); }
+.feature-list strong { font-family: var(--font-display); font-size: 1.05rem; }
+
+/* Loading */
+.app-loading-mark { width: 56px; height: 56px; }
+
+/* ---------- Header / navigation: shared ---------- */
+.app-nav a {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  border-radius: var(--radius-pill);
+  font-weight: 620;
+}
+.nav-icon { width: 18px; height: 18px; flex: none; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; opacity: .85; }
+.app-nav a[aria-current] { color: var(--ink-strong); }
+
+/* ---------- Wide screens: sidebar shell ---------- */
+@media (min-width: 1180px) {
+  .app {
+    display: grid;
+    grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+    column-gap: clamp(28px, 3vw, 48px);
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    padding: 0 clamp(28px, 3vw, 48px) 48px 0;
+  }
+  .app > * { grid-column: 2; min-width: 0; }
+  .app > :not(.app-header):first-of-type { margin-top: 28px; }
+  .app > .app-header {
+    grid-column: 1;
+    grid-row: 1 / span 60;
+    position: sticky;
+    top: 0;
+    align-self: start;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 22px;
+    height: 100vh;
+    margin: 0;
+    padding: 26px 18px 22px;
+    border: 0;
+    background: url("/brand/contours-faint.svg") -260px calc(100% + 230px) / 600px no-repeat, var(--sidebar-bg);
+    color: var(--sidebar-ink);
+    overflow: visible;
+    z-index: 20;
+  }
+  .app > .app-header > * { position: relative; }
+  .app-header .brand-lockup { color: var(--sidebar-ink); padding: 0 8px 6px; }
+  .app-header .brand-mark { width: 34px; height: 34px; }
+  .app-header .brand-wordmark { font-size: 1.45rem; }
+  .app-header .app-nav {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
+    width: auto;
+  }
+  body:not(.has-history) .app-header .app-nav { display: none; }
+  .app-header .app-nav a {
+    justify-content: flex-start;
+    min-height: 44px;
+    padding: 10px 14px;
+    color: var(--sidebar-soft);
+    background: transparent;
+  }
+  .app-header .app-nav a:hover { color: var(--sidebar-ink); background: rgba(255, 255, 255, 0.06); }
+  .app-header .app-nav a[aria-current] {
+    color: var(--sidebar-ink);
+    background: rgba(255, 255, 255, 0.09);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+  }
+  /* The summit marks where you are. */
+  .app-header .app-nav a[aria-current]::after {
+    content: "";
+    width: 8px;
+    height: 8px;
+    margin-left: auto;
+    border-radius: 50%;
+    background: var(--summit);
+    box-shadow: 0 0 0 4px rgba(200, 240, 74, 0.16);
+  }
+  .app-header > .header-actions {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    margin-top: auto;
+    grid-column: auto;
+    justify-self: stretch;
+    justify-items: stretch;
+  }
+  .app-header .header-actions .actions {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    width: 100%;
+  }
+  .app-header .header-actions .actions > * { width: 100%; justify-content: center; }
+  .app-header #sourceStatus {
+    padding: 0 8px;
+    color: var(--sidebar-soft);
+    font-size: .78rem;
+  }
+  /* Only the sidebar's own buttons; the data menu panel keeps page styling. */
+  .app-header .actions > :is(.ghost-action, .file-button),
+  .app-header .data-menu > summary {
+    min-height: 42px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--sidebar-ink);
+    text-align: center;
+  }
+  .app-header .actions > :is(.ghost-action, .file-button):hover,
+  .app-header .data-menu > summary:hover { background: rgba(255, 255, 255, 0.1); color: var(--sidebar-ink); }
+  .app-header .account-button { max-width: none; }
+  .app-header .data-menu { width: 100%; }
+  .app-header .data-menu > summary { display: flex; align-items: center; justify-content: center; }
+  .app-header .data-menu[open] > summary { background: rgba(255, 255, 255, 0.12); }
+  /* The data menu opens beside the sidebar instead of below it. */
+  .app-header .data-menu-panel {
+    top: auto;
+    bottom: 0;
+    right: auto;
+    left: calc(100% + 26px);
+    width: 400px;
+    max-height: calc(100vh - 48px);
+    color: var(--ink);
+  }
+  .app-footer { margin-top: 32px; }
+}
+
+/* ---------- Narrower screens: top bar with tabs ---------- */
+@media (max-width: 1179px) {
+  .app-header {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--rule);
+    background: color-mix(in oklch, var(--paper) 88%, transparent);
+    backdrop-filter: saturate(1.2) blur(10px);
+  }
+  .app-nav { gap: 4px; padding: 4px; border: 1px solid var(--rule); border-radius: var(--radius-pill); background: var(--surface); }
+  .app-nav a { justify-content: center; padding: 8px 14px; }
+  .app-nav a[aria-current] { background: var(--ink-strong); color: var(--surface); }
+  .app-nav a[aria-current] .nav-icon { opacity: 1; }
+}
+@media (max-width: 700px) {
+  .app-header {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 12px;
+    margin: 0 -16px 12px;
+    padding: 10px 16px;
+  }
+  .app-header .brand-lockup { grid-column: 1; grid-row: 1; }
+  .app-header .brand-mark { width: 26px; height: 26px; }
+  .app-header .brand-wordmark { font-size: 1.1rem; }
+  .app-header > .header-actions {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: end;
+    width: auto;
+    display: flex;
+  }
+  .app-header .header-actions .actions { display: flex; flex-wrap: nowrap; align-items: center; gap: 6px; width: auto; }
+  .app-header .header-actions .actions > * { min-height: 36px; padding: 6px 12px; font-size: .82rem; }
+  .app-header #sourceStatus,
+  .app-header .header-actions #demoButton,
+  .app-header .header-actions .file-button { display: none; }
+  .app-header .data-menu > summary { min-height: 36px; padding: 6px 12px; font-size: .82rem; }
+  .app-header .data-menu-panel { position: fixed; top: 64px; left: 16px; right: 16px; width: auto; }
+  .app-header .app-nav {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    width: 100%;
+  }
+  body:not(.has-history) .app-header .app-nav { display: none; }
+  .app-nav a { flex-direction: column; gap: 2px; padding: 7px 4px; min-height: 48px; }
+  .app-nav a span { font-size: .74rem; }
+  .nav-icon { width: 17px; height: 17px; }
+}
+
+/* The run-type filter is a label wrapping its select; match other labels. */
+.ledger-controls label.control { gap: 5px; color: var(--ink-faint); font-size: .7rem; font-weight: 760; letter-spacing: .025em; }
+.ledger-controls label.control select { color: var(--ink); font-size: .9rem; font-weight: 400; letter-spacing: 0; }
+
+/* ---------- Footer ---------- */
+.app-footer { border-top: 1px solid var(--rule); }
+
+@media (prefers-reduced-motion: reduce) {
+  button, .key-run-card { transition: none; }
+  .key-run-card:hover { transform: none; }
+}
