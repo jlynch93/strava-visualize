@@ -141,7 +141,9 @@ button,
 /* The block review and its trend read as one card. */
 .block-review { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
 .block-review + .primary-chart, .overview .primary-chart { border-top-left-radius: 0; border-top-right-radius: 0; }
-dialog, .workout-modal, .account-dialog { border-radius: 22px; overflow: hidden; }
+/* overflow: auto (not hidden) clips the rounded corners and still lets tall
+   dialogs and the run sheet scroll. */
+dialog, .workout-modal, .account-dialog { border-radius: 22px; overflow: auto; }
 /* Sign-in is a decision, so centre it rather than pinning it to the top. */
 .account-dialog[open] { margin: auto; inset: 0; max-height: calc(100vh - 32px); overflow: auto; }
 .account-dialog-head h2 { font-size: 1.45rem; letter-spacing: -0.03em; }
@@ -640,7 +642,13 @@ dialog, .workout-modal, .account-dialog { border-radius: 22px; overflow: hidden;
 .workout-modal {
   width: min(760px, 100vw);
   height: 100vh;
+  height: 100dvh;
   max-height: none;
+  /* The sheet is the scroll container; keep scrolling inside it. */
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   border: 0;
   border-left: 1px solid var(--rule);
   border-radius: 24px 0 0 24px;
