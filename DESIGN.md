@@ -121,6 +121,16 @@ The wordmark is lowercase `runlore`, set in the system stack at weight 780 with
 letter-space it. The header uses a 28px mark; the footer uses 20px. The tagline
 is "Every run adds to the story."
 
+### First paint and welcome
+
+The page starts in a loading state (`body.is-loading`): the pulsing mark and
+"Loading your runs…" show while the account and history load, so returning
+runners never see the welcome panel flash. Signed-out visitors see the welcome
+panel: the headline and actions on the left, and "What Runlore shows you"
+(Trends, Fitness, Plan, Runs, and "Works with Strava and Garmin") on the right.
+Before any history is loaded, the header shows only Sign in and Data & settings
+on the right; the demo entry point lives in the welcome panel.
+
 ## Overview
 
 **Creative North Star: "The Performance Ledger"**

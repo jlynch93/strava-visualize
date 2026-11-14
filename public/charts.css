@@ -109,7 +109,6 @@
 .supporting-panel { margin: 0 18px 18px; padding: 18px; }
 .supporting-panel h2 { margin: 0 0 12px; font-size: 1.05rem; }
 @media (max-width: 900px) { .supporting-panel { margin: 0 0 16px; padding: 14px; } }
-.onboarding-field .field-label, .onboarding-field .field-caption { color: var(--ink-soft); }
 
 /* ---------- Overview trend chart clarity ---------- */
 .primary-chart .bar.in-progress { fill: var(--teal); opacity: .35; }

@@ -25,7 +25,7 @@
     <link rel="stylesheet" href="/fitness.css">
     <link rel="stylesheet" href="/theme.css">
   </head>
-  <body>
+  <body class="is-loading">
     <!--
       THESIS: A runner should see the shape of a training block before being asked to inspect individual metrics; this dashboard refuses the decorative neon control-room template.
       OWN-WORLD: Runlore — the story a runner’s miles keep, told as a precise performance ledger — mineral paper, deep blue-black ink, sharp timing rules, and one electric-lime action signal.
@@ -114,12 +114,17 @@
         <button id="resetWindowButton" class="primary" type="button">Show all history</button>
       </section>
 
+      <section class="app-loading" aria-live="polite" aria-busy="true">
+        <img class="app-loading-mark" src="/brand/runlore-mark.svg" alt="" width="48" height="48">
+        <p>Loading your runs…</p>
+      </section>
+
       <section class="onboarding" aria-labelledby="onboardingTitle">
         <div class="onboarding-copy">
           <h1 id="onboardingTitle">Every run adds to the story.</h1>
-          <p>Sign in with Strava or Garmin, import an activity export, or use a sample block to explore the dashboard before sharing any of your data.</p>
+          <p>Runlore turns your running history into clear trends, an honest read on your fitness, and a plan for the week ahead. Sign in with Strava or Garmin, import an export, or explore with sample data first.</p>
           <div class="onboarding-actions">
-            <button id="emptyConnectButton" class="primary" type="button">Sign in</button>
+            <button id="emptyConnectButton" class="primary" type="button">Sign in to get started</button>
             <label class="file-button">
               <span>Import JSON or CSV</span>
               <input id="emptyFileInput" type="file" accept=".json,.csv,text/csv,application/json">
@@ -128,15 +133,15 @@
           </div>
           <p class="privacy-note">Imports stay in this browser tab. Coach analysis shares a compact summary only when you request it. <a href="/privacy">Privacy policy</a></p>
         </div>
-        <div class="onboarding-field" aria-hidden="true">
-          <span class="field-label">What becomes visible</span>
-          <div class="field-line field-line-long"></div>
-          <div class="field-line field-line-medium"></div>
-          <div class="field-line field-line-short"></div>
-          <div class="field-mark field-mark-one"></div>
-          <div class="field-mark field-mark-two"></div>
-          <div class="field-mark field-mark-three"></div>
-          <span class="field-caption">Volume · pace · recovery</span>
+        <div class="onboarding-features">
+          <h2 class="features-title">What Runlore shows you</h2>
+          <ul class="feature-list">
+            <li><strong>Trends</strong><span>Volume, pace and rhythm, compared with the block before.</span></li>
+            <li><strong>Fitness</strong><span>Readiness today, estimated VO2 max, and fitness, fatigue and form.</span></li>
+            <li><strong>Plan</strong><span>A draft week built around your goal, availability and recent load.</span></li>
+            <li><strong>Runs</strong><span>Every run, searchable, with splits, weather and comparisons.</span></li>
+          </ul>
+          <p class="works-with">Works with <strong>Strava</strong> and <strong>Garmin</strong></p>
         </div>
       </section>
 

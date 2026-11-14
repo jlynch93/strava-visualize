@@ -2,11 +2,11 @@
    Calculations live in fitness-core.js; this file only prepares and draws them. */
 const ATHLETE_STORAGE_KEY = "run-trends-athlete-v1";
 const DEFAULT_REST_HR = 55;
-let athleteProfile = (() => {
-  const saved = readSaved(ATHLETE_STORAGE_KEY, {});
+function sanitizeAthleteProfile(saved) {
   const clean = (value, low, high) => { const number = Number(value); return number >= low && number <= high ? Math.round(number) : null; };
   return { maxHr: clean(saved?.maxHr, 120, 225), restHr: clean(saved?.restHr, 30, 100) };
-})();
+}
+let athleteProfile = sanitizeAthleteProfile(readSaved(ATHLETE_STORAGE_KEY, {}));
 let fitnessModelCache = { key: "", model: null };
 
 const RACES = [

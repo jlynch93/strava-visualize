@@ -37,7 +37,9 @@ async function loadLedger(page) {
 
 async function loadDemoBlock(page) {
   await page.goto("/");
-  await page.getByRole("button", { name: "Demo data", exact: true }).click();
+  // First-time visitors start from the welcome panel; the header's demo
+  // button only appears once some history is loaded.
+  await page.getByRole("button", { name: "Preview demo data", exact: true }).click();
   await expect(page.locator("#activityCount")).toContainText(/runs in range/);
 }
 

@@ -28,6 +28,15 @@ export async function currentUserId(env, request) {
   return row.user_id;
 }
 
+export async function deleteExpiredSessions(env) {
+  if (!env.DB) return 0;
+  const result = await env.DB
+    .prepare("DELETE FROM sessions WHERE expires_at <= ?")
+    .bind(Math.floor(Date.now() / 1000))
+    .run();
+  return Number(result?.meta?.changes) || 0;
+}
+
 export async function destroySession(env, request) {
   const token = parseCookies(request)[SESSION_COOKIE];
   if (token && env.DB) {

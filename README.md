@@ -274,6 +274,50 @@ stores and sends. Garmin requires one. Replace `[OPERATOR NAME]` and
 `[CONTACT EMAIL]` before submitting the app to Garmin, and update the policy
 whenever data handling changes.
 
+## Production
+
+### Account-synced settings
+
+When a runner is signed in, goals, check-ins, saved plans, the heart-rate
+profile and display preferences are saved to the account (`user_state` table,
+`migrations/0003_user_state.sql`) through `GET /api/state` and
+`PUT /api/state/:key`. Only the four keys in `src/state.js` are accepted, each
+up to 256 KB. On sign-in the account's copy is applied; settings that exist only
+on the device are uploaded once. Signing out or deleting the account removes
+goals, plans and the fitness profile from the browser (theme and units stay).
+Imported activity files never leave the browser.
+
+### Hardening
+
+- **Security headers** on every response: a strict Content Security Policy
+  (no inline scripts, no third-party origins), `frame-ancestors 'none'`,
+  `nosniff`, a strict referrer policy and a locked-down permissions policy.
+  HSTS is sent over HTTPS only. Worker responses get them from
+  `src/security.js`; static files get the same values from the `_headers`
+  file that `scripts/build-assets.js` writes. A test keeps the two in step.
+- **Errors:** unexpected failures return a generic message and are logged as
+  structured JSON (`event: "request_failed"`). `observability` is enabled in
+  `wrangler.jsonc`, so they appear in Workers Logs.
+- **Session cleanup:** a daily cron trigger (`03:17 UTC`) deletes expired
+  sessions.
+- **Strava rate limits** are app-wide (every runner's requests count together).
+  A 429 is shown as "try again in a few minutes" and the runner's loaded
+  history stays on screen. Syncs are incremental, so a returning runner usually
+  costs one Strava request. Before opening the app widely, ask Strava to raise
+  the app's athlete capacity and rate limits.
+
+### Go-live checklist
+
+1. Apply migrations: `npx wrangler d1 migrations apply strava-visualize --remote`
+   (0001 accounts, 0002 activities, 0003 synced settings).
+2. Set secrets: `STRAVA_CLIENT_ID`, `STRAVA_CLIENT_SECRET`,
+   `TOKEN_ENCRYPTION_KEY`, and `APP_BASE_URL=https://runlore.app`.
+3. Add `runlore.app` as the Worker's custom domain, and set Strava's
+   Authorization Callback Domain to `runlore.app`.
+4. Fill in the operator name and contact email in `public/privacy.html`.
+5. After deploying, run the "Verify production" workflow against
+   `https://runlore.app`.
+
 ## Cloudflare Workers
 
 The app deploys as a Cloudflare Worker with static assets and a D1 database.
