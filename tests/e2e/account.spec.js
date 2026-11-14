@@ -82,8 +82,9 @@ test("settings saved to the account load on a new device and changes are saved b
   await expect(page.locator("#activityCount")).toContainText(/runs in range/);
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("run-trends-athlete-v1") || "{}").maxHr)).toBe(191);
-  await expect.poll(() => page.evaluate(() => coachingContext.goal.raceName)).toBe("City Marathon");
-  await expect.poll(() => page.evaluate(() => preferences.units)).toBe("metric");
+  // Check what the runner sees rather than internal script variables.
+  await expect(page.locator("#goalRaceName")).toHaveValue("City Marathon");
+  await expect(page.locator("#unitPreference")).toHaveValue("metric");
 
   // A device with settings the account doesn't have yet uploads them once.
   expect(saves.map((save) => save.key)).not.toContain("run-trends-preferences");

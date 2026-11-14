@@ -398,9 +398,10 @@
 
       <section id="runs" class="table-section data-panel" aria-labelledby="runsTitle">
         <div class="panel-heading">
-          <h2 id="runsTitle">Run ledger</h2>
+          <h2 id="runsTitle">Your runs</h2>
           <span id="activityCount">No activities loaded</span>
         </div>
+        <div id="runsSummary" class="runs-summary" aria-live="polite"></div>
         <div class="ledger-controls">
           <div class="control run-search"><label for="runSearch">Find a run</label><input id="runSearch" type="search" placeholder="Search by run name" autocomplete="off"></div>
           <div class="control"><label for="runSort">Sort by</label><select id="runSort"><option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="distance">Longest distance</option><option value="pace">Fastest pace</option></select></div>
@@ -412,14 +413,15 @@
           <table>
             <thead>
               <tr>
-                <th aria-label="Open details"></th>
                 <th>Date</th>
-                <th>Name</th>
+                <th>Run</th>
+                <th><span class="visually-hidden">Type</span></th>
                 <th>Distance</th>
                 <th>Pace</th>
-                <th>Elev.</th>
-                <th>HR</th>
                 <th>Time</th>
+                <th>HR</th>
+                <th>Elev.</th>
+                <th><span class="visually-hidden">Open details</span></th>
               </tr>
             </thead>
             <tbody id="activityRows"></tbody>

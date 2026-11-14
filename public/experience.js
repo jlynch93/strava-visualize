@@ -334,14 +334,12 @@ function streamlineRunDetails(openPanels) {
     details.open = openPanels.includes(id); more.append(details); return details;
   };
   const section = (heading) => [...grid.querySelectorAll(".workout-section")].find((element) => element.querySelector("h3")?.textContent === heading);
-  const comparisons = panel("runComparisons", "Comparisons and training context", [section("Context"), section("Effort profile"), section("Neighboring runs"), section("Signals"), body.querySelector(".workout-read")]);
+  const comparisons = panel("runComparisons", "Comparisons and training context", [section("Context"), section("Effort profile"), section("Neighboring runs"), section("Signals")]);
   const comparisonControl = document.querySelector("#comparisonScope").closest("label"); comparisons.querySelector("summary").after(comparisonControl);
   panel("runMeasurements", "More run measurements", [section("Run details")]);
   panel("runWeather", "Weather at the start", [grid.querySelector(".workout-weather")]);
   panel("runCoach", "Ask for a coach’s read", [grid.querySelector(".workout-ai-digest")]);
   body.querySelector(".workout-lead").after(document.querySelector("#enrichedRun"));
-  body.querySelectorAll(".workout-lead-metric small")[0].textContent = "Recorded distance";
-  body.querySelectorAll(".workout-lead-metric small")[1].textContent = "Moving pace";
   grid.remove(); body.append(more);
 }
 function finishModalRender(run, openPanels = []) {
@@ -357,7 +355,7 @@ function finishModalRender(run, openPanels = []) {
 async function hydrateRunDetail(run, session) {
   const root = document.querySelector("#enrichedRun");
   if (!root || state.dataSource !== "strava" || !/^\d+$/.test(String(run.id))) return;
-  root.textContent = "Loading splits and activity details…";
+  root.innerHTML = '<p class="splits-loading">Loading splits from Strava…</p>';
   try {
     state.activityDetails ||= new Map();
     let activity = state.activityDetails.get(String(run.id));
@@ -369,14 +367,50 @@ async function hydrateRunDetail(run, session) {
     }
     if (session !== state.modalSession) return;
     root.replaceChildren();
-    const splits = activity.splits_metric || activity.laps || [];
-    const title = document.createElement("h3"); title.textContent = activity.splits_metric ? "Recorded kilometer splits" : "Recorded laps"; root.append(title);
+    // Strava provides both mile and kilometer splits; show the runner's units.
+    const metric = preferences.units === "metric";
+    const standard = Array.isArray(activity.splits_standard) && activity.splits_standard.length ? activity.splits_standard : null;
+    const metricSplits = Array.isArray(activity.splits_metric) && activity.splits_metric.length ? activity.splits_metric : null;
+    const kind = !metric && standard ? "mile" : metricSplits ? "kilometer" : standard ? "mile" : "lap";
+    const splits = kind === "mile" ? standard : kind === "kilometer" ? metricSplits : (activity.laps || []);
+    const heading = document.createElement("div"); heading.className = "splits-heading";
+    const title = document.createElement("h3"); title.textContent = kind === "lap" ? "Recorded laps" : `Recorded ${kind} splits`;
+    heading.append(title);
+    root.append(heading);
     if (!splits.length) { root.append("No splits or laps were supplied by Strava."); return; }
-    const table = document.createElement("table"); table.innerHTML = "<caption>Recorded splits from Strava</caption><thead><tr><th scope='col'>Split</th><th scope='col'>Distance</th><th scope='col'>Pace</th><th scope='col'>HR</th></tr></thead>";
+    const paceOf = (split) => split.distance ? (split.moving_time || split.elapsed_time) / miles(split.distance) : 0;
+    // Partial final splits are shown but don't set the scale.
+    const typical = splits.map((split) => split.distance).sort((a, b) => b - a)[0] || 1;
+    const scaled = splits.filter((split) => split.distance >= typical * 0.6 && paceOf(split) > 0);
+    const paces = scaled.map(paceOf);
+    const fastest = Math.min(...paces), slowest = Math.max(...paces);
+    const fastestIndex = splits.findIndex((split) => scaled.includes(split) && paceOf(split) === fastest);
+    const note = document.createElement("span"); note.className = "splits-note";
+    note.textContent = fastestIndex >= 0 ? `Fastest: ${kind === "lap" ? "lap" : kind} ${fastestIndex + 1} · ${formatPace(fastest)}` : "";
+    heading.append(note);
+    const table = document.createElement("table"); table.className = "splits-table";
+    table.innerHTML = `<caption class="visually-hidden">${title.textContent} from Strava</caption><thead><tr><th scope='col'>${kind === "lap" ? "Lap" : "Split"}</th><th scope='col'>Distance</th><th scope='col'>Pace</th><th scope='col'>HR</th></tr></thead>`;
     const body = document.createElement("tbody");
     splits.forEach((split, index) => {
       const row = document.createElement("tr");
-      [String(index + 1), `${miles(split.distance).toFixed(2)} mi`, formatPace(split.distance ? (split.moving_time || split.elapsed_time) / miles(split.distance) : 0), split.average_heartrate ? `${Math.round(split.average_heartrate)} bpm` : "Unavailable"].forEach((value) => { const cell = document.createElement("td"); cell.textContent = value; row.append(cell); });
+      if (index === fastestIndex) row.className = "is-fastest";
+      else if (!scaled.includes(split)) row.className = "is-partial";
+      const pace = paceOf(split);
+      const share = pace && slowest > fastest ? 0.35 + 0.65 * (slowest - Math.min(Math.max(pace, fastest), slowest)) / (slowest - fastest) : pace ? 1 : 0;
+      const number = document.createElement("td"); number.textContent = String(index + 1);
+      const distance = document.createElement("td");
+      if (kind === "kilometer" && !metric) { distance.textContent = `${(split.distance / 1000).toFixed(2)} km`; distance.dataset.unitSkip = ""; }
+      else distance.textContent = `${miles(split.distance).toFixed(2)} mi`;
+      // A table cell cannot be a grid container, so the bar and value sit in a wrapper.
+      const paceCell = document.createElement("td");
+      const paceWrap = document.createElement("div"); paceWrap.className = "split-pace-cell";
+      const track = document.createElement("span"); track.className = "split-track"; track.setAttribute("aria-hidden", "true");
+      const bar = document.createElement("span"); bar.className = "split-bar"; bar.style.setProperty("--share", share.toFixed(3));
+      track.append(bar);
+      const paceText = document.createElement("span"); paceText.className = "split-pace"; paceText.textContent = formatPace(pace);
+      paceWrap.append(track, paceText); paceCell.append(paceWrap);
+      const hr = document.createElement("td"); hr.textContent = split.average_heartrate ? `${Math.round(split.average_heartrate)} bpm` : "–";
+      row.append(number, distance, paceCell, hr);
       body.append(row);
     });
     table.append(body); root.append(table); applyDisplayUnits(root);
