@@ -270,9 +270,8 @@ receive with your keys.
 ### Privacy policy
 
 `public/privacy.html` (served at `/privacy`) describes exactly what the app
-stores and sends. Garmin requires one. Replace `[OPERATOR NAME]` and
-`[CONTACT EMAIL]` before submitting the app to Garmin, and update the policy
-whenever data handling changes.
+stores and sends, including the operator (Runlore, Ohio, USA) and the privacy
+contact. Garmin requires one. Update it whenever data handling changes.
 
 ## Production
 
@@ -314,7 +313,8 @@ Imported activity files never leave the browser.
    `TOKEN_ENCRYPTION_KEY`, and `APP_BASE_URL=https://runlore.app`.
 3. Add `runlore.app` as the Worker's custom domain, and set Strava's
    Authorization Callback Domain to `runlore.app`.
-4. Fill in the operator name and contact email in `public/privacy.html`.
+4. Point `ollama.runlore.app` at the analysis server (it is the default
+   `OLLAMA_BASE_URL`).
 5. After deploying, run the "Verify production" workflow against
    `https://runlore.app`.
 
@@ -346,7 +346,7 @@ STRAVA_CLIENT_SECRET
 TOKEN_ENCRYPTION_KEY=<32 random bytes, base64>
 STRAVA_REDIRECT_URI=https://your-domain.example/auth/strava/callback   (optional)
 APP_BASE_URL=https://your-domain.example
-OLLAMA_BASE_URL=https://ollama.jeer.rest
+OLLAMA_BASE_URL=https://ollama.runlore.app
 OLLAMA_MODEL=qwen3.5:0.8b
 ```
 

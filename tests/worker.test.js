@@ -86,7 +86,7 @@ test("Worker reports an actionable configuration state", async () => {
 
   const ready = await (await worker.fetch(request("/api/status"), configuredEnv())).json();
   assert.equal(ready.configured, true);
-  assert.equal(ready.analysisService, "https://ollama.jeer.rest");
+  assert.equal(ready.analysisService, "https://ollama.runlore.app");
   assert.equal(ready.analysisModel, "qwen3.5:0.8b");
 });
 

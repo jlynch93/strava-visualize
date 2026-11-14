@@ -23,7 +23,9 @@ export function withSecurityHeaders(response, request) {
   headers.set("X-Frame-Options", "DENY");
   headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
   headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=(), usb=()");
-  headers.set("Cross-Origin-Opener-Policy", "same-origin");
+  // No Cross-Origin-Opener-Policy: Firefox swaps the browsing context group on
+  // navigation when it is set, which drops emulated media in Playwright, and
+  // the app opens no cross-origin windows that it would protect against.
   if (https) headers.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
   // Redirects and bodiless responses must keep their original shape.
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
