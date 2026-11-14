@@ -9,11 +9,21 @@
     "not_found_handling": "single-page-application",
     "run_worker_first": ["/", "/index.html", "/api/*", "/auth/*"]
   },
+  "ratelimits": [
+    {
+      "name": "ANALYSIS_RATE_LIMITER",
+      "namespace_id": "1101",
+      "simple": {
+        "limit": 5,
+        "period": 60
+      }
+    }
+  ],
   "d1_databases": [
     {
       "binding": "DB",
       "database_name": "strava-visualize",
-      "database_id": "REPLACE_WITH_D1_DATABASE_ID",
+      "database_id": "85989f5f-4070-4383-aaff-345ba13e03ff",
       "migrations_dir": "migrations"
     }
   ]

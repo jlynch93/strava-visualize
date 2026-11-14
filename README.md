@@ -122,12 +122,10 @@ Strava app settings keep working.
 The app deploys as a Cloudflare Worker with static assets and a D1 database.
 Static files live in `public/`; API and auth routes are handled by `src/worker.js`.
 
-Create the database once, put its ID in `wrangler.jsonc` in place of
-`REPLACE_WITH_D1_DATABASE_ID`, then apply migrations (repeat the last command
-whenever `migrations/` changes):
+The `DB` binding in `wrangler.jsonc` points at the `strava-visualize` D1
+database. Apply migrations whenever `migrations/` changes:
 
 ```powershell
-npx wrangler d1 create strava-visualize
 npx wrangler d1 migrations apply strava-visualize --remote
 ```
 
