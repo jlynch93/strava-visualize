@@ -156,6 +156,31 @@ test("the scheduled cleanup deletes expired sessions only", async (t) => {
   assert.equal(config.observability.enabled, true);
 });
 
+test("the configured Ollama model and server are used for analysis and reported in status", async (t) => {
+  const worker = await workerPromise;
+  const testEnv = env({ OLLAMA_MODEL: "llama3.2:3b", OLLAMA_BASE_URL: "https://ollama.example.test/" });
+  let sent;
+  t.mock.method(globalThis, "fetch", async (url, options) => {
+    sent = { url: String(url), body: JSON.parse(options.body) };
+    return Response.json({ message: { content: JSON.stringify({ summary: "Steady.", observations: Array(3).fill({ title: "t", detail: "d", tone: "neutral" }) }) } });
+  });
+  const response = await worker.fetch(new Request("https://runlore.test/api/insights", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ recentRuns: [{ distanceMiles: 5 }], summary: { runCount: 1 } })
+  }), testEnv);
+  assert.equal(response.status, 200);
+  assert.equal(sent.url, "https://ollama.example.test/api/chat");
+  assert.equal(sent.body.model, "llama3.2:3b");
+  assert.equal((await response.json()).model, "llama3.2:3b");
+  const status = await (await worker.fetch(request("/api/status"), testEnv)).json();
+  assert.equal(status.analysisModel, "llama3.2:3b");
+  assert.equal(status.analysisService, "https://ollama.example.test");
+
+  const config = JSON.parse(fs.readFileSync(path.resolve(__dirname, "../wrangler.jsonc"), "utf8"));
+  assert.equal(config.keep_vars, true, "Dashboard variables such as OLLAMA_MODEL must survive deploys.");
+});
+
 test("a Strava rate limit reads as a temporary, retryable problem", async (t) => {
   const worker = await workerPromise;
   const testEnv = env();

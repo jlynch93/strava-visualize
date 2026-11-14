@@ -350,6 +350,11 @@ OLLAMA_BASE_URL=https://ollama.runlore.app
 OLLAMA_MODEL=qwen3.5:0.8b
 ```
 
+`wrangler.jsonc` sets `keep_vars: true`, so plain-text variables added in the
+Cloudflare dashboard (such as `OLLAMA_MODEL`) survive each `wrangler deploy`.
+Without it, every Git build would reset them and the app would fall back to the
+default model. `/api/status` reports the model in use as `analysisModel`.
+
 For Garmin, also set `GARMIN_CLIENT_ID`, `GARMIN_CLIENT_SECRET` and
 `GARMIN_WEBHOOK_SECRET` (and optionally `GARMIN_REDIRECT_URI`). Garmin stays
 listed as "Not available yet" until all three are present.

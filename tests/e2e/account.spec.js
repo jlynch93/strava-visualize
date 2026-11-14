@@ -44,7 +44,8 @@ test("a returning signed-in runner sees a loading state, never the welcome panel
   await expect(page.locator(".app-loading")).toBeVisible();
   await expect(page.locator(".app-loading")).toContainText("Loading your runs");
   await expect(page.locator("#activityCount")).toContainText(/runs in range/);
-  await expect(page.locator(".app-loading")).toBeHidden();
+  // Generous timeout: under parallel cross-browser runs the delayed sync can be slow.
+  await expect(page.locator(".app-loading")).toBeHidden({ timeout: 15_000 });
   expect(welcomeSeen).toBe(false);
 });
 
@@ -80,9 +81,9 @@ test("settings saved to the account load on a new device and changes are saved b
   await page.goto("/");
   await expect(page.locator("#activityCount")).toContainText(/runs in range/);
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
-  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("run-trends-athlete-v1")).maxHr)).toBe(191);
-  expect(await page.evaluate(() => coachingContext.goal.raceName)).toBe("City Marathon");
-  expect(await page.evaluate(() => preferences.units)).toBe("metric");
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("run-trends-athlete-v1") || "{}").maxHr)).toBe(191);
+  await expect.poll(() => page.evaluate(() => coachingContext.goal.raceName)).toBe("City Marathon");
+  await expect.poll(() => page.evaluate(() => preferences.units)).toBe("metric");
 
   // A device with settings the account doesn't have yet uploads them once.
   expect(saves.map((save) => save.key)).not.toContain("run-trends-preferences");
