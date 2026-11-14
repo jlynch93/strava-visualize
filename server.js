@@ -74,10 +74,17 @@ const assets = {
     if (relativePath === ".." || relativePath.startsWith(`..${path.sep}`) || path.isAbsolute(relativePath)) {
       return new Response("Forbidden", { status: 403 });
     }
-    try {
-      const data = await fs.promises.readFile(filePath);
-      return new Response(data, { headers: { "content-type": MIME_TYPES[path.extname(filePath)] || "application/octet-stream" } });
-    } catch {
+    // Like Workers assets, serve /privacy from privacy.html.
+    const candidates = path.extname(filePath) ? [filePath] : [filePath, `${filePath}.html`];
+    for (const candidate of candidates) {
+      try {
+        const data = await fs.promises.readFile(candidate);
+        return new Response(data, { headers: { "content-type": MIME_TYPES[path.extname(candidate)] || "application/octet-stream" } });
+      } catch {
+        // Try the next candidate, then fall back to the dashboard.
+      }
+    }
+    {
       // Mirror Workers' single-page-application fallback.
       const index = await fs.promises.readFile(path.join(PUBLIC_DIR, "index.html"));
       return new Response(index, { headers: { "content-type": MIME_TYPES[".html"] } });

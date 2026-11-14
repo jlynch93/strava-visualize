@@ -2494,7 +2494,12 @@ async function fetchActivities(providerId = state.activeProvider) {
     state.dataSource = provider;
     state.ledgerPage = 0;
     syncRangeInputs();
-    setStatus(`Loaded ${data.activities.length} activities from ${providerName(provider)}.${data.truncated ? " This is a partial history; import an export to include older runs." : ""}`);
+    const recentlyConnected = data.connectedAt && Date.now() / 1000 - Number(data.connectedAt) < 24 * 60 * 60;
+    if (!data.activities.length && recentlyConnected) {
+      setStatus(`${providerName(provider)} is still sending your history. It can take a few minutes to arrive; sync again shortly.`);
+    } else {
+      setStatus(`Loaded ${data.activities.length} activities from ${providerName(provider)}.${data.truncated ? " This is a partial history; import an export to include older runs." : ""}`);
+    }
     render();
   } finally {
     state.syncing = false;
@@ -2547,7 +2552,7 @@ function renderAccountDialog() {
       <p class="account-copy">Use the account you record runs with. Run Trends creates your profile the first time you sign in.</p>
       <div class="provider-list">${buttons || `<p class="account-error">${escapeHtml(state.account.error || "Sign-in is not available on this server.")}</p>`}</div>
       ${buttons && state.account.error ? `<p class="account-error">${escapeHtml(state.account.error)}</p>` : ""}
-      <p class="account-fine-print">Run Trends only reads your activities. It never posts to your accounts.</p>`;
+      <p class="account-fine-print">Run Trends only reads your activities. It never posts to your accounts. <a href="/privacy">Privacy policy</a></p>`;
     return;
   }
   const rows = providers.map((provider) => {

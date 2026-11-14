@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#eef2ec">
+    <title>Privacy Policy · Run Trends</title>
+    <style>
+      :root {
+        --paper: oklch(96.8% 0.012 135);
+        --surface: oklch(99% 0.008 135);
+        --ink: oklch(20% 0.035 226);
+        --ink-strong: oklch(14% 0.038 226);
+        --ink-soft: oklch(39% 0.03 226);
+        --rule: oklch(79% 0.018 150);
+        --accent: oklch(88% 0.21 116);
+        --blue: oklch(52% 0.12 258);
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--paper);
+        color: var(--ink);
+        font-family: Aptos, "Segoe UI Variable", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+        line-height: 1.6;
+      }
+      main {
+        max-width: 760px;
+        margin: 0 auto;
+        padding: 40px 16px 64px;
+      }
+      .back { display: inline-block; margin-bottom: 28px; color: var(--ink-soft); font-size: .9rem; }
+      h1 { margin: 0 0 6px; color: var(--ink-strong); font-size: clamp(2rem, 5vw, 2.6rem); line-height: 1.1; }
+      .effective { margin: 0 0 32px; color: var(--ink-soft); }
+      h2 {
+        margin: 40px 0 10px;
+        padding-top: 14px;
+        border-top: 2px solid var(--accent);
+        color: var(--ink-strong);
+        font-size: 1.25rem;
+      }
+      h3 { margin: 22px 0 6px; font-size: 1rem; color: var(--ink-strong); }
+      p, li { max-width: 68ch; }
+      ul { padding-left: 1.2rem; }
+      li { margin: 4px 0; }
+      a { color: var(--blue); }
+      a:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+      .table-wrap { overflow-x: auto; }
+      table { width: 100%; border-collapse: collapse; background: var(--surface); font-size: .92rem; }
+      th, td { padding: 10px 12px; border: 1px solid var(--rule); text-align: left; vertical-align: top; }
+      th { color: var(--ink-strong); }
+      code { font-size: .88em; }
+      footer { margin-top: 48px; color: var(--ink-soft); font-size: .85rem; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <a class="back" href="/">← Back to Run Trends</a>
+      <h1>Privacy Policy</h1>
+      <p class="effective">Effective November 14, 2026</p>
+
+      <p>
+        Run Trends is a dashboard that helps runners review their own training history.
+        This policy explains what data Run Trends collects when you sign in with Strava or
+        Garmin, how it is used, and the choices you have. Run Trends is operated by
+        <strong>[OPERATOR NAME]</strong> (“we”, “us”). You can reach us at
+        <a href="mailto:[CONTACT EMAIL]">[CONTACT EMAIL]</a>.
+      </p>
+
+      <h2>Summary</h2>
+      <ul>
+        <li>We only <strong>read</strong> your activity data. Run Trends never posts, edits, or deletes anything in your Strava or Garmin account.</li>
+        <li>Your data is shown only to you. It is not sold, not used for advertising, and not shared with other users.</li>
+        <li>You can disconnect a provider or delete your Run Trends account at any time, and the related data is deleted.</li>
+      </ul>
+
+      <h2>Data we collect</h2>
+      <h3>When you sign in</h3>
+      <ul>
+        <li><strong>Strava:</strong> your Strava athlete ID, first and last name, and profile photo address, as provided by Strava when you authorize Run Trends.</li>
+        <li><strong>Garmin:</strong> your Garmin user ID. Garmin does not share your name with Run Trends.</li>
+        <li><strong>Access tokens</strong> issued by Strava or Garmin so Run Trends can read your activities. They are encrypted before they are stored.</li>
+      </ul>
+
+      <h3>Activity data</h3>
+      <ul>
+        <li>
+          <strong>Strava activities</strong> are requested from Strava each time you sync and are sent to your browser.
+          They are not stored on our servers.
+        </li>
+        <li>
+          <strong>Garmin activities</strong> are sent to Run Trends by Garmin, as Garmin requires, and stored on our
+          servers so they are available when you open the dashboard. For each activity we keep a summary: activity
+          type and name, start time and time-zone offset, distance, duration, elevation gain, speed, heart rate,
+          cadence, calories, device name, and the start location (latitude and longitude). We do not store GPS
+          routes or second-by-second samples.
+        </li>
+      </ul>
+
+      <h3>Data that stays in your browser</h3>
+      <p>
+        Goals, weekly check-ins, and plan statuses you enter are saved in your browser’s local storage and are not sent
+        to our servers. Files you import are read in your browser tab only and are not uploaded.
+      </p>
+
+      <h2>How we use your data</h2>
+      <ul>
+        <li>To sign you in and keep you signed in.</li>
+        <li>To show your training history, charts, and plan in the dashboard.</li>
+        <li>
+          <strong>Weather for a run:</strong> when you open a run that has a start location, its date, hour, and start
+          location rounded to about 1 km (two decimal places) are sent to Open-Meteo to look up the weather at that time.
+        </li>
+        <li>
+          <strong>Coach’s read:</strong> only when you ask for an analysis, a compact summary of metrics (such as distance,
+          pace, duration, elevation, heart rate, and comparisons with similar runs) is sent to the AI analysis service that
+          Run Trends uses. Activity names, descriptions, routes, and coordinates are not included.
+        </li>
+      </ul>
+
+      <h2>Cookies</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Cookie</th><th>Purpose</th><th>Duration</th></tr></thead>
+          <tbody>
+            <tr><td><code>sv_session</code></td><td>Keeps you signed in. Only a one-way hash of it is stored on our servers.</td><td>30 days, or until you sign out</td></tr>
+            <tr><td><code>sv_oauth_state</code>, <code>sv_oauth_verifier</code></td><td>Protect the sign-in process with Strava or Garmin from being hijacked.</td><td>10 minutes</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Run Trends does not use advertising or analytics cookies.</p>
+
+      <h2>Who processes your data</h2>
+      <ul>
+        <li><strong>Cloudflare</strong> hosts Run Trends and its database.</li>
+        <li><strong>Strava</strong> and <strong>Garmin</strong> provide your activity data under their own privacy policies.</li>
+        <li><strong>Open-Meteo</strong> provides weather data for the rounded locations described above.</li>
+        <li>The <strong>AI analysis service</strong> receives the compact metric summaries described above when you request a coach’s read.</li>
+      </ul>
+      <p>We do not sell your data or share it with anyone else, except where required by law.</p>
+
+      <h2>How long we keep data</h2>
+      <ul>
+        <li>Account and connection data is kept until you disconnect the provider or delete your account.</li>
+        <li>Garmin activity summaries are kept while Garmin is connected. They are deleted when you disconnect Garmin in Run Trends, when you remove Run Trends from your Garmin Connect account, or when you withdraw permission to share activities.</li>
+        <li>Sign-in sessions expire after 30 days and are deleted when you sign out.</li>
+      </ul>
+
+      <h2>Your choices and rights</h2>
+      <ul>
+        <li><strong>Disconnect a provider</strong> from <em>Account</em> in Run Trends. Its tokens and any stored activities are deleted, and for Garmin, Run Trends asks Garmin to stop sending data.</li>
+        <li><strong>Delete your account</strong> from <em>Account → Delete account</em>. Your profile, connections, sessions, and stored activities are deleted immediately.</li>
+        <li><strong>Revoke access</strong> at any time from Strava’s <em>Settings → My Apps</em> or Garmin Connect’s connected-apps settings.</li>
+        <li><strong>Access or correction:</strong> contact us at the address above. Depending on where you live, you may have additional rights, such as to request a copy of your data or to complain to a data-protection authority.</li>
+      </ul>
+
+      <h2>Security</h2>
+      <p>
+        Connections to Run Trends use HTTPS. Provider tokens are encrypted with AES-256-GCM, sessions are stored only as
+        hashes, and data is accessible only to the account it belongs to.
+      </p>
+
+      <h2>Children</h2>
+      <p>Run Trends is not directed at children under 16, and we do not knowingly collect their data.</p>
+
+      <h2>Changes to this policy</h2>
+      <p>If this policy changes, we will update the effective date above. Significant changes will be noted in the app.</p>
+
+      <footer>
+        Garmin and Garmin Connect are trademarks of Garmin Ltd. or its subsidiaries. Strava is a trademark of Strava, Inc.
+        Run Trends is not affiliated with or endorsed by Garmin or Strava.
+      </footer>
+    </main>
+  </body>
+</html>

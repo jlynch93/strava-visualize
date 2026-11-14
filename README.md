@@ -113,9 +113,43 @@ expects. Strava is the first provider. Garmin will be added as another module.
 | `GET /api/me`, `DELETE /api/me` | Profile and connections; delete the account |
 | `DELETE /api/connections/:provider` | Disconnect a provider |
 | `GET /api/activities?provider=`, `/api/activities/:id?provider=` | Activities from a connected provider |
+| `POST /webhooks/garmin/:secret` | Garmin activity, deregistration and permission notifications |
 
 `/auth/login` and `/auth/callback` remain as aliases for Strava so existing
 Strava app settings keep working.
+
+### Garmin
+
+Garmin needs approval through the Garmin Connect Developer Program (Activity
+API). Unlike Strava, Garmin does not let apps list activities on demand: it
+pushes them to a webhook, so Garmin activities are stored in the D1
+`activities` table (`migrations/0002_activities.sql`) as summaries already
+mapped to Strava's field names. No GPS routes or samples are stored.
+
+- **Sign-in** uses OAuth 2.0 with PKCE. The code verifier is kept in a
+  10-minute `HttpOnly` cookie.
+- **Webhook:** in Garmin's developer portal, set the Activity, Activity
+  Details, Manually Updated Activities, Deregistration and User Permissions
+  endpoints to `https://<your-domain>/webhooks/garmin/<GARMIN_WEBHOOK_SECRET>`.
+  Both push (data in the body) and ping (callback URL) modes are handled. The
+  secret in the path is what authenticates Garmin's requests, so use a long
+  random value.
+- **Backfill:** connecting Garmin requests about a year of history in 90-day
+  windows. It arrives through the webhook over the following minutes.
+- **Disconnecting** Garmin, deleting the account, a Garmin deregistration, or
+  removing the `ACTIVITY_EXPORT` permission deletes the stored activities. A
+  deregistration also deletes the profile if Garmin was its only sign-in.
+
+The Garmin URLs in `src/providers/garmin.js` follow Garmin's published OAuth 2.0
+PKCE and Activity API documentation. Confirm them against the documentation you
+receive with your keys.
+
+### Privacy policy
+
+`public/privacy.html` (served at `/privacy`) describes exactly what the app
+stores and sends. Garmin requires one. Replace `[OPERATOR NAME]` and
+`[CONTACT EMAIL]` before submitting the app to Garmin, and update the policy
+whenever data handling changes.
 
 ## Cloudflare Workers
 
@@ -139,6 +173,10 @@ STRAVA_REDIRECT_URI=https://your-domain.example/auth/strava/callback   (optional
 OLLAMA_BASE_URL=https://ollama.jeer.rest
 OLLAMA_MODEL=qwen3.5:0.8b
 ```
+
+For Garmin, also set `GARMIN_CLIENT_ID`, `GARMIN_CLIENT_SECRET` and
+`GARMIN_WEBHOOK_SECRET` (and optionally `GARMIN_REDIRECT_URI`). Garmin stays
+listed as "Not available yet" until all three are present.
 
 Generate the encryption key with
 `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`.

@@ -1,5 +1,5 @@
 import { appError, cookie, json, parseCookies, redirect } from "./http.js";
-import { hasEncryptionKey } from "./crypto.js";
+import { hasEncryptionKey, randomToken, sha256 } from "./crypto.js";
 import {
   createUser,
   deleteConnection,
@@ -15,6 +15,7 @@ import { createSession, currentUserId, destroySession } from "./session.js";
 import { getProvider, providers } from "./providers/index.js";
 
 const STATE_COOKIE = "sv_oauth_state";
+const VERIFIER_COOKIE = "sv_oauth_verifier";
 
 // Problems that stop any sign-in, independent of which provider is chosen.
 function platformError(env) {
@@ -74,6 +75,9 @@ export async function handleMe(env, request) {
 
 export async function handleDeleteAccount(env, request) {
   const userId = await requireUser(env, request);
+  for (const connection of await listConnections(env, userId)) {
+    await revokeAtProvider(env, request, userId, connection.provider);
+  }
   await deleteUser(env, userId);
   return json({ deleted: true }, 200, { "set-cookie": cookie("sv_session", "", 0, request) });
 }
@@ -87,29 +91,38 @@ export async function handleDisconnect(env, request, providerId) {
   if (connections.length === 1) {
     return json({ error: "This is the only way you sign in. Connect another provider or delete your account instead." }, 409);
   }
+  await revokeAtProvider(env, request, userId, providerId);
   await deleteConnection(env, userId, providerId);
   return json({ disconnected: providerId });
 }
 
-export function handleLogin(env, request, providerId) {
+export async function handleLogin(env, request, providerId) {
   const provider = getProvider(providerId);
   if (!provider) return json({ error: "Unknown provider." }, 404);
   const platform = platformError(env);
   const config = provider.config(env, request);
   if (platform || config.error) return json({ error: platform || config.error }, 503);
   const state = crypto.randomUUID();
-  return new Response(null, {
-    status: 302,
-    headers: {
-      location: provider.authorizeUrl(config, state),
-      "cache-control": "no-store",
-      "set-cookie": cookie(STATE_COOKIE, `${provider.id}.${state}`, 600, request)
-    }
-  });
+  const headers = new Headers({ "cache-control": "no-store" });
+  headers.append("set-cookie", cookie(STATE_COOKIE, `${provider.id}.${state}`, 600, request));
+  let pkce;
+  if (provider.pkce) {
+    // PKCE: the verifier stays in an HttpOnly cookie; only its hash is sent
+    // to the provider, and the verifier is presented when exchanging the code.
+    const verifier = randomToken(48);
+    pkce = { codeChallenge: await sha256(verifier) };
+    headers.append("set-cookie", cookie(VERIFIER_COOKIE, verifier, 600, request));
+  }
+  headers.set("location", provider.authorizeUrl(config, state, pkce));
+  return new Response(null, { status: 302, headers });
+}
+
+function clearOauthCookies(request) {
+  return [cookie(STATE_COOKIE, "", 0, request), cookie(VERIFIER_COOKIE, "", 0, request)];
 }
 
 function authFailure(request, code) {
-  return redirect(`/?auth_error=${code}`, [cookie(STATE_COOKIE, "", 0, request)]);
+  return redirect(`/?auth_error=${code}`, clearOauthCookies(request));
 }
 
 export async function handleCallback(env, request, providerId) {
@@ -130,26 +143,53 @@ export async function handleCallback(env, request, providerId) {
   const code = url.searchParams.get("code");
   if (!code) return authFailure(request, "denied");
 
-  const { tokens, account } = await provider.exchangeCode(config, { code, searchParams: url.searchParams });
+  const codeVerifier = parseCookies(request)[VERIFIER_COOKIE] || "";
+  if (provider.pkce && !codeVerifier) return authFailure(request, "expired");
+
+  const { tokens, account } = await provider.exchangeCode(config, { code, codeVerifier, searchParams: url.searchParams });
   const signedInUserId = await currentUserId(env, request);
   const existing = await findConnectionByProviderUser(env, provider.id, account.id);
-  const cookies = [cookie(STATE_COOKIE, "", 0, request)];
+  const cookies = clearOauthCookies(request);
 
+  let userId = signedInUserId;
   if (signedInUserId) {
     if (existing && existing.user_id !== signedInUserId) return authFailure(request, "already_linked");
-    await upsertConnection(env, signedInUserId, provider.id, account, tokens);
-    return redirect(`/?connected=${provider.id}`, cookies);
+  } else {
+    userId = existing?.user_id || await createUser(env, account);
+    cookies.push(await createSession(env, userId, request));
   }
-
-  const userId = existing?.user_id || await createUser(env, account);
   await upsertConnection(env, userId, provider.id, account, tokens);
-  cookies.push(await createSession(env, userId, request));
-  return redirect(`/?signedin=${provider.id}`, cookies);
+  await runConnectedHook(env, provider, config, tokens, userId);
+  return redirect(signedInUserId ? `/?connected=${provider.id}` : `/?signedin=${provider.id}`, cookies);
+}
+
+// Lets a provider start work after a connection is saved (Garmin requests a
+// history backfill). A failure here must not undo a successful sign-in.
+async function runConnectedHook(env, provider, config, tokens, userId) {
+  if (!provider.onConnected) return;
+  try {
+    await provider.onConnected(env, config, tokens, userId);
+  } catch (error) {
+    console.warn(`${provider.name} post-connect step failed: ${error.message}`);
+  }
+}
+
+// Tells the provider to stop sending data for this user, where it supports
+// that. Best effort: local data is removed regardless.
+async function revokeAtProvider(env, request, userId, providerId) {
+  const provider = getProvider(providerId);
+  if (!provider?.onDisconnect) return;
+  try {
+    const accessToken = await providerAccessToken(env, request, userId, providerId);
+    await provider.onDisconnect(provider.config(env, request), accessToken);
+  } catch (error) {
+    console.warn(`${provider.name} deregistration failed: ${error.message}`);
+  }
 }
 
 export async function handleLogout(env, request) {
   const sessionCookie = await destroySession(env, request);
-  return redirect("/?signedout=1", [sessionCookie, cookie(STATE_COOKIE, "", 0, request)]);
+  return redirect("/?signedout=1", [sessionCookie, ...clearOauthCookies(request)]);
 }
 
 // Returns a usable access token for the user's connection, refreshing and

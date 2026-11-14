@@ -11,6 +11,7 @@ import {
 import { handleActivities, handleActivity } from "./activities.js";
 import { handleWeather } from "./weather.js";
 import { handleInsights } from "./insights.js";
+import { handleGarminWebhook } from "./webhooks.js";
 
 async function handleRequest(request, env) {
   const url = new URL(request.url);
@@ -38,7 +39,10 @@ async function handleRequest(request, env) {
   if (pathname === "/auth/callback") return handleCallback(env, request, "strava");
   if (pathname === "/auth/logout") return handleLogout(env, request);
 
-  if (pathname.startsWith("/api/") || pathname.startsWith("/auth/")) {
+  const garminWebhook = pathname.match(/^\/webhooks\/garmin\/([^/]+)$/);
+  if (garminWebhook && method === "POST") return handleGarminWebhook(env, request, garminWebhook[1]);
+
+  if (pathname.startsWith("/api/") || pathname.startsWith("/auth/") || pathname.startsWith("/webhooks/")) {
     return json({ error: "Not found" }, 404);
   }
   const asset = await env.ASSETS.fetch(request);

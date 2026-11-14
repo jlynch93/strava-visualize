@@ -78,7 +78,7 @@ test("Worker reports an actionable configuration state", async () => {
   assert.equal(data.signedIn, false);
   assert.equal(data.connected, false);
   assert.match(data.error, /D1 database/);
-  assert.deepEqual(data.providers.map((provider) => provider.id), ["strava"]);
+  assert.deepEqual(data.providers.map((provider) => provider.id), ["strava", "garmin"]);
   assert.equal(data.providers[0].redirectUri, "https://example.test/auth/strava/callback");
 
   const missingStrava = await worker.fetch(request("/api/status"), configuredEnv({ STRAVA_CLIENT_ID: "" }));
@@ -204,8 +204,11 @@ test("Activity routes require a session and report when pagination reaches its c
   assert.equal((await complete.json()).truncated, false);
   assert.equal(calls.at(-1).url.searchParams.get("per_page"), "100");
 
-  const unknown = await worker.fetch(request("/api/activities?provider=garmin", { cookie: session }), env);
+  const unknown = await worker.fetch(request("/api/activities?provider=fitbit", { cookie: session }), env);
   assert.equal(unknown.status, 400);
+  const notConnected = await worker.fetch(request("/api/activities?provider=garmin", { cookie: session }), env);
+  assert.equal(notConnected.status, 401);
+  assert.equal((await notConnected.json()).error, "Connect Garmin first.");
 });
 
 test("Activity detail rejects malformed upstream payloads", async (t) => {
