@@ -24,6 +24,8 @@
     <link rel="stylesheet" href="/charts.css">
     <link rel="stylesheet" href="/fitness.css">
     <link rel="stylesheet" href="/theme.css">
+    <link rel="stylesheet" href="/runlore.css">
+    <link rel="preload" href="/fonts/bricolage-grotesque-latin-wght.woff2" as="font" type="font/woff2" crossorigin>
   </head>
   <body class="is-loading">
     <!--
@@ -48,10 +50,10 @@
           <span class="brand-wordmark">runlore</span>
         </a>
         <nav class="app-nav" aria-label="Dashboard sections">
-          <a href="#overview">Overview</a>
-          <a href="#fitness">Fitness</a>
-          <a href="#planning">Plan</a>
-          <a href="#runs">Runs</a>
+          <a href="#overview"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3.5 15c0-5.5 4.5-10 10-10 4 0 6.5 2.6 6.5 6 0 4.8-4.4 8.5-9.6 8.5C6.5 19.5 3.5 18 3.5 15z"/><circle cx="13" cy="11.5" r="2.2"/></svg><span>Overview</span></a>
+          <a href="#fitness"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 12h4l2.5-6 4 12 2.5-6H21"/></svg><span>Fitness</span></a>
+          <a href="#planning"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="3.5" y="5" width="17" height="15" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg><span>Plan</span></a>
+          <a href="#runs"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M8 6h12M8 12h12M8 18h12"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/></svg><span>Runs</span></a>
         </nav>
         <div class="header-actions">
           <span id="heroStatus" class="live-indicator">Ready for training data</span>
@@ -316,7 +318,7 @@
       </section>
 
       <section id="planning" class="coaching-workspace data-panel" aria-labelledby="coachingWorkspaceTitle">
-        <div class="panel-heading"><h2 id="coachingWorkspaceTitle">Make room for your next week</h2><span>Goals and check-ins stay in this browser</span></div>
+        <div class="panel-heading"><h2 id="coachingWorkspaceTitle">Make room for your next week</h2><span>Saved to your account when you’re signed in</span></div>
         <div class="coaching-grid">
           <details class="context-disclosure"><summary>Goal &amp; availability<span>Personalize your week</span></summary><form id="goalForm" class="context-card">
 
