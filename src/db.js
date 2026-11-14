@@ -161,6 +161,7 @@ export async function deleteUser(env, userId) {
   // foreign keys enabled on the connection.
   await db.batch([
     db.prepare("DELETE FROM activities WHERE user_id = ?").bind(userId),
+    db.prepare("DELETE FROM user_state WHERE user_id = ?").bind(userId),
     db.prepare("DELETE FROM provider_connections WHERE user_id = ?").bind(userId),
     db.prepare("DELETE FROM sessions WHERE user_id = ?").bind(userId),
     db.prepare("DELETE FROM users WHERE id = ?").bind(userId)

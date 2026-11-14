@@ -37,13 +37,15 @@ async function loadLedger(page) {
 
 async function loadDemoBlock(page) {
   await page.goto("/");
-  await page.getByRole("button", { name: "Demo data", exact: true }).click();
+  // First-time visitors start from the welcome panel; the header's demo
+  // button only appears once some history is loaded.
+  await page.getByRole("button", { name: "Preview demo data", exact: true }).click();
   await expect(page.locator("#activityCount")).toContainText(/runs in range/);
 }
 
 test("first use presents onboarding and reveals the dashboard after data is loaded", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "Bring your training history into view." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Every run adds to the story." })).toBeVisible();
   for (const selector of [".toolbar", "#overview", ".key-runs", "#planning", ".training-texture", ".advanced-exploration", ".dashboard", "#runs"]) {
     const sections = page.locator(selector);
     for (let index = 0; index < await sections.count(); index += 1) {

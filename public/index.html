@@ -5,17 +5,30 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#eef2ec" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#0d181c" media="(prefers-color-scheme: dark)">
-    <title>Strava Run Trends</title>
+    <title>Runlore · Every run adds to the story</title>
+    <meta name="description" content="Runlore turns your Strava and Garmin runs into training trends, fitness, and a plan for the week ahead.">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+    <link rel="manifest" href="/site.webmanifest">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="Runlore">
+    <meta property="og:title" content="Runlore · Every run adds to the story">
+    <meta property="og:description" content="Training trends, fitness and plans from Strava and Garmin.">
+    <meta property="og:url" content="https://runlore.app/">
+    <meta property="og:image" content="https://runlore.app/brand/og-image.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta name="twitter:card" content="summary_large_image">
     <link rel="stylesheet" href="/styles.css">
     <link rel="stylesheet" href="/dashboard.css">
     <link rel="stylesheet" href="/charts.css">
     <link rel="stylesheet" href="/fitness.css">
     <link rel="stylesheet" href="/theme.css">
   </head>
-  <body>
+  <body class="is-loading">
     <!--
       THESIS: A runner should see the shape of a training block before being asked to inspect individual metrics; this dashboard refuses the decorative neon control-room template.
-      OWN-WORLD: A precise performance ledger — mineral paper, deep blue-black ink, sharp timing rules, and one electric-lime action signal.
+      OWN-WORLD: Runlore — the story a runner’s miles keep, told as a precise performance ledger — mineral paper, deep blue-black ink, sharp timing rules, and one electric-lime action signal.
       STORY: Set a window, read the work at a glance, then move from the trend to training signals and individual runs.
       FIRST VIEWPORT: A compact tool header leads to the selected-block statement, its primary trend, and one continuous metric strip; the data connection action stays at the top right.
       FORM: Operate-mode dashboard, designed for repeat post-run review. FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review and verdict.
@@ -23,9 +36,16 @@
     <a class="skip-link" href="#overview">Skip to training overview</a>
     <main class="app" id="app">
       <header class="app-header" aria-label="Application header">
-        <a class="brand-lockup" href="#overview" aria-label="Run Trends overview">
-          <span class="brand-mark" aria-hidden="true"></span>
-          <span class="brand-wordmark">Run Trends</span>
+        <a class="brand-lockup" href="#overview" aria-label="Runlore overview">
+          <svg class="brand-mark" viewBox="0 0 64 64" aria-hidden="true" focusable="false">
+            <rect x=".75" y=".75" width="62.5" height="62.5" rx="14.5" fill="#0e1a1f" stroke="#26404a" stroke-width="1.5"/>
+            <g fill="none" stroke-linejoin="round" stroke-width="4.5">
+              <path d="M8.5 47.5C6 34 14 14.5 34 10.5c13.5-2.7 22.5 5 21 16.5C53.5 39.5 42 53 25.5 55 15.5 56.2 10 53 8.5 47.5z" stroke="#3d8f86"/>
+              <path d="M20 40.5c-1.2-8.5 4.5-18.5 15-20.8 7.5-1.6 12.4 2.2 11.7 8.3-.9 7.7-7.6 14-16.2 15-5.6.6-9.9-.5-10.5-2.5z" stroke="#5fb3a8"/>
+            </g>
+            <circle cx="36.5" cy="30" r="6" fill="#c8f04a"/>
+          </svg>
+          <span class="brand-wordmark">runlore</span>
         </a>
         <nav class="app-nav" aria-label="Dashboard sections">
           <a href="#overview">Overview</a>
@@ -94,12 +114,17 @@
         <button id="resetWindowButton" class="primary" type="button">Show all history</button>
       </section>
 
+      <section class="app-loading" aria-live="polite" aria-busy="true">
+        <img class="app-loading-mark" src="/brand/runlore-mark.svg" alt="" width="48" height="48">
+        <p>Loading your runs…</p>
+      </section>
+
       <section class="onboarding" aria-labelledby="onboardingTitle">
         <div class="onboarding-copy">
-          <h1 id="onboardingTitle">Bring your training history into view.</h1>
-          <p>Sign in with Strava or Garmin, import an activity export, or use a sample block to explore the dashboard before sharing any of your data.</p>
+          <h1 id="onboardingTitle">Every run adds to the story.</h1>
+          <p>Runlore turns your running history into clear trends, an honest read on your fitness, and a plan for the week ahead. Sign in with Strava or Garmin, import an export, or explore with sample data first.</p>
           <div class="onboarding-actions">
-            <button id="emptyConnectButton" class="primary" type="button">Sign in</button>
+            <button id="emptyConnectButton" class="primary" type="button">Sign in to get started</button>
             <label class="file-button">
               <span>Import JSON or CSV</span>
               <input id="emptyFileInput" type="file" accept=".json,.csv,text/csv,application/json">
@@ -108,15 +133,15 @@
           </div>
           <p class="privacy-note">Imports stay in this browser tab. Coach analysis shares a compact summary only when you request it. <a href="/privacy">Privacy policy</a></p>
         </div>
-        <div class="onboarding-field" aria-hidden="true">
-          <span class="field-label">What becomes visible</span>
-          <div class="field-line field-line-long"></div>
-          <div class="field-line field-line-medium"></div>
-          <div class="field-line field-line-short"></div>
-          <div class="field-mark field-mark-one"></div>
-          <div class="field-mark field-mark-two"></div>
-          <div class="field-mark field-mark-three"></div>
-          <span class="field-caption">Volume · pace · recovery</span>
+        <div class="onboarding-features">
+          <h2 class="features-title">What Runlore shows you</h2>
+          <ul class="feature-list">
+            <li><strong>Trends</strong><span>Volume, pace and rhythm, compared with the block before.</span></li>
+            <li><strong>Fitness</strong><span>Readiness today, estimated VO2 max, and fitness, fatigue and form.</span></li>
+            <li><strong>Plan</strong><span>A draft week built around your goal, availability and recent load.</span></li>
+            <li><strong>Runs</strong><span>Every run, searchable, with splits, weather and comparisons.</span></li>
+          </ul>
+          <p class="works-with">Works with <strong>Strava</strong> and <strong>Garmin</strong></p>
         </div>
       </section>
 
@@ -402,8 +427,8 @@
       </section>
 
       <footer class="app-footer">
-        <span>Run Trends</span>
-        <p>Every run belongs to the larger block. <a href="/privacy">Privacy policy</a></p>
+        <span class="footer-lockup"><img class="brand-mark" src="/brand/runlore-mark.svg" alt="" width="20" height="20"><span class="brand-wordmark">runlore</span></span>
+        <p>Every run adds to the story. <a href="/privacy">Privacy policy</a></p>
       </footer>
     </main>
     <div id="chartTooltip" class="chart-tooltip" role="tooltip" aria-label="Chart values"></div>

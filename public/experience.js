@@ -2,14 +2,16 @@
 function readSaved(key, fallback) {
   try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch { return fallback; }
 }
-const savedPreferences = readSaved("run-trends-preferences", {});
-const preferences = {
-  units: savedPreferences?.units === "metric" ? "metric" : "imperial",
-  weather: savedPreferences?.weather === true,
-  rememberImports: savedPreferences?.rememberImports === true,
-  analysisService: typeof savedPreferences?.analysisService === "string" ? savedPreferences.analysisService : "",
-  theme: ["light", "dark"].includes(savedPreferences?.theme) ? savedPreferences.theme : "system"
-};
+function sanitizePreferences(saved) {
+  return {
+    units: saved?.units === "metric" ? "metric" : "imperial",
+    weather: saved?.weather === true,
+    rememberImports: saved?.rememberImports === true,
+    analysisService: typeof saved?.analysisService === "string" ? saved.analysisService : "",
+    theme: ["light", "dark"].includes(saved?.theme) ? saved.theme : "system"
+  };
+}
+const preferences = sanitizePreferences(readSaved("run-trends-preferences", {}));
 function applyTheme() {
   if (preferences.theme === "system") delete document.documentElement.dataset.theme;
   else document.documentElement.dataset.theme = preferences.theme;
@@ -38,8 +40,94 @@ function actionFeedback(message, isError, scopeId = feedbackScopeId) {
 }
 
 function persist(key, value) {
+  queueAccountSave(key, value);
   try { localStorage.setItem(key, JSON.stringify(value)); return true; }
-  catch { setStatus("Browser storage is full or unavailable. Your changes remain in this tab; export a backup.", true); return false; }
+  catch {
+    if (accountSync.enabled && SYNCED_STORAGE_KEYS.includes(key)) return true;
+    setStatus("Browser storage is full or unavailable. Your changes remain in this tab; export a backup.", true); return false;
+  }
+}
+
+/* Account sync: when signed in, goals, check-ins, saved plans, the fitness
+   profile and preferences are saved to the account and follow the runner to
+   other devices. The account copy wins when both exist; a device's existing
+   settings are uploaded the first time it signs in. Imports stay local. */
+const SYNCED_STORAGE_KEYS = ["run-trends-preferences", "run-trends-plans-v1", "run-trends-coaching-context-v1", "run-trends-athlete-v1"];
+const accountSync = { enabled: false, timers: new Map(), failed: false };
+
+function queueAccountSave(key, value) {
+  if (!accountSync.enabled || !SYNCED_STORAGE_KEYS.includes(key)) return;
+  clearTimeout(accountSync.timers.get(key));
+  accountSync.timers.set(key, setTimeout(() => saveToAccount(key, value), 500));
+}
+
+async function saveToAccount(key, value) {
+  accountSync.timers.delete(key);
+  try {
+    const response = await fetch(`/api/state/${encodeURIComponent(key)}`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(value)
+    });
+    if (response.status === 401) { accountSync.enabled = false; return; }
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    if (accountSync.failed) { accountSync.failed = false; setStatus("Your settings are saved to your account again."); }
+  } catch {
+    accountSync.failed = true;
+    setStatus("Couldn't save that change to your account. It's kept on this device and will sync with your next change.", true);
+  }
+}
+
+function applySyncedValue(key, value) {
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* The in-memory copy still applies. */ }
+  if (key === "run-trends-preferences") {
+    Object.assign(preferences, sanitizePreferences(value));
+    applyTheme();
+    const controls = { unitPreference: preferences.units, themePreference: preferences.theme };
+    for (const [id, setting] of Object.entries(controls)) { const control = document.getElementById(id); if (control) control.value = setting; }
+    const weather = document.getElementById("weatherPreference"); if (weather) weather.checked = preferences.weather;
+  } else if (key === "run-trends-plans-v1") {
+    acceptedPlans = validPlans(value) ? value : {};
+  } else if (key === "run-trends-coaching-context-v1") {
+    coachingContext = sanitizeCoachingContext(value);
+    syncCoachingInputs();
+  } else if (key === "run-trends-athlete-v1") {
+    athleteProfile = sanitizeAthleteProfile(value);
+    fitnessModelCache.key = "";
+  }
+}
+
+async function syncAccountState() {
+  const response = await fetch("/api/state");
+  if (!response.ok) { accountSync.enabled = false; return; }
+  const { state: remote = {} } = await response.json();
+  accountSync.enabled = true;
+  for (const key of SYNCED_STORAGE_KEYS) {
+    if (remote[key]) applySyncedValue(key, remote[key].value);
+    else {
+      const local = readSaved(key, null);
+      if (local && typeof local === "object") queueAccountSave(key, local);
+    }
+  }
+  if (Object.keys(remote).length) render();
+}
+
+// Signing out or deleting the account removes the account's goals, plans and
+// fitness profile from this browser, so a shared computer doesn't keep the
+// previous runner's data. Display preferences (theme, units) stay on the device.
+function clearSyncedSettings() {
+  accountSync.enabled = false;
+  for (const timer of accountSync.timers.values()) clearTimeout(timer);
+  accountSync.timers.clear();
+  for (const key of SYNCED_STORAGE_KEYS.filter((item) => item !== "run-trends-preferences")) {
+    try { localStorage.removeItem(key); } catch { /* Storage unavailable. */ }
+  }
+  acceptedPlans = {};
+  coachingContext = sanitizeCoachingContext(null);
+  athleteProfile = sanitizeAthleteProfile(null);
+  fitnessModelCache.key = "";
+  syncCoachingInputs();
+  render();
 }
 function activeCheckin() { return TrainingCore.freshCheckin(coachingContext.checkin); }
 function hasHistoryCoverage(start, end) {

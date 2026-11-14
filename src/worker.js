@@ -12,6 +12,9 @@ import { handleActivities, handleActivity } from "./activities.js";
 import { handleWeather } from "./weather.js";
 import { handleInsights } from "./insights.js";
 import { handleGarminWebhook } from "./webhooks.js";
+import { handleGetState, handlePutState } from "./state.js";
+import { withSecurityHeaders } from "./security.js";
+import { deleteExpiredSessions } from "./session.js";
 
 async function handleRequest(request, env) {
   const url = new URL(request.url);
@@ -28,6 +31,9 @@ async function handleRequest(request, env) {
   if (activityRoute && method === "GET") return handleActivity(env, request, activityRoute[1]);
   if (pathname === "/api/weather" && method === "GET") return handleWeather(request);
   if (pathname === "/api/insights" && method === "POST") return handleInsights(env, request);
+  if (pathname === "/api/state" && method === "GET") return handleGetState(env, request);
+  const stateRoute = pathname.match(/^\/api\/state\/([a-z0-9-]+)$/);
+  if (stateRoute && method === "PUT") return handlePutState(env, request, stateRoute[1]);
 
   const authRoute = pathname.match(/^\/auth\/([a-z]+)\/(login|callback)$/);
   if (authRoute) {
@@ -63,12 +69,29 @@ async function handleRequest(request, env) {
   return asset;
 }
 
+async function respond(request, env) {
+  try {
+    return await handleRequest(request, env);
+  } catch (error) {
+    const status = Number(error.status) || 500;
+    if (status >= 500) {
+      // Structured so Workers Logs can filter on it; never includes tokens.
+      console.error(JSON.stringify({ event: "request_failed", path: new URL(request.url).pathname, status, message: error.message }));
+    }
+    // Errors without a status are unexpected; don't leak their internals.
+    const message = error.status ? error.message : "Something went wrong on our side. Try again in a moment.";
+    return json({ error: message || "Unexpected server error." }, status);
+  }
+}
+
 export default {
   async fetch(request, env) {
-    try {
-      return await handleRequest(request, env);
-    } catch (error) {
-      return json({ error: error.message || "Unexpected server error." }, Number(error.status) || 500);
-    }
+    return withSecurityHeaders(await respond(request, env), request);
+  },
+
+  // Cron trigger (see wrangler.jsonc): remove expired sign-in sessions.
+  async scheduled(controller, env) {
+    const removed = await deleteExpiredSessions(env);
+    console.log(JSON.stringify({ event: "sessions_cleaned", removed }));
   }
 };

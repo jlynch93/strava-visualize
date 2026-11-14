@@ -1,6 +1,6 @@
 ---
-name: Run Trends
-description: A precise running ledger on mineral paper, with deep ink and a restrained lime action signal.
+name: Runlore
+description: Runlore (runlore.app). A precise running ledger on mineral paper, with deep ink and a restrained lime action signal.
 colors:
   paper: "oklch(96.8% 0.012 135)"
   paper-deep: "oklch(93.5% 0.018 136)"
@@ -105,7 +105,31 @@ components:
     padding: "17px 20px"
 ---
 
-# Design System: Run Trends
+# Design System: Runlore
+
+## Brand
+
+Runlore's mark is two topographic contour rings rising to a lime summit on an
+ink tile (`public/brand/runlore-mark.svg`). It stands for terrain, the layers a
+runner's history builds up, and the latest run at the top. The tile carries a
+fine `#26404a` edge so it stays defined on dark surfaces. Keep its colors fixed
+(ink `#0e1a1f`, teal `#3d8f86` and `#5fb3a8`, lime `#c8f04a`); do not
+recolor it per theme.
+
+The wordmark is lowercase `runlore`, set in the system stack at weight 780 with
+`-0.035em` tracking, beside the mark with a 9–10px gap. Do not uppercase or
+letter-space it. The header uses a 28px mark; the footer uses 20px. The tagline
+is "Every run adds to the story."
+
+### First paint and welcome
+
+The page starts in a loading state (`body.is-loading`): the pulsing mark and
+"Loading your runs…" show while the account and history load, so returning
+runners never see the welcome panel flash. Signed-out visitors see the welcome
+panel: the headline and actions on the left, and "What Runlore shows you"
+(Trends, Fitness, Plan, Runs, and "Works with Strava and Garmin") on the right.
+Before any history is loaded, the header shows only Sign in and Data & settings
+on the right; the demo entry point lives in the welcome panel.
 
 ## Overview
 
@@ -149,7 +173,7 @@ Mineral paper (`paper`) is the page canvas. `surface` lifts content through tone
 
 Use the local Aptos / Segoe UI system stack for headings, prose, controls, and SVG labels. There is no separate display or monospace font and no remote font dependency.
 
-The display role belongs to onboarding; the smaller headline belongs to the loaded overview. Section titles stay compact, while metric figures gain hierarchy from size, weight, and tabular numerals. Most dashboard explanations sit below the base body size, around 0.8–0.88rem. Form labels use sentence case; uppercase tracking is reserved for the wordmark, table headings, and short categorical labels. On mobile the overview headline becomes 1.65rem and onboarding becomes 2.1rem.
+The display role belongs to onboarding; the smaller headline belongs to the loaded overview. Section titles stay compact, while metric figures gain hierarchy from size, weight, and tabular numerals. Most dashboard explanations sit below the base body size, around 0.8–0.88rem. Form labels use sentence case; uppercase tracking is reserved for table headings, and short categorical labels. On mobile the overview headline becomes 1.65rem and onboarding becomes 2.1rem.
 
 ## Layout
 

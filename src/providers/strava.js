@@ -20,14 +20,20 @@ async function tokenRequest(params) {
     body: new URLSearchParams(params),
     signal: AbortSignal.timeout(20_000)
   }, "Strava");
+  if (response.status === 429) throw appError(RATE_LIMITED, 429);
   if (!response.ok) throw appError(data.message || "Strava rejected the token request.", response.status === 400 || response.status === 401 ? 401 : 502);
   return data;
 }
+
+// Strava's limits apply to the whole app (every runner's requests together),
+// so a 429 is expected under load and should read as "try again shortly".
+const RATE_LIMITED = "Strava is limiting requests right now. Your saved history is still here; try syncing again in a few minutes.";
 
 async function apiGet(accessToken, path) {
   const { response, data } = await fetchJson(`${API}${path}`, {
     headers: { authorization: `Bearer ${accessToken}` }
   }, "Strava");
+  if (response.status === 429) throw appError(RATE_LIMITED, 429);
   if (!response.ok) throw appError(data.message || `Strava returned HTTP ${response.status}.`, response.status);
   return data;
 }

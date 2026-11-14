@@ -1,8 +1,8 @@
 {
-  "name": "strava-visualize",
+  "name": "runlore",
   "version": "0.1.0",
   "private": true,
-  "description": "A local web dashboard for visualizing Strava running trends over time.",
+  "description": "Runlore: every run adds to the story. Training trends, fitness and plans from Strava and Garmin.",
   "scripts": {
     "build": "node scripts/build-assets.js",
     "start": "node server.js",

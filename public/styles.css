@@ -150,44 +150,39 @@ h3 {
   text-decoration: none;
 }
 
+/* Runlore mark (inline SVG) and lowercase wordmark. */
 .brand-mark {
-  position: relative;
-  width: 23px;
-  height: 23px;
-  overflow: hidden;
-  background: var(--ink-strong);
-}
-
-.brand-mark::before,
-.brand-mark::after {
-  position: absolute;
-  content: "";
-}
-
-.brand-mark::before {
-  top: 5px;
-  left: 4px;
-  width: 15px;
-  height: 8px;
-  border: 2px solid var(--accent);
-  border-bottom: 0;
-  border-radius: 12px 12px 0 0;
-  transform: rotate(-18deg);
-}
-
-.brand-mark::after {
-  right: 3px;
-  bottom: 4px;
-  width: 8px;
-  height: 3px;
-  background: var(--accent);
+  display: block;
+  flex: none;
+  width: 28px;
+  height: 28px;
 }
 
 .brand-wordmark {
-  font-size: 0.78rem;
-  font-weight: 800;
-  letter-spacing: 0.13em;
-  text-transform: uppercase;
+  font-size: 1.22rem;
+  font-weight: 780;
+  letter-spacing: -0.035em;
+  line-height: 1;
+}
+
+.footer-lockup {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink-strong);
+}
+
+.footer-lockup .brand-mark {
+  width: 20px;
+  height: 20px;
+}
+
+.app-footer .footer-lockup .brand-wordmark {
+  color: var(--ink-strong);
+  font-size: .95rem;
+  font-weight: 780;
+  letter-spacing: -0.035em;
+  text-transform: none;
 }
 
 .app-nav {
@@ -484,105 +479,6 @@ body:not(.is-custom-range) .toolbar-controls .control:nth-child(3) {
   color: var(--ink-faint);
   font-size: 0.78rem;
   line-height: 1.45;
-}
-
-.onboarding-field {
-  position: relative;
-  overflow: hidden;
-  border-left: 1px solid var(--rule);
-  background: var(--ink-strong);
-}
-
-.onboarding-field::before,
-.onboarding-field::after {
-  position: absolute;
-  content: "";
-}
-
-.onboarding-field::before {
-  top: 24px;
-  right: 24px;
-  bottom: 24px;
-  left: 24px;
-  border: 1px solid rgba(242, 249, 244, 0.22);
-}
-
-.onboarding-field::after {
-  top: 52%;
-  right: 24px;
-  left: 24px;
-  height: 1px;
-  background: rgba(242, 249, 244, 0.3);
-}
-
-.field-label,
-.field-caption {
-  position: absolute;
-  z-index: 1;
-  color: rgba(242, 249, 244, 0.72);
-  font-size: 0.65rem;
-  font-weight: 700;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-}
-
-.field-label {
-  top: 40px;
-  left: 40px;
-}
-
-.field-caption {
-  right: 40px;
-  bottom: 40px;
-  text-align: right;
-}
-
-.field-line {
-  position: absolute;
-  left: 39px;
-  height: 7px;
-  background: var(--accent);
-}
-
-.field-line-long {
-  bottom: 109px;
-  width: 65%;
-}
-
-.field-line-medium {
-  bottom: 86px;
-  width: 42%;
-  background: rgba(242, 249, 244, 0.72);
-}
-
-.field-line-short {
-  bottom: 63px;
-  width: 25%;
-  background: var(--teal);
-}
-
-.field-mark {
-  position: absolute;
-  top: 47%;
-  width: 11px;
-  height: 11px;
-  border-radius: 50%;
-  background: var(--accent);
-  transform: translate(-50%, -50%);
-}
-
-.field-mark-one {
-  left: 29%;
-}
-
-.field-mark-two {
-  left: 55%;
-  background: rgba(242, 249, 244, 0.92);
-}
-
-.field-mark-three {
-  left: 76%;
-  background: var(--teal);
 }
 
 body.has-data .onboarding {
@@ -2240,11 +2136,6 @@ body.modal-open {
     grid-template-columns: 1fr;
   }
 
-  .onboarding-field {
-    min-height: 210px;
-    border-top: 1px solid var(--rule);
-    border-left: 0;
-  }
 
   .overview-head {
     grid-template-columns: 1fr;
@@ -2406,24 +2297,6 @@ body.modal-open {
   .onboarding-actions button,
   .onboarding-actions .file-button {
     width: 100%;
-  }
-
-  .onboarding-field {
-    min-height: 184px;
-  }
-
-  .field-label {
-    top: 29px;
-    left: 27px;
-  }
-
-  .field-caption {
-    right: 27px;
-    bottom: 28px;
-  }
-
-  .field-line {
-    left: 27px;
   }
 
   .panel-heading {

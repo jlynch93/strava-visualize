@@ -1,6 +1,28 @@
-# Strava Visualize
+# Runlore
 
-A web dashboard for runners to analyze Strava trends over a selected period.
+**Every run adds to the story.** [runlore.app](https://runlore.app) turns a runner's
+Strava or Garmin history into training trends, fitness, and a plan for the week
+ahead.
+
+## Brand
+
+- **Name:** Runlore, written `runlore` in the wordmark and "Runlore" in prose.
+  The domain is `runlore.app`.
+- **Idea:** *lore* is the story your running builds over time. The mark is a
+  pair of topographic contour rings rising to a lime summit: terrain and a trail
+  map, layers of accumulated runs, and the latest run at the top.
+- **Assets** (in `public/`): `brand/runlore-mark.svg` (master mark),
+  `favicon.svg`, `apple-touch-icon.png`, `brand/icon-192.png`,
+  `brand/icon-512.png`, `brand/og-image.png` (1200×630 share card) and
+  `site.webmanifest`. Regenerate the PNGs after changing the mark with
+  `node scripts/render-brand-assets.js`.
+- **Colors:** the existing system tokens. Ink `#0e1a1f` tile, teal contours
+  `#3d8f86` and `#5fb3a8`, lime summit `#c8f04a` (the `accent` token).
+- **Voice:** plain, specific, encouraging. Tagline: "Every run adds to the story."
+
+The Cloudflare Worker and D1 database keep their original `strava-visualize`
+names: renaming the Worker would deploy a new one without its secrets,
+bindings, or domain.
 
 ## Local Development
 
@@ -185,7 +207,7 @@ is required.
 ## Accounts and providers
 
 People sign in with an activity provider; there are no passwords. The first
-sign-in creates a Run Trends profile, and signing in again with the same
+sign-in creates a Runlore profile, and signing in again with the same
 provider account returns to it. From **Account**, a signed-in user can connect
 another provider, disconnect one (the last one cannot be removed, because it is
 how they sign in), sign out, or delete the account.
@@ -248,9 +270,53 @@ receive with your keys.
 ### Privacy policy
 
 `public/privacy.html` (served at `/privacy`) describes exactly what the app
-stores and sends. Garmin requires one. Replace `[OPERATOR NAME]` and
-`[CONTACT EMAIL]` before submitting the app to Garmin, and update the policy
-whenever data handling changes.
+stores and sends, including the operator (Runlore, Ohio, USA) and the privacy
+contact. Garmin requires one. Update it whenever data handling changes.
+
+## Production
+
+### Account-synced settings
+
+When a runner is signed in, goals, check-ins, saved plans, the heart-rate
+profile and display preferences are saved to the account (`user_state` table,
+`migrations/0003_user_state.sql`) through `GET /api/state` and
+`PUT /api/state/:key`. Only the four keys in `src/state.js` are accepted, each
+up to 256 KB. On sign-in the account's copy is applied; settings that exist only
+on the device are uploaded once. Signing out or deleting the account removes
+goals, plans and the fitness profile from the browser (theme and units stay).
+Imported activity files never leave the browser.
+
+### Hardening
+
+- **Security headers** on every response: a strict Content Security Policy
+  (no inline scripts, no third-party origins), `frame-ancestors 'none'`,
+  `nosniff`, a strict referrer policy and a locked-down permissions policy.
+  HSTS is sent over HTTPS only. Worker responses get them from
+  `src/security.js`; static files get the same values from the `_headers`
+  file that `scripts/build-assets.js` writes. A test keeps the two in step.
+- **Errors:** unexpected failures return a generic message and are logged as
+  structured JSON (`event: "request_failed"`). `observability` is enabled in
+  `wrangler.jsonc`, so they appear in Workers Logs.
+- **Session cleanup:** a daily cron trigger (`03:17 UTC`) deletes expired
+  sessions.
+- **Strava rate limits** are app-wide (every runner's requests count together).
+  A 429 is shown as "try again in a few minutes" and the runner's loaded
+  history stays on screen. Syncs are incremental, so a returning runner usually
+  costs one Strava request. Before opening the app widely, ask Strava to raise
+  the app's athlete capacity and rate limits.
+
+### Go-live checklist
+
+1. Apply migrations: `npx wrangler d1 migrations apply strava-visualize --remote`
+   (0001 accounts, 0002 activities, 0003 synced settings).
+2. Set secrets: `STRAVA_CLIENT_ID`, `STRAVA_CLIENT_SECRET`,
+   `TOKEN_ENCRYPTION_KEY`, and `APP_BASE_URL=https://runlore.app`.
+3. Add `runlore.app` as the Worker's custom domain, and set Strava's
+   Authorization Callback Domain to `runlore.app`.
+4. Point `ollama.runlore.app` at the analysis server (it is the default
+   `OLLAMA_BASE_URL`).
+5. After deploying, run the "Verify production" workflow against
+   `https://runlore.app`.
 
 ## Cloudflare Workers
 
@@ -280,7 +346,7 @@ STRAVA_CLIENT_SECRET
 TOKEN_ENCRYPTION_KEY=<32 random bytes, base64>
 STRAVA_REDIRECT_URI=https://your-domain.example/auth/strava/callback   (optional)
 APP_BASE_URL=https://your-domain.example
-OLLAMA_BASE_URL=https://ollama.jeer.rest
+OLLAMA_BASE_URL=https://ollama.runlore.app
 OLLAMA_MODEL=qwen3.5:0.8b
 ```
 

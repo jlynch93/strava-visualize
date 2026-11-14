@@ -72,6 +72,10 @@ button:disabled { cursor: default; opacity: .48; }
 .app-nav a { padding: 10px 12px; border-radius: 5px; }
 .app-nav a:hover, .app-nav a[aria-current] { background: var(--paper-deep); }
 .header-actions { gap: 10px; }
+/* Keep actions at the right edge even when the nav is hidden (no history). */
+.app-header > .header-actions { grid-column: 3; justify-self: end; }
+body:not(.has-history) #sourceStatus,
+body:not(.has-history) .header-actions #demoButton { display: none; }
 .hero-status { font-variant-numeric: tabular-nums; }
 .live-indicator { display: none; }
 .actions { gap: 6px; }
@@ -179,7 +183,6 @@ body:not(.has-history) .app-nav,
 body.has-history .onboarding { display: none; }
 .onboarding { margin: 40px 0; }
 .onboarding-copy h1 { font-size: 2.7rem; line-height: 1.08; }
-.onboarding-field { background: var(--paper-deep); }
 @media (max-width: 1100px) {
   .app-header { grid-template-columns: auto 1fr; gap: 8px 20px; }
   .header-actions { grid-column: 2; grid-row: 1; }
@@ -193,7 +196,7 @@ body.has-history .onboarding { display: none; }
   html { scroll-padding-top: 16px; }
   .app { width: calc(100% - 32px); }
   .app-header { gap: 12px; }
-  .brand-wordmark { font-size: .8rem; }
+  .brand-wordmark { font-size: 1.1rem; }
   .header-actions { grid-column: 1 / -1; grid-row: 2; justify-content: start; }
   .actions { display: flex; flex-wrap: wrap; width: 100%; }
   .actions button, .actions .file-button { min-height: 40px; padding: 8px 10px; }
@@ -256,7 +259,8 @@ body.has-history .onboarding { display: none; }
   .onboarding { margin-top: 24px; }
   .onboarding-copy { padding: 28px 22px; }
   .onboarding-copy h1 { font-size: 2.1rem; }
-  .onboarding-field { display: none; }
+  .onboarding { grid-template-columns: 1fr; }
+  .onboarding-features { border-left: 0; border-top: 1px solid var(--rule); padding: 24px 22px; }
 }
 
 /* Account sign-in and connected accounts */
@@ -377,3 +381,26 @@ body.has-history .onboarding { display: none; }
   .session-editor > label:last-of-type { grid-column: 1 / -1; }
   .session-editor select { grid-column: auto; }
 }
+
+/* Welcome panel: what the product does, beside the sign-in actions. */
+.onboarding-features { display: flex; flex-direction: column; gap: 18px; padding: 36px 34px; border-left: 1px solid var(--rule); background: var(--paper-deep); }
+.features-title { margin: 0; font-size: .72rem; font-weight: 760; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-soft); }
+.feature-list { display: grid; gap: 14px; margin: 0; padding: 0; list-style: none; }
+.feature-list li { display: grid; gap: 2px; padding-left: 14px; border-left: 3px solid var(--teal); }
+.feature-list li:first-child { border-left-color: var(--accent); }
+.feature-list strong { color: var(--ink-strong); font-size: .95rem; }
+.feature-list span { color: var(--ink-soft); font-size: .86rem; line-height: 1.45; }
+.works-with { margin: auto 0 0; color: var(--ink-faint); font-size: .8rem; }
+.works-with strong { color: var(--ink-soft); }
+
+/* First paint: while the account and history load, show a calm loading state
+   instead of flashing the welcome panel at returning runners. */
+.app-loading { display: none; }
+body.is-loading .app-loading { display: grid; justify-items: center; gap: 14px; padding: 96px 16px; color: var(--ink-soft); }
+body.is-loading .app-loading p { margin: 0; font-size: .95rem; }
+body.is-loading .onboarding,
+body.is-loading .header-actions .actions > :not(#accountButton) { visibility: hidden; }
+body.is-loading .onboarding { display: none; }
+.app-loading-mark { width: 48px; height: 48px; animation: runlore-pulse 1.4s ease-in-out infinite; }
+@keyframes runlore-pulse { 0%, 100% { opacity: .55; transform: scale(.96); } 50% { opacity: 1; transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) { .app-loading-mark { animation: none; } }

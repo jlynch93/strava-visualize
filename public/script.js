@@ -569,13 +569,18 @@ function updateWindowContext() {
   document.querySelector("#exportButton").disabled = !state.filteredRuns.length;
 }
 
+// Defaults are left out of the URL so a fresh visit stays at a clean address;
+// restoreViewState() falls back to the same defaults.
+const VIEW_DEFAULTS = { range: "90", group: "week", metric: "distance", sort: "newest", type: "all" };
+
 function saveViewState() {
   const url = new URL(window.location.href);
+  const before = url.search;
   for (const [key, value] of Object.entries({ range: els.rangeSelect.value, start: els.rangeSelect.value === "custom" ? els.startDate.value : "", end: els.rangeSelect.value === "custom" ? els.endDate.value : "", group: els.bucketSelect.value, metric: els.metricSelect.value, search: els.runSearch.value, sort: els.runSort.value, type: document.querySelector("#runTypeFilter")?.value || "all" })) {
-    if (value) url.searchParams.set(key, value);
+    if (value && value !== VIEW_DEFAULTS[key]) url.searchParams.set(key, value);
     else url.searchParams.delete(key);
   }
-  window.history.replaceState(null, "", url);
+  if (url.search !== before) window.history.replaceState(null, "", url);
 }
 
 function restoreViewState() {
@@ -2457,7 +2462,7 @@ function renderTable() {
 const AUTH_MESSAGES = {
   expired: "That sign-in took too long or started in another browser. Try again.",
   denied: "Sign-in was cancelled before access was granted.",
-  already_linked: "That account is already linked to a different Run Trends profile. Sign out and sign in with it instead."
+  already_linked: "That account is already linked to a different Runlore profile. Sign out and sign in with it instead."
 };
 const PROVIDER_CACHE_KEY = "run-trends-provider-session";
 
@@ -2479,6 +2484,12 @@ function isProviderSource() {
 
 function hasProviderConnection() {
   return state.account.signedIn && state.account.connections.length > 0;
+}
+
+// Ends the first-paint loading state (see .app-loading in dashboard.css).
+function finishLoading() {
+  document.body.classList.remove("is-loading");
+  document.querySelector(".app-loading")?.setAttribute("aria-busy", "false");
 }
 
 function clearProviderCache() {
@@ -2569,7 +2580,7 @@ function renderAccountControls() {
     els.connectButton.textContent = signedIn && provider ? `Sync ${providerName(provider)}` : "Sign in";
   }
   els.connectButton.title = !signedIn && state.account.error ? state.account.error : "";
-  if (els.emptyConnectButton) els.emptyConnectButton.textContent = signedIn ? "Sync activities" : "Sign in";
+  if (els.emptyConnectButton) els.emptyConnectButton.textContent = signedIn ? "Sync activities" : "Sign in to get started";
   els.accountButton.hidden = !signedIn;
   els.accountButton.textContent = user?.displayName || "Account";
 }
@@ -2588,10 +2599,10 @@ function renderAccountDialog() {
   if (!signedIn) {
     const buttons = providers.map(providerButton).join("");
     els.accountDialogBody.innerHTML = `
-      <p class="account-copy">Use the account you record runs with. Run Trends creates your profile the first time you sign in.</p>
+      <p class="account-copy">Use the account you record runs with. Runlore creates your profile the first time you sign in.</p>
       <div class="provider-list">${buttons || `<p class="account-error">${escapeHtml(state.account.error || "Sign-in is not available on this server.")}</p>`}</div>
       ${buttons && state.account.error ? `<p class="account-error">${escapeHtml(state.account.error)}</p>` : ""}
-      <p class="account-fine-print">Run Trends only reads your activities. It never posts to your accounts. <a href="/privacy">Privacy policy</a></p>`;
+      <p class="account-fine-print">Runlore only reads your activities. It never posts to your accounts. <a href="/privacy">Privacy policy</a></p>`;
     return;
   }
   const rows = providers.map((provider) => {
@@ -2649,10 +2660,17 @@ async function loadAccount({ sync = true } = {}) {
     }
   }
   if (!isConnected(state.activeProvider)) state.activeProvider = state.account.connections[0]?.provider || "";
+  // Account settings load before activities so the first render uses them.
+  if (state.account.signedIn && sync) {
+    try { await syncAccountState(); } catch { /* Local settings stay in use. */ }
+  } else if (!state.account.signedIn) {
+    accountSync.enabled = false;
+  }
   renderAccountControls();
   if (els.accountDialog.open) renderAccountDialog();
   if (!state.activeProvider) {
     clearProviderCache();
+    finishLoading();
     return;
   }
   if (!sync || state.dataSource === "import") return;
@@ -2665,7 +2683,7 @@ async function loadAccount({ sync = true } = {}) {
   state.freshAuth = false;
   if (usable) {
     state.rawActivities = cached.activities.map(normalizeActivity); state.dataSource = cached.provider; state.lastSync = cached.lastSync; state.historyTruncated = cached.truncated; historyCoverage = cached.coverage;
-    syncRangeInputs(); render();
+    syncRangeInputs(); render(); finishLoading();
     const age = Date.now() - new Date(cached.lastSync).valueOf();
     if (!Number.isFinite(age) || age < 0 || age > 5 * 60 * 1000) await fetchActivities("recent", state.activeProvider);
   } else {
@@ -2683,7 +2701,7 @@ function consumeAuthResult() {
   keys.forEach((key) => url.searchParams.delete(key));
   window.history.replaceState(null, "", url);
   if (params.signedin || params.connected) state.freshAuth = true;
-  if (params.signedout !== null || params.disconnected !== null) clearProviderCache();
+  if (params.signedout !== null || params.disconnected !== null) { clearProviderCache(); clearSyncedSettings(); }
   if (params.auth_error) setStatus(AUTH_MESSAGES[params.auth_error] || "Sign-in did not complete. Try again.", true);
   else if (params.connected) state.activeProvider = params.connected;
   else if (params.signedout !== null || params.disconnected !== null) setStatus("Signed out.");
@@ -2706,12 +2724,13 @@ async function disconnectProvider(providerId) {
 }
 
 async function deleteAccount() {
-  if (!window.confirm("Delete your Run Trends account? This removes your profile and connected accounts from Run Trends. Your Strava and Garmin data are not affected.")) return;
+  if (!window.confirm("Delete your Runlore account? This removes your profile and connected accounts from Runlore. Your Strava and Garmin data are not affected.")) return;
   const response = await fetch("/api/me", { method: "DELETE" });
   const data = await readApiJson(response);
   if (!response.ok) throw new Error(data.error || "Unable to delete the account.");
   els.accountDialog.close();
   clearProviderCache();
+  clearSyncedSettings();
   state.rawActivities = [];
   state.dataSource = "";
   state.activeProvider = "";
@@ -3077,7 +3096,9 @@ syncCoachingInputs();
 bindTooltips();
 render();
 consumeAuthResult();
-loadAccount().catch((error) => setStatus(error.message, true));
+// Never leave the loading state up indefinitely, even if the network stalls.
+const loadingFallback = setTimeout(finishLoading, 12_000);
+loadAccount().catch((error) => setStatus(error.message, true)).finally(() => { clearTimeout(loadingFallback); finishLoading(); });
 
 let chartResizeTimer;
 let lastChartWidth = document.querySelector("#app").clientWidth;

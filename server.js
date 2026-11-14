@@ -137,7 +137,7 @@ async function start() {
     }
   });
   server.listen(port, () => {
-    console.log(`Strava Visualize is running at ${origin}`);
+    console.log(`Runlore is running at ${origin}`);
   });
 }
 

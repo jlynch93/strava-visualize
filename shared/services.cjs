@@ -1,4 +1,4 @@
-const DEFAULT_OLLAMA_URL = "https://ollama.jeer.rest";
+const DEFAULT_OLLAMA_URL = "https://ollama.runlore.app";
 const DEFAULT_OLLAMA_MODEL = "qwen3.5:0.8b";
 const WEATHER_HOURLY = [
   "temperature_2m",

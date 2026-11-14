@@ -4,6 +4,8 @@
   "main": "src/worker.js",
   "compatibility_date": "2026-07-09",
   "build": { "command": "npm run build" },
+  "observability": { "enabled": true },
+  "triggers": { "crons": ["17 3 * * *"] },
   "assets": {
     "directory": "./.build/public",
     "binding": "ASSETS",
