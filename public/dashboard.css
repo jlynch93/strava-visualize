@@ -193,7 +193,7 @@ body.has-history .onboarding { display: none; }
   html { scroll-padding-top: 16px; }
   .app { width: calc(100% - 32px); }
   .app-header { gap: 12px; }
-  .brand-wordmark { font-size: .8rem; }
+  .brand-wordmark { font-size: 1.1rem; }
   .header-actions { grid-column: 1 / -1; grid-row: 2; justify-content: start; }
   .actions { display: flex; flex-wrap: wrap; width: 100%; }
   .actions button, .actions .file-button { min-height: 40px; padding: 8px 10px; }

@@ -67,7 +67,7 @@
 }
 
 /* Panels that are deliberately dark in both themes keep a dark ground. */
-.brand-mark, .ai-insights-intro, .plan-draft, .chart-tooltip, .modal-close, .workout-header { background: var(--panel-ink); }
+.ai-insights-intro, .plan-draft, .chart-tooltip, .modal-close, .workout-header { background: var(--panel-ink); }
 .plan-draft, .plan-draft h3, .modal-close, .workout-header { color: var(--panel-text); }
 
 /* Dark-theme specifics that tokens alone cannot express. */

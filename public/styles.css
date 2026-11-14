@@ -150,44 +150,39 @@ h3 {
   text-decoration: none;
 }
 
+/* Runlore mark (inline SVG) and lowercase wordmark. */
 .brand-mark {
-  position: relative;
-  width: 23px;
-  height: 23px;
-  overflow: hidden;
-  background: var(--ink-strong);
-}
-
-.brand-mark::before,
-.brand-mark::after {
-  position: absolute;
-  content: "";
-}
-
-.brand-mark::before {
-  top: 5px;
-  left: 4px;
-  width: 15px;
-  height: 8px;
-  border: 2px solid var(--accent);
-  border-bottom: 0;
-  border-radius: 12px 12px 0 0;
-  transform: rotate(-18deg);
-}
-
-.brand-mark::after {
-  right: 3px;
-  bottom: 4px;
-  width: 8px;
-  height: 3px;
-  background: var(--accent);
+  display: block;
+  flex: none;
+  width: 28px;
+  height: 28px;
 }
 
 .brand-wordmark {
-  font-size: 0.78rem;
-  font-weight: 800;
-  letter-spacing: 0.13em;
-  text-transform: uppercase;
+  font-size: 1.22rem;
+  font-weight: 780;
+  letter-spacing: -0.035em;
+  line-height: 1;
+}
+
+.footer-lockup {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink-strong);
+}
+
+.footer-lockup .brand-mark {
+  width: 20px;
+  height: 20px;
+}
+
+.app-footer .footer-lockup .brand-wordmark {
+  color: var(--ink-strong);
+  font-size: .95rem;
+  font-weight: 780;
+  letter-spacing: -0.035em;
+  text-transform: none;
 }
 
 .app-nav {

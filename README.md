@@ -1,6 +1,28 @@
-# Strava Visualize
+# Runlore
 
-A web dashboard for runners to analyze Strava trends over a selected period.
+**Every run adds to the story.** [runlore.app](https://runlore.app) turns a runner's
+Strava or Garmin history into training trends, fitness, and a plan for the week
+ahead.
+
+## Brand
+
+- **Name:** Runlore, written `runlore` in the wordmark and "Runlore" in prose.
+  The domain is `runlore.app`.
+- **Idea:** *lore* is the story your running builds over time. The mark is a
+  pair of topographic contour rings rising to a lime summit: terrain and a trail
+  map, layers of accumulated runs, and the latest run at the top.
+- **Assets** (in `public/`): `brand/runlore-mark.svg` (master mark),
+  `favicon.svg`, `apple-touch-icon.png`, `brand/icon-192.png`,
+  `brand/icon-512.png`, `brand/og-image.png` (1200×630 share card) and
+  `site.webmanifest`. Regenerate the PNGs after changing the mark with
+  `node scripts/render-brand-assets.js`.
+- **Colors:** the existing system tokens. Ink `#0e1a1f` tile, teal contours
+  `#3d8f86` and `#5fb3a8`, lime summit `#c8f04a` (the `accent` token).
+- **Voice:** plain, specific, encouraging. Tagline: "Every run adds to the story."
+
+The Cloudflare Worker and D1 database keep their original `strava-visualize`
+names: renaming the Worker would deploy a new one without its secrets,
+bindings, or domain.
 
 ## Local Development
 
@@ -185,7 +207,7 @@ is required.
 ## Accounts and providers
 
 People sign in with an activity provider; there are no passwords. The first
-sign-in creates a Run Trends profile, and signing in again with the same
+sign-in creates a Runlore profile, and signing in again with the same
 provider account returns to it. From **Account**, a signed-in user can connect
 another provider, disconnect one (the last one cannot be removed, because it is
 how they sign in), sign out, or delete the account.

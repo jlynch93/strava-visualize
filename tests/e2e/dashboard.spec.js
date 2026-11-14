@@ -43,7 +43,7 @@ async function loadDemoBlock(page) {
 
 test("first use presents onboarding and reveals the dashboard after data is loaded", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "Bring your training history into view." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Every run adds to the story." })).toBeVisible();
   for (const selector of [".toolbar", "#overview", ".key-runs", "#planning", ".training-texture", ".advanced-exploration", ".dashboard", "#runs"]) {
     const sections = page.locator(selector);
     for (let index = 0; index < await sections.count(); index += 1) {

@@ -2457,7 +2457,7 @@ function renderTable() {
 const AUTH_MESSAGES = {
   expired: "That sign-in took too long or started in another browser. Try again.",
   denied: "Sign-in was cancelled before access was granted.",
-  already_linked: "That account is already linked to a different Run Trends profile. Sign out and sign in with it instead."
+  already_linked: "That account is already linked to a different Runlore profile. Sign out and sign in with it instead."
 };
 const PROVIDER_CACHE_KEY = "run-trends-provider-session";
 
@@ -2588,10 +2588,10 @@ function renderAccountDialog() {
   if (!signedIn) {
     const buttons = providers.map(providerButton).join("");
     els.accountDialogBody.innerHTML = `
-      <p class="account-copy">Use the account you record runs with. Run Trends creates your profile the first time you sign in.</p>
+      <p class="account-copy">Use the account you record runs with. Runlore creates your profile the first time you sign in.</p>
       <div class="provider-list">${buttons || `<p class="account-error">${escapeHtml(state.account.error || "Sign-in is not available on this server.")}</p>`}</div>
       ${buttons && state.account.error ? `<p class="account-error">${escapeHtml(state.account.error)}</p>` : ""}
-      <p class="account-fine-print">Run Trends only reads your activities. It never posts to your accounts. <a href="/privacy">Privacy policy</a></p>`;
+      <p class="account-fine-print">Runlore only reads your activities. It never posts to your accounts. <a href="/privacy">Privacy policy</a></p>`;
     return;
   }
   const rows = providers.map((provider) => {
@@ -2706,7 +2706,7 @@ async function disconnectProvider(providerId) {
 }
 
 async function deleteAccount() {
-  if (!window.confirm("Delete your Run Trends account? This removes your profile and connected accounts from Run Trends. Your Strava and Garmin data are not affected.")) return;
+  if (!window.confirm("Delete your Runlore account? This removes your profile and connected accounts from Runlore. Your Strava and Garmin data are not affected.")) return;
   const response = await fetch("/api/me", { method: "DELETE" });
   const data = await readApiJson(response);
   if (!response.ok) throw new Error(data.error || "Unable to delete the account.");

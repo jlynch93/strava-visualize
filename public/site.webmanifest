@@ -1,0 +1,14 @@
+{
+  "name": "Runlore",
+  "short_name": "Runlore",
+  "description": "Every run adds to the story. Training trends, fitness and plans from Strava and Garmin.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0d181c",
+  "theme_color": "#0d181c",
+  "icons": [
+    { "src": "/brand/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/brand/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}

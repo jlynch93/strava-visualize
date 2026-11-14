@@ -29,7 +29,7 @@ before(async () => {
     const timer = setTimeout(() => reject(new Error(`Server did not start. Output: ${output}`)), 5000);
     const collect = (chunk) => {
       output += chunk;
-      if (!output.includes("Strava Visualize is running")) return;
+      if (!output.includes("Runlore is running")) return;
       clearTimeout(timer);
       resolve();
     };

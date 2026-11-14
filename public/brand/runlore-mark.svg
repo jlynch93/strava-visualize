@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title">
+  <title id="title">Runlore</title>
+  <rect x=".75" y=".75" width="62.5" height="62.5" rx="14.5" fill="#0e1a1f" stroke="#26404a" stroke-width="1.5"/>
+  <g fill="none" stroke-linejoin="round" stroke-width="4.5">
+    <path d="M8.5 47.5C6 34 14 14.5 34 10.5c13.5-2.7 22.5 5 21 16.5C53.5 39.5 42 53 25.5 55 15.5 56.2 10 53 8.5 47.5z" stroke="#3d8f86"/>
+    <path d="M20 40.5c-1.2-8.5 4.5-18.5 15-20.8 7.5-1.6 12.4 2.2 11.7 8.3-.9 7.7-7.6 14-16.2 15-5.6.6-9.9-.5-10.5-2.5z" stroke="#5fb3a8"/>
+  </g>
+  <circle cx="36.5" cy="30" r="6" fill="#c8f04a"/>
+</svg>
