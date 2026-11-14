@@ -1,4 +1,4 @@
-import { appError, fetchJson } from "../http.js";
+import { appError, callbackUrl, fetchJson } from "../http.js";
 
 const API = "https://www.strava.com/api/v3";
 const AUTHORIZE = "https://www.strava.com/oauth/authorize";
@@ -43,8 +43,7 @@ export default {
   name: "Strava",
 
   config(env, request) {
-    const origin = (env.APP_BASE_URL || new URL(request.url).origin).replace(/\/+$/, "");
-    const redirectUri = env.STRAVA_REDIRECT_URI || `${origin}/auth/strava/callback`;
+    const redirectUri = callbackUrl(env, request, "/auth/strava/callback", env.STRAVA_REDIRECT_URI);
     if (!env.STRAVA_CLIENT_ID || !env.STRAVA_CLIENT_SECRET) {
       return { error: "Add STRAVA_CLIENT_ID and STRAVA_CLIENT_SECRET to this Cloudflare Worker.", redirectUri };
     }

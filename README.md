@@ -347,7 +347,7 @@ TOKEN_ENCRYPTION_KEY=<32 random bytes, base64>
 STRAVA_REDIRECT_URI=https://your-domain.example/auth/strava/callback   (optional)
 APP_BASE_URL=https://your-domain.example
 OLLAMA_BASE_URL=https://ollama.runlore.app
-OLLAMA_MODEL=qwen3.5:0.8b
+OLLAMA_MODEL=qwen3:1.7b
 ```
 
 `wrangler.jsonc` sets `keep_vars: true`, so plain-text variables added in the
@@ -390,7 +390,7 @@ The dashboard can also import Strava JSON or CSV exports, download the selected
 window as a normalized CSV, and preserve the run-browser filters in a copied
 view link.
 
-`qwen3.5:0.8b` is the default workout-analysis model. The request keeps
+`qwen3:1.7b` is the default workout-analysis model. The request keeps
 reasoning hidden and asks for concise schema-valid JSON so the UI receives only
 the final training read.
 

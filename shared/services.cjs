@@ -1,5 +1,5 @@
 const DEFAULT_OLLAMA_URL = "https://ollama.runlore.app";
-const DEFAULT_OLLAMA_MODEL = "qwen3.5:0.8b";
+const DEFAULT_OLLAMA_MODEL = "qwen3:1.7b";
 const WEATHER_HOURLY = [
   "temperature_2m",
   "apparent_temperature",
@@ -266,8 +266,9 @@ function normalizeRunDigest(value, input) {
 
 async function requestInsight(input, env = {}, signal) {
   const isRunDigest = input?.kind === "run";
-  const baseUrl = String(env.OLLAMA_BASE_URL || DEFAULT_OLLAMA_URL).replace(/\/+$/, "");
-  const model = env.OLLAMA_MODEL || DEFAULT_OLLAMA_MODEL;
+  const baseUrl = String(env.OLLAMA_BASE_URL || DEFAULT_OLLAMA_URL).trim().replace(/\/+$/, "");
+  // Dashboard values are easy to paste with stray whitespace.
+  const model = String(env.OLLAMA_MODEL || "").trim() || DEFAULT_OLLAMA_MODEL;
   const response = await fetch(`${baseUrl}/api/chat`, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -284,8 +285,28 @@ async function requestInsight(input, env = {}, signal) {
     }),
     signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(120_000)]) : AbortSignal.timeout(120_000)
   });
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.error || `Ollama returned HTTP ${response.status}.`);
+  const text = await response.text();
+  let data;
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch {
+    data = null;
+  }
+  if (!response.ok || !data) {
+    const detail = String(data?.error || `HTTP ${response.status}`);
+    // A missing model is a configuration problem, not a passing failure:
+    // say so plainly and log which model was requested.
+    if (/model .*not found|pull/i.test(detail)) {
+      throw Object.assign(new Error("Coach analysis isn't available right now: the analysis server doesn't have the configured model installed."), {
+        status: 503,
+        log: { event: "analysis_model_missing", model, baseUrl, detail }
+      });
+    }
+    throw Object.assign(new Error(data ? `The analysis server returned an error (${detail}). Try again shortly.` : "The analysis server returned an unreadable response. Try again shortly."), {
+      status: 502,
+      log: { event: "analysis_failed", model, baseUrl, status: response.status, detail: data ? detail : text.slice(0, 200) }
+    });
+  }
   let parsed;
   try {
     parsed = JSON.parse(data.message?.content || "");

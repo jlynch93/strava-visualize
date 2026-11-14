@@ -37,6 +37,19 @@ export function cookie(name, value, maxAge, request) {
   return `${name}=${encodeURIComponent(value)}; Path=/; Max-Age=${maxAge}; HttpOnly${secure}; SameSite=Lax`;
 }
 
+const LOCAL_HOST = /^(localhost|127\.0\.0\.1|\[::1\])$|\.(localhost|test)$/i;
+
+// OAuth callback for a provider: an explicit override (e.g.
+// STRAVA_REDIRECT_URI), else APP_BASE_URL or the request origin plus `path`.
+// Anything other than a local development host is forced to https, so a stray
+// http:// setting can't send sign-in codes or cookies over plain HTTP.
+export function callbackUrl(env, request, path, override) {
+  const origin = String(env.APP_BASE_URL || new URL(request.url).origin).trim().replace(/\/+$/, "");
+  const url = new URL(String(override || "").trim() || `${origin}${path}`);
+  if (url.protocol === "http:" && !LOCAL_HOST.test(url.hostname)) url.protocol = "https:";
+  return url.toString();
+}
+
 export async function fetchJson(url, options = {}, label = "The provider") {
   const response = await fetch(url, { signal: AbortSignal.timeout(30_000), ...options });
   const text = await response.text();

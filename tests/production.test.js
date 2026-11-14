@@ -181,6 +181,64 @@ test("the configured Ollama model and server are used for analysis and reported 
   assert.equal(config.keep_vars, true, "Dashboard variables such as OLLAMA_MODEL must survive deploys.");
 });
 
+function insightRequest() {
+  return new Request("https://runlore.test/api/insights", {
+    method: "POST",
+    // A distinct client key per request keeps the per-client analysis rate
+    // limit (5/minute) from affecting these tests.
+    headers: { "content-type": "application/json", "x-analysis-client": `test-${Math.random()}` },
+    body: JSON.stringify({ recentRuns: [{ distanceMiles: 5 }], summary: { runCount: 1 } })
+  });
+}
+
+test("the default analysis model is one the Runlore server has, and stray whitespace is ignored", async (t) => {
+  const worker = await workerPromise;
+  let sentModel;
+  t.mock.method(globalThis, "fetch", async (url, options) => {
+    sentModel = JSON.parse(options.body).model;
+    return Response.json({ message: { content: JSON.stringify({ summary: "Steady.", observations: Array(3).fill({ title: "t", detail: "d", tone: "neutral" }) }) } });
+  });
+  await worker.fetch(insightRequest(), env());
+  assert.equal(sentModel, "qwen3:1.7b");
+  await worker.fetch(insightRequest(), env({ OLLAMA_MODEL: "  gemma4:e2b \n" }));
+  assert.equal(sentModel, "gemma4:e2b");
+  await worker.fetch(insightRequest(), env({ OLLAMA_MODEL: "   " }));
+  assert.equal(sentModel, "qwen3:1.7b", "A blank setting falls back to the default.");
+});
+
+test("a missing analysis model is reported plainly and logged with the model name", async (t) => {
+  const worker = await workerPromise;
+  const logged = [];
+  t.mock.method(console, "error", (line) => logged.push(JSON.parse(line)));
+  t.mock.method(globalThis, "fetch", async () => Response.json({ error: "model 'qwen3.5:0.8b' not found" }, { status: 404 }));
+  const response = await worker.fetch(insightRequest(), env({ OLLAMA_MODEL: "qwen3.5:0.8b" }));
+  assert.equal(response.status, 503);
+  assert.match((await response.json()).error, /doesn't have the configured model installed/);
+  assert.equal(logged[0].event, "analysis_model_missing");
+  assert.equal(logged[0].model, "qwen3.5:0.8b");
+
+  // A proxy error page (not JSON) doesn't leak a parser error to the runner.
+  t.mock.restoreAll();
+  t.mock.method(console, "error", () => {});
+  t.mock.method(globalThis, "fetch", async () => new Response("<html>502 Bad Gateway</html>", { status: 502 }));
+  const gateway = await worker.fetch(insightRequest(), env());
+  assert.equal(gateway.status, 502);
+  assert.match((await gateway.json()).error, /unreadable response/);
+});
+
+test("provider callbacks are forced to https except on local development hosts", async () => {
+  const worker = await workerPromise;
+  const redirect = async (testEnv, origin = "https://runlore.test") => {
+    const login = await worker.fetch(request("/auth/strava/login", { origin }), testEnv);
+    return new URL(login.headers.get("location")).searchParams.get("redirect_uri");
+  };
+  assert.equal(await redirect(env({ STRAVA_REDIRECT_URI: "http://runlore.app/auth/callback" })), "https://runlore.app/auth/callback");
+  assert.equal(await redirect(env({ APP_BASE_URL: "http://runlore.app/" })), "https://runlore.app/auth/strava/callback");
+  assert.equal(await redirect(env({ STRAVA_REDIRECT_URI: " https://runlore.app/auth/strava/callback " })), "https://runlore.app/auth/strava/callback");
+  assert.equal(await redirect(env(), "http://localhost:4173"), "http://localhost:4173/auth/strava/callback");
+  assert.equal(await redirect(env({ APP_BASE_URL: "http://runlore.localhost:8787" })), "http://runlore.localhost:8787/auth/strava/callback");
+});
+
 test("a Strava rate limit reads as a temporary, retryable problem", async (t) => {
   const worker = await workerPromise;
   const testEnv = env();
