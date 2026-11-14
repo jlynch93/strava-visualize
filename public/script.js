@@ -2290,21 +2290,23 @@ function showWorkoutModal(runId, trigger = document.activeElement) {
   const cadence = rawCadence && rawCadence < 120 ? rawCadence * 2 : rawCadence;
   const watts = Number(run.average_watts) || 0;
   const maxSpeedPace = run.max_speed ? formatPace(1609.344 / run.max_speed) : "-";
-  const bucketLabelText = digest.bucket ? `${digest.bucket.label}: ${displayDistance(digest.bucket.distanceMiles, 1)}, ${digest.bucket.runs} runs` : "No group context";
+  const bucketLabelText = digest.bucket ? `${els.bucketSelect.value === "month" ? digest.bucket.label : `Week of ${digest.bucket.label}`} · ${displayDistance(digest.bucket.distanceMiles, 1)} across ${digest.bucket.runs} run${digest.bucket.runs === 1 ? "" : "s"}` : "No group context";
   const similarPaceText = digest.similarPace ? `${formatPace(digest.similarPace)} across ${digest.similarCount} similar` : "Needs more similar runs";
   const hrCompare = averageHr && digest.similarHr ? `${Math.round(averageHr - digest.similarHr) >= 0 ? "+" : ""}${Math.round(averageHr - digest.similarHr)} bpm vs similar` : "HR comparison unavailable";
-  const socialText = `${run.kudos_count || 0} kudos · ${run.achievement_count || 0} achievements · ${run.pr_count || 0} PRs`;
+  const socialParts = [run.kudos_count ? `${run.kudos_count} kudos` : "", run.achievement_count ? `${run.achievement_count} achievement${run.achievement_count === 1 ? "" : "s"}` : "", run.pr_count ? `${run.pr_count} PR${run.pr_count === 1 ? "" : "s"}` : ""].filter(Boolean);
+  const startTime = /T\d{2}:\d{2}/.test(String(run.start_date_local || run.start_date || "")) ? digest.date.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }) : "";
+  const stravaLink = state.dataSource === "strava" && /^\d+$/.test(String(run.id)) ? `<a class="strava-link" target="_blank" rel="noopener noreferrer" href="https://www.strava.com/activities/${run.id}">Open in Strava</a>` : "";
 
   els.workoutModalContent.innerHTML = `
-    <div class="workout-toolbar"><button type="button" data-action="previous-run">Previous run</button><button type="button" data-action="next-run">Next run</button>${state.dataSource === "strava" && /^\d+$/.test(String(run.id)) ? `<a target="_blank" rel="noopener noreferrer" href="https://www.strava.com/activities/${run.id}">Open in Strava</a>` : ""}<label>Compare with <select id="comparisonScope"><option value="distance">Similar distance</option><option value="sport">Same sport and distance</option><option value="recent">Recent 90 days and distance</option></select></label></div>
+    <div class="workout-toolbar"><div class="workout-nav"><button type="button" class="workout-step" data-action="previous-run" aria-label="Previous run"><span aria-hidden="true">←</span><span class="step-label">Previous</span></button><button type="button" class="workout-step" data-action="next-run" aria-label="Next run"><span class="step-label">Next</span><span aria-hidden="true">→</span></button></div>${stravaLink}<label>Compare with <select id="comparisonScope"><option value="distance">Similar distance</option><option value="sport">Same sport and distance</option><option value="recent">Recent 90 days and distance</option></select></label></div>
     <section id="enrichedRun" aria-live="polite"></section>
     <header class="workout-header">
-      <p class="workout-kicker">${escapeHtml(digest.date.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric", year: "numeric" }))}</p>
+      <p class="workout-kicker">${escapeHtml(digest.date.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric", year: "numeric" }))}${startTime ? ` · ${escapeHtml(startTime)}` : ""}</p>
       <h2 id="workoutModalTitle">${escapeHtml(run.name)}</h2>
       <div class="workout-header-meta">
-        <span class="workout-type">${escapeHtml(digest.runType)} run</span>
+        ${runTypeChip(run)}
         <span id="workoutModalMeta">${escapeHtml(bucketLabelText)}</span>
-        <span>${escapeHtml(socialText)}</span>
+        ${socialParts.length ? `<span class="workout-social">${escapeHtml(socialParts.join(" · "))}</span>` : ""}
       </div>
     </header>
     <div class="workout-body">
@@ -2313,6 +2315,9 @@ function showWorkoutModal(runId, trigger = document.activeElement) {
           <article class="workout-lead-metric"><span>Distance</span><strong>${displayDistance(digest.distance, 2)}</strong><small>${formatOrdinal(digest.distanceRank)} percentile</small></article>
           <article class="workout-lead-metric"><span>Average pace</span><strong>${escapeHtml(formatPace(digest.pace))}</strong><small>${escapeHtml(similarPaceText)}</small></article>
           <article class="workout-lead-metric"><span>Moving time</span><strong>${escapeHtml(formatDuration(digest.moving))}</strong><small>${digest.stopped ? `${escapeHtml(formatDuration(digest.stopped))} stopped` : "Continuous effort"}</small></article>
+          <article class="workout-lead-metric is-secondary"><span>Elevation</span><strong>${!run.has_elevation ? "–" : `${Math.round(digest.elevation).toLocaleString()} ft`}</strong><small>${!run.has_elevation ? "Not recorded" : `${Math.round(digest.elevationDensity)} ft/mi`}</small></article>
+          <article class="workout-lead-metric is-secondary"><span>Heart rate</span><strong>${averageHr ? `${Math.round(averageHr)} bpm` : "–"}</strong><small>${maxHr ? `Max ${Math.round(maxHr)} bpm` : escapeHtml(hrCompare)}</small></article>
+          <article class="workout-lead-metric is-secondary"><span>Cadence</span><strong>${cadence ? `${Math.round(cadence)} spm` : "–"}</strong><small>${cadence ? "Steps per minute" : "Not recorded"}</small></article>
         </div>
         <aside class="workout-read">
           <span>The read</span>
@@ -2419,44 +2424,69 @@ function renderTable() {
   els.previousPage.disabled = state.ledgerPage === 0;
   els.nextPage.disabled = offset + pageSize >= matching.length;
   els.ledgerEmpty.hidden = matching.length > 0;
+  renderRunsSummary(matching, query);
+  // Each row carries a thin distance trace relative to the longest match.
+  const longest = Math.max(...matching.map((run) => Number(run.distance) || 0), 1);
   els.activityRows.replaceChildren(...recent.map((run) => {
     const row = document.createElement("tr");
     row.className = "activity-row";
     row.dataset.activityId = run.id;
     row.title = "Open workout details";
+    row.style.setProperty("--share", ((Number(run.distance) || 0) / longest).toFixed(3));
+    const date = parseActivityDate(run);
+    const cell = (label, className = "") => {
+      const element = document.createElement("td");
+      element.dataset.label = label;
+      if (className) element.className = className;
+      row.appendChild(element);
+      return element;
+    };
+    const dateCell = cell("Date", "cell-date");
+    dateCell.title = date.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" });
+    dateCell.innerHTML = `<span class="date-weekday">${escapeHtml(date.toLocaleDateString(undefined, { weekday: "short" }))}</span><span class="date-day">${date.getDate()}</span><span class="date-month">${escapeHtml(date.toLocaleDateString(undefined, { month: "short", year: date.getFullYear() === new Date().getFullYear() ? undefined : "2-digit" }))}</span><span class="visually-hidden">${escapeHtml(date.toLocaleDateString())}</span>`;
+    const name = cell("Name", "cell-name");
+    name.textContent = run.name;
+    name.dataset.unitSkip = "";
+    cell("Type", "cell-type").innerHTML = runTypeChip(run);
+    cell("Distance", "cell-distance").textContent = `${displayDistance(miles(run.distance), 2)}`;
+    cell("Pace", "cell-pace").textContent = formatPace(paceSeconds(run));
+    cell("Time", "cell-time").textContent = formatDuration(Number(run.moving_time) || 0);
+    cell("Heart rate", "cell-hr").textContent = run.average_heartrate ? `${Math.round(run.average_heartrate)} bpm` : "–";
+    cell("Elevation", "cell-elev").textContent = run.has_elevation ? `${Math.round(feet(run.total_elevation_gain)).toLocaleString()} ft` : "Unavailable";
     const actionCell = document.createElement("td");
+    actionCell.className = "cell-open";
     const action = document.createElement("button");
     action.type = "button";
     action.className = "row-detail-button";
     action.dataset.activityId = run.id;
     action.setAttribute("aria-label", `Open details for ${run.name}`);
-    action.textContent = "→";
+    action.innerHTML = '<span aria-hidden="true">→</span>';
     actionCell.appendChild(action);
     row.appendChild(actionCell);
-    const values = [
-      parseActivityDate(run).toLocaleDateString(),
-      run.name,
-      `${displayDistance(miles(run.distance), 2)}`,
-      formatPace(paceSeconds(run)),
-      run.has_elevation ? `${Math.round(feet(run.total_elevation_gain)).toLocaleString()} ft` : "Unavailable",
-      run.average_heartrate ? `${Math.round(run.average_heartrate)} bpm` : "-",
-      formatDuration(Number(run.moving_time) || 0)
-    ];
-    const labels = ["Date", "Name", "Distance", "Pace", "Elevation", "Heart rate", "Time"];
-    values.forEach((value, index) => {
-      const cell = document.createElement("td");
-      cell.textContent = value;
-      if (index === 0) cell.insertAdjacentHTML("beforeend", ` ${runTypeChip(run)}`);
-      if (index === 1) cell.dataset.unitSkip = "";
-      cell.dataset.label = labels[index];
-      row.appendChild(cell);
-    });
     row.addEventListener("click", (event) => {
       if (event.target.closest("button")) return;
       showWorkoutModal(run.id, action);
     });
     return row;
   }));
+}
+
+// Totals for the runs currently listed (after search and type filters).
+function renderRunsSummary(runs, query) {
+  const root = document.querySelector("#runsSummary");
+  if (!root) return;
+  const distance = runs.reduce((sum, run) => sum + miles(Number(run.distance) || 0), 0);
+  const seconds = runs.reduce((sum, run) => sum + (Number(run.moving_time) || 0), 0);
+  const longest = runs.reduce((max, run) => Math.max(max, miles(Number(run.distance) || 0)), 0);
+  const filtered = Boolean(query) || (document.querySelector("#runTypeFilter")?.value || "all") !== "all";
+  const item = (label, value) => `<div class="runs-summary-item"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`;
+  root.innerHTML = runs.length ? [
+    item(filtered ? "Matching runs" : "Runs", runs.length.toLocaleString()),
+    item("Distance", displayDistance(distance, 1)),
+    item("Moving time", formatDuration(seconds)),
+    item("Average pace", formatPace(distance ? seconds / distance : 0)),
+    item("Longest", displayDistance(longest, 1))
+  ].join("") : "";
 }
 
 const AUTH_MESSAGES = {
@@ -2583,6 +2613,8 @@ function renderAccountControls() {
   if (els.emptyConnectButton) els.emptyConnectButton.textContent = signedIn ? "Sync activities" : "Sign in to get started";
   els.accountButton.hidden = !signedIn;
   els.accountButton.textContent = user?.displayName || "Account";
+  // Phones show the account as a round initial (see runlore.css).
+  els.accountButton.dataset.initial = (user?.displayName || "A").trim().charAt(0).toUpperCase() || "A";
 }
 
 function providerButton(provider) {
