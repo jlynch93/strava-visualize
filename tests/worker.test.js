@@ -87,7 +87,7 @@ test("Worker reports an actionable configuration state", async () => {
   const ready = await (await worker.fetch(request("/api/status"), configuredEnv())).json();
   assert.equal(ready.configured, true);
   assert.equal(ready.analysisService, "https://ollama.runlore.app");
-  assert.equal(ready.analysisModel, "qwen3.5:0.8b");
+  assert.equal(ready.analysisModel, "qwen3:1.7b");
 });
 
 test("Worker uses the configured app base URL for provider callbacks and respects overrides", async () => {
@@ -342,5 +342,5 @@ test("Worker applies streamed input limits and shared analysis normalization", a
   assert.equal(called, 0);
   const valid = await worker.fetch(request(input), analysisEnv);
   assert.equal(valid.status, 200); const result = await valid.json();
-  assert.equal(result.model, "qwen3.5:0.8b"); assert.match(result.insight.nextStep, /Plan view/);
+  assert.equal(result.model, "qwen3:1.7b"); assert.match(result.insight.nextStep, /Plan view/);
 });

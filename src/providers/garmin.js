@@ -1,4 +1,4 @@
-import { appError, fetchJson } from "../http.js";
+import { appError, callbackUrl, fetchJson } from "../http.js";
 
 // Garmin Connect Developer Program (OAuth 2.0 with PKCE + Activity API).
 // Garmin pushes activities to /webhooks/garmin/<GARMIN_WEBHOOK_SECRET>
@@ -120,8 +120,7 @@ export default {
   storesActivities: true,
 
   config(env, request) {
-    const origin = (env.APP_BASE_URL || new URL(request.url).origin).replace(/\/+$/, "");
-    const redirectUri = env.GARMIN_REDIRECT_URI || `${origin}/auth/garmin/callback`;
+    const redirectUri = callbackUrl(env, request, "/auth/garmin/callback", env.GARMIN_REDIRECT_URI);
     if (!env.GARMIN_CLIENT_ID || !env.GARMIN_CLIENT_SECRET) {
       return { error: "Add GARMIN_CLIENT_ID and GARMIN_CLIENT_SECRET to this Worker once Garmin approves the app.", redirectUri };
     }

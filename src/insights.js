@@ -11,6 +11,10 @@ export async function handleInsights(env, request) {
     const result = await guardedAnalysis(request, env, () => requestInsight(input, env, request.signal));
     return json(result);
   } catch (error) {
-    return json({ error: error.message }, error.status || 502);
+    const status = error.status || 502;
+    // Configuration and upstream failures go to Workers Logs with the model
+    // and server involved; the runner only sees the plain message.
+    if (status >= 500) console.error(JSON.stringify(error.log || { event: "analysis_failed", status, message: error.message }));
+    return json({ error: error.message }, status);
   }
 }
