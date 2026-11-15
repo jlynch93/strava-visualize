@@ -155,3 +155,16 @@
 .column-hit:hover, .column-hit:focus-visible { fill: color-mix(in oklch, var(--series-a) 8%, transparent); }
 .primary-chart .rate-dot { transition: r 120ms var(--ease); }
 .primary-chart .period:hover .rate-dot, .primary-chart .period:focus-within .rate-dot { r: 7px; }
+
+/* Runs / Walks switch: separate views of the same pipeline. */
+.mode-control { order: -1; min-width: 0 !important; margin: 0; padding: 0; border: 0; }
+.mode-control[hidden] { display: none !important; }
+.mode-control legend { margin-bottom: 6px; padding: 0; color: var(--ink-faint); font-size: .7rem; font-weight: 760; letter-spacing: .025em; text-transform: none; }
+.mode-switch { display: inline-flex; height: 39px; padding: 3px; border: 1px solid var(--rule-strong); border-radius: 7px; background: var(--surface); }
+.mode-switch label { position: relative; display: flex; color: var(--ink-soft); font-size: .86rem; font-weight: 700; letter-spacing: 0; text-transform: none; cursor: pointer; }
+.mode-switch input { position: absolute; width: 1px !important; height: 1px !important; margin: 0; opacity: 0; }
+.mode-switch span { display: inline-flex; gap: 6px; align-items: center; padding: 0 12px; border-radius: 5px; white-space: nowrap; }
+.mode-switch small { color: var(--ink-faint); font-size: .72rem; font-variant-numeric: tabular-nums; font-weight: 600; }
+.mode-switch input:checked + span { background: var(--ink-strong); color: var(--surface); }
+.mode-switch input:checked + span small { color: color-mix(in oklch, var(--surface) 75%, transparent); }
+.mode-switch input:focus-visible + span { outline: 2px solid var(--teal); outline-offset: 1px; }

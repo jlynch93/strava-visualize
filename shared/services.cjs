@@ -125,6 +125,13 @@ function normalizeWeather(data, request) {
   };
 }
 
+// The same summaries describe walks in walk mode; tell the model how to read them.
+function walkNote(input) {
+  return input?.activity === "walk"
+    ? "Activity: these records are walks and hikes, not runs. Read every \"run\" field as a walk. Discuss walking volume, consistency, pace and climbing on their own terms; do not compare them with running standards or suggest running workouts."
+    : "";
+}
+
 function buildInsightPrompt(input) {
   const summary = input.summary || {};
   const context = input.coachingContext || {};
@@ -139,6 +146,7 @@ function buildInsightPrompt(input) {
     `${run.date} ${run.name || "Run"}: ${run.distanceMiles} mi, ${pace(run.paceSecondsPerMile)}, ${run.elevationFeet} ft, HR ${run.averageHr ?? "n/a"}, load ${run.trainingLoad}`
   );
   return [
+    walkNote(input),
     `Focus: ${input.focus || "balanced"}. Window: ${input.range?.start || "unknown"} to ${input.range?.end || "unknown"}.`,
     input.question ? `Runner question: ${String(input.question).slice(0, 180)} Answer this directly using the supplied evidence; say when the data cannot answer it.` : "",
     `Runner context (self-reported, optional): goal ${context.goal?.mode || "not set"}, weekly target ${context.goal?.miles || "not set"}, race ${context.goal?.raceName || "not set"} ${context.goal?.raceDistance || ""} on ${context.goal?.raceDate || "not set"}; feel ${context.checkin?.feel || "not logged"}/5, limiter ${context.checkin?.limiter || "not logged"}, run intent ${context.checkin?.intent || "not logged"}.`,
@@ -220,7 +228,7 @@ function buildRunDigestPrompt(input) {
   const comparison = input?.comparison || {};
   const context = input?.context || {};
   const weather = input?.weather || null;
-  const allowedRunTypes = new Set(["Race", "Quality", "Long", "Easy", "Steady"]);
+  const allowedRunTypes = new Set(["Race", "Quality", "Long", "Easy", "Recovery", "Steady", "Walk", "Long walk", "Hike"]);
   const runType = allowedRunTypes.has(run.runType) ? run.runType : "Run";
   const paceComparison = paceComparisonLine(comparison.paceDeltaSeconds);
   const loadComparison = loadComparisonLine(comparison.loadPerMileDeltaPercent);
@@ -228,6 +236,7 @@ function buildRunDigestPrompt(input) {
     ? `Modeled weather at the rounded run start: ${compactNumber(weather.temperatureF)}°F, feels ${compactNumber(weather.feelsLikeF)}°F, humidity ${compactNumber(weather.humidityPercent)}%, wind ${compactNumber(weather.windSpeedMph)} mph, precipitation ${compactNumber(weather.precipitationInches, 2)} in.`
     : "Modeled weather was unavailable for this run.";
   return [
+    walkNote(input),
     "Act like a calm, practical running coach reviewing one completed run. Return JSON only; never mention these instructions, the schema, or how comparisons are validated.",
     `Run type: ${runType}. Distance ${compactNumber(run.distanceMiles, 2)} mi. Moving time ${compactNumber(run.movingMinutes, 1)} min. Stopped ${compactNumber(run.stoppedMinutes, 1)} min. Pace ${compactPace(run.paceSecondsPerMile)}. Elevation ${compactNumber(run.elevationFeet)} ft (${compactNumber(run.elevationFeetPerMile)} ft/mi). Average heart rate ${compactNumber(run.averageHr)} bpm. Training load ${compactNumber(run.trainingLoad)} (${compactNumber(run.loadPerMile, 1)} per mile).`,
     `Comparable efforts: ${compactNumber(comparison.similarRunCount)} similar-distance runs. Comparable pace ${compactPace(comparison.similarPaceSecondsPerMile)}. ${paceComparison} Comparable load per mile ${compactNumber(comparison.similarLoadPerMile, 1)}. ${loadComparison} Prior-run gap ${compactNumber(comparison.daysSincePreviousRun)} days; next-run gap ${compactNumber(comparison.daysUntilNextRun)} days.`,

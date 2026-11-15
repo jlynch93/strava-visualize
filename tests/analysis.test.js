@@ -45,3 +45,15 @@ test("coach prompts include the question and responses avoid planning from an ol
   assert.match(noComparison, /Pace comparison is unavailable/);
   assert.doesNotMatch(noComparison, /This run matched/);
 });
+
+test("walk summaries keep their activity and are described as walks", () => {
+  const block = { activity: "walk", focus: "weekly-review", summary: { runCount: 3 }, recentRuns: [{ date: "2026-11-01", distanceMiles: 2.4 }] };
+  const cleaned = validateInsightInput(block);
+  assert.equal(cleaned.activity, "walk");
+  assert.match(buildInsightPrompt(cleaned), /these records are walks and hikes, not runs/);
+  assert.doesNotMatch(buildInsightPrompt({ ...cleaned, activity: "run" }), /walks and hikes/);
+  const digest = validateInsightInput({ kind: "run", activity: "walk", run: { runType: "Hike", distanceMiles: 6 } });
+  const prompt = buildRunDigestPrompt(digest);
+  assert.match(prompt, /Run type: Hike\./);
+  assert.match(prompt, /walks and hikes, not runs/);
+});

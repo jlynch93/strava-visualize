@@ -25,7 +25,7 @@ function validateInsightInput(input) {
   const isRun = input.kind === "run";
   if (isRun ? !input.run || typeof input.run !== "object" || Array.isArray(input.run) : !Array.isArray(input.recentRuns) || !input.recentRuns.length || input.recentRuns.length > 12) throw fail("No running data was supplied.", 400);
   if (input.buckets && (!Array.isArray(input.buckets) || input.buckets.length > 12)) throw fail("Too many training periods.", 400);
-  const allowed = new Set(["kind", "run", "comparison", "context", "weather", "focus", "question", "range", "summary", "buckets", "recentRuns", "coachingContext"]);
+  const allowed = new Set(["kind", "activity", "run", "comparison", "context", "weather", "focus", "question", "range", "summary", "buckets", "recentRuns", "coachingContext"]);
   function clean(value, depth = 0) {
     if (depth > 5) throw fail("The summary is too deeply nested.", 400);
     if (value === null) return null;

@@ -1,4 +1,5 @@
 const state = {
+  activityMode: "run", // "run" or "walk": which activities the dashboard reviews.
   rawActivities: [],
   filteredRuns: [],
   buckets: [],
@@ -144,9 +145,9 @@ function syncCoachingInputs() {
 
 const METRICS = {
   distance: { tick: (v) => displayDistance(v, 0), label: "Distance", unit: "mi", value: (b) => b.distanceMiles, format: (v) => `${displayDistance(v, 1)}` },
-  runs: { label: "Run count", unit: "runs", value: (b) => b.runs, format: (v) => `${Math.round(v)} runs` },
+  runs: { get label() { return `${activityNoun(2, true)} count`; }, unit: "runs", value: (b) => b.runs, format: (v) => `${Math.round(v)} runs` },
   avgRun: { tick: (v) => displayDistance(v, 0), label: "Average run", unit: "mi", value: (b) => b.runs ? b.distanceMiles / b.runs : 0, format: (v) => `${displayDistance(v, 1)}` },
-  longRun: { tick: (v) => displayDistance(v, 0), label: "Long run", unit: "mi", value: (b) => b.longRunMiles, format: (v) => `${displayDistance(v, 1)}` },
+  longRun: { tick: (v) => displayDistance(v, 0), get label() { return state.activityMode === "walk" ? "Longest walk" : "Long run"; }, unit: "mi", value: (b) => b.longRunMiles, format: (v) => `${displayDistance(v, 1)}` },
   pace: { label: "Pace", unit: "/mi", value: (b) => b.averagePace, format: formatPace },
   elevation: { label: "Elevation", unit: "ft", value: (b) => b.elevationFeet, format: (v) => `${Math.round(v).toLocaleString()} ft` },
   elevationDensity: { label: "Climb per mile", unit: "ft/mi", value: (b) => b.distanceMiles ? b.elevationFeet / b.distanceMiles : 0, format: (v) => `${Math.round(v)} ft/mi` },
@@ -215,6 +216,66 @@ function parseActivityDate(activity) {
 function isRun(activity) {
   const sport = String(activity.sport_type || activity.type || "").toLowerCase();
   return sport.includes("run");
+}
+
+function isWalk(activity) {
+  return FitnessCore.isWalk(activity);
+}
+
+// Runs and walks are reviewed separately but through the same pipeline: every
+// view that used to select runs selects the activities of the current mode.
+function inMode(activity) {
+  return state.activityMode === "walk" ? isWalk(activity) : isRun(activity);
+}
+
+// Show the Runs/Walks switch only when the history has walks; fall back to runs otherwise.
+function renderModeSwitch() {
+  const control = document.querySelector("#activityModeControl");
+  if (!control) return;
+  const all = state.rawActivities.map(normalizeActivity);
+  const runCount = all.filter(isRun).length, walkCount = all.filter(isWalk).length;
+  // Fall back to runs only once history is loaded and has no walks; before that,
+  // keep the mode from the link so a shared walk view opens as walks.
+  if (state.rawActivities.length && !walkCount && state.activityMode === "walk") state.activityMode = "run";
+  control.hidden = !walkCount;
+  document.querySelector("#runModeCount").textContent = runCount.toLocaleString();
+  document.querySelector("#walkModeCount").textContent = walkCount.toLocaleString();
+  control.querySelectorAll("input").forEach((input) => { input.checked = input.value === state.activityMode; });
+  document.body.dataset.activity = state.activityMode;
+  syncModeLabels();
+}
+
+// Labels the page-text pass cannot reach: select options and placeholders.
+function syncModeLabels() {
+  const walking = state.activityMode === "walk";
+  const countOption = els.metricSelect.querySelector('option[value="runs"]');
+  if (countOption) countOption.textContent = `${activityNoun(2, true)} count`;
+  const longOption = els.metricSelect.querySelector('option[value="longRun"]');
+  if (longOption) longOption.textContent = walking ? "Longest walk" : "Long run";
+  els.runSearch.placeholder = `Search by ${activityNoun(1)} name`;
+  const filter = document.querySelector("#runTypeFilter");
+  if (filter) {
+    const labels = walking ? { all: "All walks", easy: "Walks", long: "Long walks", quality: "Hikes" } : { all: "All runs", easy: "Easy & recovery", long: "Long", quality: "Quality & race" };
+    for (const [value, label] of Object.entries(labels)) { const option = filter.querySelector(`option[value="${value}"]`); if (option) option.textContent = label; }
+  }
+}
+
+function typeLegend() {
+  return state.activityMode === "walk"
+    ? [{ key: "type-easy", label: "Walk" }, { key: "type-long", label: "Long walk" }, { key: "type-quality", label: "Hike" }]
+    : [{ key: "type-easy", label: "Easy & recovery" }, { key: "type-long", label: "Long" }, { key: "type-quality", label: "Quality & race" }];
+}
+
+function setActivityMode(mode) {
+  state.activityMode = mode === "walk" ? "walk" : "run";
+  state.ledgerPage = 0;
+  syncRangeInputs();
+  render();
+}
+
+function activityNoun(count = 2, capital = false) {
+  const word = state.activityMode === "walk" ? (count === 1 ? "walk" : "walks") : (count === 1 ? "run" : "runs");
+  return capital ? word[0].toUpperCase() + word.slice(1) : word;
 }
 
 function normalizeLatLng(value) {
@@ -320,7 +381,7 @@ function getRangeDates() {
 function getActivityBounds() {
   const dates = state.rawActivities
     .map(normalizeActivity)
-    .filter(isRun)
+    .filter(inMode)
     .map(parseActivityDate)
     .filter((date) => !Number.isNaN(date.valueOf()));
   if (!dates.length) {
@@ -503,11 +564,12 @@ function getRunStreaks(runs) {
 }
 
 function render() {
+  renderModeSwitch();
   applyRangeInputs();
   const normalized = state.rawActivities.map(normalizeActivity);
   const { start, end } = getRangeDates();
   state.filteredRuns = normalized
-    .filter(isRun)
+    .filter(inMode)
     .filter((activity) => {
       const date = parseActivityDate(activity);
       return !Number.isNaN(date.valueOf()) && (!start || date >= start) && (!end || date <= end);
@@ -571,12 +633,12 @@ function updateWindowContext() {
 
 // Defaults are left out of the URL so a fresh visit stays at a clean address;
 // restoreViewState() falls back to the same defaults.
-const VIEW_DEFAULTS = { range: "90", group: "week", metric: "distance", sort: "newest", type: "all" };
+const VIEW_DEFAULTS = { range: "90", group: "week", metric: "distance", sort: "newest", type: "all", activity: "run" };
 
 function saveViewState() {
   const url = new URL(window.location.href);
   const before = url.search;
-  for (const [key, value] of Object.entries({ range: els.rangeSelect.value, start: els.rangeSelect.value === "custom" ? els.startDate.value : "", end: els.rangeSelect.value === "custom" ? els.endDate.value : "", group: els.bucketSelect.value, metric: els.metricSelect.value, search: els.runSearch.value, sort: els.runSort.value, type: document.querySelector("#runTypeFilter")?.value || "all" })) {
+  for (const [key, value] of Object.entries({ range: els.rangeSelect.value, start: els.rangeSelect.value === "custom" ? els.startDate.value : "", end: els.rangeSelect.value === "custom" ? els.endDate.value : "", group: els.bucketSelect.value, metric: els.metricSelect.value, search: els.runSearch.value, sort: els.runSort.value, type: document.querySelector("#runTypeFilter")?.value || "all", activity: state.activityMode })) {
     if (value && value !== VIEW_DEFAULTS[key]) url.searchParams.set(key, value);
     else url.searchParams.delete(key);
   }
@@ -585,6 +647,7 @@ function saveViewState() {
 
 function restoreViewState() {
   const params = new URLSearchParams(window.location.search);
+  state.activityMode = params.get("activity") === "walk" ? "walk" : "run";
   for (const [key, element] of [["range", els.rangeSelect], ["group", els.bucketSelect], ["metric", els.metricSelect], ["sort", els.runSort], ["type", document.querySelector("#runTypeFilter")]]) {
     const value = params.get(key);
     if ([...element.options].some((option) => option.value === value)) element.value = value;
@@ -716,6 +779,7 @@ function buildInsightPayload() {
   }));
   return {
     focus: els.aiFocus.value,
+    activity: state.activityMode,
     question: els.coachQuestion.value.trim(),
     coachingContext: { goal: coachingContext.goal, checkin: activeCheckin() },
     range: {
@@ -875,7 +939,8 @@ function renderIntel(summary, previous, start, end) {
   // Share per week (a long run vs its own week), not vs the whole window.
   const fullWeeks = state.buckets.filter((bucket) => bucket.runs >= 2 && bucket.distanceMiles);
   const weeklyLongShare = fullWeeks.length ? fullWeeks.reduce((sum, bucket) => sum + bucket.longRunMiles / bucket.distanceMiles, 0) / fullWeeks.length : null;
-  const longShareClass = weeklyLongShare === null ? "" : weeklyLongShare <= 0.4 ? "good" : "warn";
+  // The 40% guide is a running heuristic; walks get no judgement here.
+  const longShareClass = weeklyLongShare === null || state.activityMode === "walk" ? "" : weeklyLongShare <= 0.4 ? "good" : "warn";
   const restClass = summary.longestRestGap <= 3 ? "good" : summary.longestRestGap >= 7 ? "warn" : "";
   const cards = [
     {
@@ -972,7 +1037,7 @@ function summarizePreviousPeriod(normalized, start, end) {
   previousStart.setDate(previousStart.getDate() - periodDays + 1);
   previousStart.setHours(0, 0, 0, 0);
   const previousRuns = normalized
-    .filter(isRun)
+    .filter(inMode)
     .filter((activity) => {
       const date = parseActivityDate(activity);
       return !Number.isNaN(date.valueOf()) && date >= previousStart && date <= previousEnd;
@@ -1262,7 +1327,7 @@ function attachChartAction(element, title, runs) {
   element.classList.add("chart-action");
   element.dataset.chartKey = JSON.stringify([element.tagName, title, String(runs[0].id)]);
   element.setAttribute("role", "button");
-  element.setAttribute("aria-label", `${title}. Open ${runs.length} run${runs.length === 1 ? "" : "s"}.`);
+  element.setAttribute("aria-label", `${title}. Open ${runs.length} ${activityNoun(runs.length)}.`);
   const open = () => showRunCollectionModal(title, runs, element);
   element.addEventListener("click", open);
   element.addEventListener("keydown", (event) => {
@@ -1297,7 +1362,7 @@ function showRunCollectionModal(title, runs, trigger = document.activeElement) {
     <header class="workout-header collection-header">
       <p class="workout-kicker">Chart selection</p>
       <h2 id="workoutModalTitle">${escapeHtml(title)}</h2>
-      <div class="workout-header-meta"><span>${runs.length} run${runs.length === 1 ? "" : "s"}</span><span>${displayDistance(totalMiles, 1)}</span><span>${formatPace(totalSeconds / totalMiles)} average pace</span></div>
+      <div class="workout-header-meta"><span>${runs.length} ${activityNoun(runs.length)}</span><span>${displayDistance(totalMiles, 1)}</span><span>${formatPace(totalSeconds / totalMiles)} average pace</span></div>
     </header>
     <div class="workout-body collection-body">
       <p>Select a run to open its full detail, conditions, and coach’s read.</p>
@@ -1470,11 +1535,11 @@ function renderBarLineChart(container, buckets, metric) {
       change ? { label: `vs previous ${mode}`, value: change } : null,
       showAverage && Number.isFinite(averages[index]) ? { label: `${averageWindow}-${mode} average`, value: metric.format(averages[index]) } : null,
       metricKey !== "distance" ? { label: "Distance", value: `${displayDistance(bucket.distanceMiles, 1)}` } : null,
-      metricKey !== "runs" ? { label: "Runs", value: bucket.runs } : null,
+      metricKey !== "runs" ? { label: activityNoun(2, true), value: bucket.runs } : null,
       metricKey !== "pace" ? { label: "Avg pace", value: formatPace(bucket.averagePace) } : null,
-      metricKey !== "longRun" ? { label: "Long run", value: `${displayDistance(bucket.longRunMiles, 1)}` } : null,
+      metricKey !== "longRun" ? { label: METRICS.longRun.label, value: `${displayDistance(bucket.longRunMiles, 1)}` } : null,
       metricKey !== "heartrate" && bucket.averageHr ? { label: "Avg HR", value: `${Math.round(bucket.averageHr)} bpm` } : null,
-      bucket.runs ? { label: "Click to open", value: `${bucket.runs} run${bucket.runs === 1 ? "" : "s"}` } : null
+      bucket.runs ? { label: "Click to open", value: `${bucket.runs} ${activityNoun(bucket.runs)}` } : null
     ].filter(Boolean));
     if (bucket.runs) attachChartAction(mark, bucket.label, runsForBucket(bucket));
     group.appendChild(mark);
@@ -1549,7 +1614,7 @@ const unitName = () => preferences.units === "metric" ? "km" : "mi";
 // Per run: distance across, pace up (faster is higher). Each dot opens its run.
 function renderScatter() {
   const runs = state.filteredRuns.filter((run) => miles(run.distance) > 0 && paceSeconds(run) > 0);
-  setLegend(els.scatterChart, [{ key: "type-easy", label: "Easy & recovery" }, { key: "type-long", label: "Long" }, { key: "type-quality", label: "Quality & race" }]);
+  setLegend(els.scatterChart, typeLegend());
   scatterChart(els.scatterChart, {
     ariaLabel: "Pace against distance for each run. Faster runs sit higher.",
     xTitle: `Distance (${unitName()}) →`, yTitle: "↑ Faster pace", invertY: true,
@@ -1593,7 +1658,7 @@ function renderStructure() {
         { label: "Total", value: displayDistance(bucket.distanceMiles, 1) },
         { label: "Long run", value: displayDistance(bucket.longRunMiles || 0, 1) },
         { label: "Long-run share", value: bucket.distanceMiles ? `${Math.round(bucket.longRunMiles / bucket.distanceMiles * 100)}%` : "-" },
-        { label: "Runs", value: bucket.runs }
+        { label: activityNoun(2, true), value: bucket.runs }
       ] };
     },
     action: (index) => buckets[index].runs ? { title: `${buckets[index].label} runs`, runs: runsForBucket(buckets[index]) } : null
@@ -1627,7 +1692,7 @@ function renderHeatmap() {
       title: date.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" }),
       rows: day ? [
         { label: "Distance", value: displayDistance(day.miles, 1) },
-        { label: "Runs", value: day.runs.length },
+        { label: activityNoun(2, true), value: day.runs.length },
         { label: "Moving time", value: formatDuration(day.seconds) },
         { label: "Pace", value: formatPace(day.seconds / day.miles) }
       ] : [{ label: "Rest", value: "No run" }]
@@ -1640,7 +1705,10 @@ function renderHeatmap() {
 // Share of total volume by run length, in the display unit.
 function renderDistanceMix() {
   const metric = preferences.units === "metric";
-  const edges = metric ? [0, 5, 10, 15, 21.1, 30, Infinity] : [0, 3, 6, 9, 13.1, 18, Infinity];
+  // Bins sized for the activity: walks are mostly short, runs reach the marathon.
+  const edges = state.activityMode === "walk"
+    ? (metric ? [0, 2, 3, 5, 8, 12, Infinity] : [0, 1, 2, 3, 5, 8, Infinity])
+    : (metric ? [0, 5, 10, 15, 21.1, 30, Infinity] : [0, 3, 6, 9, 13.1, 18, Infinity]);
   const bins = edges.slice(0, -1).map((low, index) => ({ low, high: edges[index + 1], count: 0, miles: 0 }));
   state.filteredRuns.forEach((run) => {
     const distance = miles(run.distance) * unitFactor();
@@ -1654,7 +1722,7 @@ function renderDistanceMix() {
     rows: bins.map((bin) => ({
       label: label(bin), value: bin.miles,
       display: total ? `${Math.round(bin.miles / total * 100)}%` : "0%",
-      sub: `${bin.count} run${bin.count === 1 ? "" : "s"} · ${displayDistance(bin.miles, 0)}`
+      sub: `${bin.count} ${activityNoun(bin.count)} · ${displayDistance(bin.miles, 0)}`
     }))
   });
 }
@@ -1668,7 +1736,7 @@ function renderRollingWorkload() {
   const last = end ? new Date(Math.min(end, today)) : today;
   const daily = new Map();
   // Use full history so the first weeks of the window have a real baseline.
-  state.rawActivities.map(normalizeActivity).filter(isRun).forEach((run) => {
+  state.rawActivities.map(normalizeActivity).filter(inMode).forEach((run) => {
     const key = localDateValue(parseActivityDate(run));
     daily.set(key, (daily.get(key) || 0) + miles(run.distance));
   });
@@ -1726,7 +1794,7 @@ function renderPaceZones() {
     rows: bins.map((bin, index) => ({
       label: count > 1 && index === 0 ? `Under ${plain(bin.high)}/${unitName()}` : count > 1 && index === count - 1 ? `${plain(bin.low)}/${unitName()} or slower` : `${plain(bin.low)}–${plain(bin.high)}/${unitName()}`,
       value: bin.runs, highlight: bin.runs === peak,
-      display: `${bin.runs} run${bin.runs === 1 ? "" : "s"}`,
+      display: `${bin.runs} ${activityNoun(bin.runs)}`,
       sub: `${Math.round(bin.runs / paces.length * 100)}%`
     }))
   });
@@ -2071,6 +2139,7 @@ function buildRunDigestPayload(digest, weather) {
     : null;
   return {
     kind: "run",
+    activity: isWalk(run) ? "walk" : "run",
     run: {
       runType: digest.runType,
       distanceMiles: Number(digest.distance.toFixed(2)),
@@ -2122,7 +2191,7 @@ function comparisonPlanMarkup(digest) {
   const metrics = ["pace", "load per mile"];
   if (digest.similarHr) metrics.push("average heart rate");
   const baseline = digest.similarCount
-    ? `${digest.similarCount} similar run${digest.similarCount === 1 ? "" : "s"} · ${formatPace(digest.similarPace)} pace · ${formatNumber(digest.similarLoadPerMile, 1)} load/mi${digest.similarHr ? ` · ${Math.round(digest.similarHr)} bpm` : ""}`
+    ? `${digest.similarCount} similar ${activityNoun(digest.similarCount)} · ${formatPace(digest.similarPace)} pace · ${formatNumber(digest.similarLoadPerMile, 1)} load/mi${digest.similarHr ? ` · ${Math.round(digest.similarHr)} bpm` : ""}`
     : "No similar-distance baseline yet; the next comparable run will begin one.";
   return `
     <div class="run-digest-next">
@@ -2302,7 +2371,7 @@ function showWorkoutModal(runId, trigger = document.activeElement) {
       <p class="workout-kicker">${escapeHtml(digest.date.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric", year: "numeric" }))}</p>
       <h2 id="workoutModalTitle">${escapeHtml(run.name)}</h2>
       <div class="workout-header-meta">
-        <span class="workout-type">${escapeHtml(digest.runType)} run</span>
+        <span class="workout-type">${escapeHtml(isWalk(run) ? digest.runType : `${digest.runType} run`)}</span>
         <span id="workoutModalMeta">${escapeHtml(bucketLabelText)}</span>
         <span>${escapeHtml(socialText)}</span>
       </div>
@@ -2819,7 +2888,7 @@ async function importFile(file) {
     .filter((activity) => activity && typeof activity === "object" && !Array.isArray(activity))
     .map(normalizeActivity)
     .filter((activity) => !Number.isNaN(parseActivityDate(activity).valueOf()));
-  if (!activities.some(isRun)) throw new Error("No running activities with valid dates were found. Choose a Strava running export.");
+  if (!activities.some((activity) => isRun(activity) || isWalk(activity))) throw new Error("No running or walking activities with valid dates were found. Choose a Strava or Garmin activity export.");
   const decision = await requestImportReview(activities, rows.length - activities.length);
   if (!decision) { setStatus("Import canceled. Your current history is unchanged."); return; }
   state.rawActivities = decision.mode === "merge" && state.dataSource !== "demo" ? TrainingCore.mergeActivities(state.rawActivities, activities) : TrainingCore.mergeActivities([], activities);
@@ -2875,6 +2944,34 @@ function makeDemoData() {
       kudos_count: Math.floor(random() * 18),
       achievement_count: random() > 0.78 ? Math.ceil(random() * 4) : 0,
       pr_count: random() > 0.9 ? 1 : 0
+    });
+  }
+  // Walks use their own random stream so the demo runs above never change.
+  let walkSeed = 271828;
+  const walkRandom = () => { walkSeed = (walkSeed * 16807) % 2147483647; return (walkSeed - 1) / 2147483646; };
+  for (let i = 0; i < 390; i += 1) {
+    const date = new Date(today);
+    date.setDate(today.getDate() - i);
+    if (![0, 2, 4].includes(date.getDay()) || walkRandom() < 0.25) continue;
+    const weekend = date.getDay() === 0;
+    const hike = weekend && walkRandom() < 0.35;
+    date.setHours(weekend ? 10 : 12, weekend ? 30 : 15, 0, 0);
+    const distanceMiles = hike ? 4 + walkRandom() * 4 : weekend ? 3 + walkRandom() * 3 : 1.5 + walkRandom() * 1.5;
+    const pace = (hike ? 1200 : 980) + walkRandom() * 120; // seconds per mile
+    const movingTime = Math.round(distanceMiles * pace);
+    const hr = Math.round((hike ? 112 : 96) + walkRandom() * 14);
+    activities.push({
+      id: `demo-walk-${i}`,
+      name: hike ? "Trail hike" : weekend ? "Weekend walk" : "Lunch walk",
+      sport_type: hike ? "Hike" : "Walk",
+      start_date_local: `${localDateValue(date)}T${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}:00`,
+      distance: distanceMiles * 1609.344,
+      moving_time: movingTime,
+      elapsed_time: movingTime + Math.round(walkRandom() * 300),
+      total_elevation_gain: (hike ? 250 + walkRandom() * 200 : 20 + walkRandom() * 40) * distanceMiles / 3.28084,
+      average_heartrate: hr,
+      max_heartrate: hr + 12 + Math.round(walkRandom() * 10),
+      average_cadence: Math.round(108 + walkRandom() * 12)
     });
   }
   return activities;
@@ -3083,6 +3180,10 @@ els.rangeSelect.addEventListener("change", () => {
     state.ledgerPage = 0;
     render();
   });
+});
+
+document.querySelector("#activityModeControl").addEventListener("change", (event) => {
+  if (event.target.name === "activityMode") setActivityMode(event.target.value);
 });
 
 [els.bucketSelect, els.metricSelect].forEach((element) => {

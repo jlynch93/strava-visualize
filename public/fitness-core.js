@@ -305,11 +305,40 @@
     return RUN_TYPES.easy;
   }
 
+  /* ---------- Walks ---------- */
+
+  // Walks and hikes, from Strava (Walk, Hike) or Garmin (mapped to the same names).
+  function isWalk(activity) {
+    const sport = String(activity?.sport_type || activity?.type || "").toLowerCase();
+    return sport.includes("walk") || sport.includes("hike");
+  }
+
+  const WALK_TYPES = {
+    hike: { key: "hike", label: "Hike", group: "quality" },
+    long: { key: "long-walk", label: "Long walk", group: "long" },
+    walk: { key: "walk", label: "Walk", group: "easy" }
+  };
+
+  /*
+   * Walk types share the run-type groups (easy / long / quality) so charts and
+   * filters treat both activities the same way.
+   * context: { typicalMeters } (median walk distance).
+   */
+  function classifyWalkType(walk, context = {}) {
+    const meters = Number(walk.distance) || 0;
+    const sport = String(walk.sport_type || walk.type || "").toLowerCase();
+    const climbPerKm = meters ? (Number(walk.total_elevation_gain) || 0) / (meters / 1000) : 0;
+    if (sport.includes("hike") || (meters >= 3000 && climbPerKm >= 40)) return WALK_TYPES.hike;
+    const typical = context.typicalMeters || 0;
+    if ((typical && meters >= Math.max(typical * 1.5, 7000)) || meters >= 12000) return WALK_TYPES.long;
+    return WALK_TYPES.walk;
+  }
+
   const api = {
     oxygenCost, sustainableFraction, vdotFromPerformance, speedForOxygen, predictRaceSeconds, trainingPaces,
     estimateMaxHr, heartRateReserve, runVo2Estimate, runVdot, percentile, vo2Series,
     runLoad, dailyLoads, loadSeries, workloadRatios, formZone, readiness, dayKey, finite,
-    RUN_TYPES, classifyRunType
+    RUN_TYPES, classifyRunType, isWalk, WALK_TYPES, classifyWalkType
   };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.FitnessCore = api;

@@ -73,6 +73,19 @@ Below the readiness strip, **This week** shows distance and runs completed
 against this week's saved plan (or your 4-week average when there is no plan),
 with a Monday–Sunday strip of what you ran and what is still planned.
 
+**Runs and walks** are reviewed separately and processed the same way. When your
+history includes walks or hikes (from Strava, Garmin, or an import), a **Runs /
+Walks** switch appears beside the range. It shows how many of each you have.
+Overview, the activity list, every chart, the block metrics, the This week card,
+and the coach analysis then cover only the selected activity, with walk wording
+and walk types (Walk, Long walk, Hike). Walks never enter run totals, pace, or
+plans. The mode is part of the view link (`?activity=walk`).
+
+Physiologically, one body does both: on **Fitness**, walks add to training load
+on the same scale as runs, so fitness, fatigue and readiness include them, and
+the load tooltips split each day into runs and walks. VO2 max, race predictions,
+training paces and running metrics use runs only. Plans are running plans.
+
 Every run gets an **effort-based type** (Easy, Recovery, Long, Quality, Race)
 from heart rate (or pace relative to threshold) and distance, not from its name.
 Types appear as chips in the Runs table, in run details, and as dot colours in

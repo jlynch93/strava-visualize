@@ -36,19 +36,27 @@ function resolvedAthleteProfile(runs) {
 }
 
 function fitnessModel() {
-  const runs = state.rawActivities.map(normalizeActivity).filter(isRun)
-    .filter((run) => !Number.isNaN(parseActivityDate(run).valueOf()))
+  const dated = state.rawActivities.map(normalizeActivity)
+    .filter((activity) => !Number.isNaN(parseActivityDate(activity).valueOf()))
     .sort((a, b) => parseActivityDate(a) - parseActivityDate(b));
-  const key = JSON.stringify([runs.length, runs[0]?.id, runs.at(-1)?.id, runs.at(-1)?.moving_time, athleteProfile, activeCheckin(), new Date().toDateString()]);
+  const runs = dated.filter(isRun);
+  const walks = dated.filter(isWalk);
+  const key = JSON.stringify([runs.length, walks.length, runs[0]?.id, runs.at(-1)?.id, runs.at(-1)?.moving_time, walks.at(-1)?.id, athleteProfile, activeCheckin(), new Date().toDateString()]);
   if (fitnessModelCache.key === key) return fitnessModelCache.model;
-  const model = buildFitnessModel(runs);
+  const model = buildFitnessModel(runs, walks);
   fitnessModelCache = { key, model };
   return model;
 }
 
-function buildFitnessModel(runs) {
-  if (!runs.length) return null;
-  const profile = resolvedAthleteProfile(runs);
+/*
+ * Runs and walks are separate in the views but share one body: walks add to
+ * training load (fitness, fatigue, readiness) on the same scale as runs.
+ * VO2 max, race predictions, paces and running metrics use runs only.
+ */
+function buildFitnessModel(runs, walks = []) {
+  if (!runs.length && !walks.length) return null;
+  const everything = [...runs, ...walks].sort((a, b) => parseActivityDate(a) - parseActivityDate(b));
+  const profile = resolvedAthleteProfile(everything);
   const hrProfile = profile.usable ? profile : null;
   const today = new Date(); today.setHours(23, 59, 59, 999);
   const vo2Points = FitnessCore.vo2Series(runs, hrProfile, parseActivityDate);
@@ -65,31 +73,41 @@ function buildFitnessModel(runs) {
   // raced hard; otherwise the heart-rate estimate (which assumes even effort).
   const fitnessVdot = currentVdot && currentVo2 ? Math.min(currentVo2.vo2max, Math.max(currentVdot.vdot, currentVo2.vo2max * 0.9)) : vo2?.value ?? null;
   const thresholdSpeed = fitnessVdot ? FitnessCore.speedForOxygen(fitnessVdot * 0.88) : 0;
-  const loads = FitnessCore.dailyLoads(runs, hrProfile, thresholdSpeed, parseActivityDate);
+  const loads = FitnessCore.dailyLoads(everything, hrProfile, thresholdSpeed, parseActivityDate);
+  // Kept apart so every load figure can say how much came from runs and walks.
+  const runDayLoads = FitnessCore.dailyLoads(runs, hrProfile, thresholdSpeed, parseActivityDate);
+  const walkDayLoads = FitnessCore.dailyLoads(walks, hrProfile, thresholdSpeed, parseActivityDate);
   const typicalMeters = FitnessCore.percentile(runs.slice(-60).map((run) => Number(run.distance) || 0), 0.5) || 0;
   const typeContext = { profile: hrProfile, thresholdSpeed, typicalMeters };
-  const types = new Map(runs.map((run) => [String(run.id), FitnessCore.classifyRunType(run, typeContext)]));
-  const firstDay = parseActivityDate(runs[0]);
+  const walkContext = { typicalMeters: FitnessCore.percentile(walks.slice(-60).map((walk) => Number(walk.distance) || 0), 0.5) || 0 };
+  const types = new Map([
+    ...runs.map((run) => [String(run.id), FitnessCore.classifyRunType(run, typeContext)]),
+    ...walks.map((walk) => [String(walk.id), FitnessCore.classifyWalkType(walk, walkContext)])
+  ]);
+  const firstDay = parseActivityDate(everything[0]);
   const loadSeries = FitnessCore.loadSeries(loads, firstDay, today);
   const latest = loadSeries.at(-1);
   const ratios = FitnessCore.workloadRatios(loads, today);
   const runLoads = runs.map((run) => ({ run, date: parseActivityDate(run), ...FitnessCore.runLoad(run, hrProfile, thresholdSpeed) }));
-  const recentLoads = runLoads.filter((item) => item.date >= recentCutoff).map((item) => item.load);
+  const allLoads = everything.map((activity) => ({ run: activity, date: parseActivityDate(activity), ...FitnessCore.runLoad(activity, hrProfile, thresholdSpeed) }));
+  // "Hard" is judged against a typical run; with no runs, against a typical walk.
+  const recentLoads = (runs.length ? runLoads : allLoads).filter((item) => item.date >= recentCutoff).map((item) => item.load);
   const typicalLoad = FitnessCore.percentile(recentLoads, 0.5) || 0;
-  const lastHard = [...runLoads].reverse().find((item) => item.date <= today && (item.load >= typicalLoad * 1.35 || [1, 3].includes(Number(item.run.workout_type))));
+  const lastHard = [...allLoads].reverse().find((item) => item.date <= today && (item.load >= typicalLoad * 1.35 || [1, 3].includes(Number(item.run.workout_type))));
   const historyDays = Math.round((today - firstDay) / 86400000);
-  const newestRun = parseActivityDate(runs.at(-1));
+  const newestRun = parseActivityDate(everything.at(-1));
   const stale = (today - newestRun) / 86400000 > 10;
   const readiness = stale ? null : FitnessCore.readiness({
     form: latest?.form, fitness: latest?.fitness, acwr: historyDays >= 28 ? ratios.acwr : null,
     hoursSinceHard: lastHard ? (Date.now() - lastHard.date) / 3600000 : historyDays >= 14 ? 24 * 14 : null,
     checkin: activeCheckin(), monotony: ratios.monotony
   });
+  const recentWalks = walks.filter((walk) => parseActivityDate(walk) >= recentCutoff).length;
   const loadSources = runLoads.filter((item) => item.date >= recentCutoff).reduce((counts, item) => ({ ...counts, [item.source]: (counts[item.source] || 0) + 1 }), {});
   return {
-    runs, runLoads, profile, vo2Points, types, typeContext, vo2, fitnessVdot, thresholdSpeed, loads, loadSeries, latest, ratios, readiness,
+    runs, walks, runLoads, runDayLoads, walkDayLoads, recentWalks, profile, vo2Points, types, typeContext, walkContext, vo2, fitnessVdot, thresholdSpeed, loads, loadSeries, latest, ratios, readiness,
     lastHard, historyDays, stale, newestRun, loadSources,
-    hrCoverage: runs.filter((run) => run.average_heartrate).length / runs.length
+    hrCoverage: everything.filter((activity) => activity.average_heartrate).length / everything.length
   };
 }
 
@@ -228,7 +246,11 @@ function renderLoadCharts(model, days) {
       { label: "Fitness", value: Math.round(point.fitness) },
       { label: "Fatigue", value: Math.round(point.fatigue) },
       { label: "Form", value: `${signed(point.form, 0)} · ${zone.label}` },
-      { label: "Day's load", value: point.load ? Math.round(point.load) : "Rest" }
+      { label: "Day's load", value: point.load ? Math.round(point.load) : "Rest" },
+      ...(model.walks.length && point.load ? [
+        { label: "  from runs", value: Math.round(model.runDayLoads.get(FitnessCore.dayKey(point.date)) || 0) },
+        { label: "  from walks", value: Math.round(model.walkDayLoads.get(FitnessCore.dayKey(point.date)) || 0) }
+      ] : [])
     ] : [{ label: "Status", value: "Before your history" }] };
   };
   timeChart(document.querySelector("#loadChart"), {
@@ -396,7 +418,9 @@ function renderDataNotes(model) {
   if (!model.profile.usable) notes.push("No heart-rate data found, so VO2 max uses your best efforts and load uses pace.");
   else if (model.profile.restSource === "assumed") notes.push(`Resting heart rate is assumed to be ${DEFAULT_REST_HR} bpm. Set yours below for a sharper VO2 max estimate.`);
   if (model.historyDays < 42) notes.push(`Fitness builds over about six weeks of history; you have ${model.historyDays} days loaded, so it reads low for now.`);
-  if (model.hrCoverage > 0 && model.hrCoverage < 0.6) notes.push(`Only ${Math.round(model.hrCoverage * 100)}% of runs have heart rate; the rest use pace to estimate load.`);
+  if (model.hrCoverage > 0 && model.hrCoverage < 0.6) notes.push(`Only ${Math.round(model.hrCoverage * 100)}% of activities have heart rate; the rest use pace to estimate load.`);
+  if (model.walks.length) notes.push(`Walks count toward fitness, fatigue and readiness (${model.recentWalks} in the last six weeks). VO2 max, race predictions and paces use runs only.`);
+  if (!model.runs.length) notes.push("No runs yet, so VO2 max, race predictions and training paces are not available.");
   const host = document.querySelector("#fitnessNotes");
   host.hidden = !notes.length;
   host.innerHTML = notes.map((note) => `<li>${escapeHtml(note)}</li>`).join("");
@@ -430,10 +454,14 @@ function renderThisWeek(model) {
   host.hidden = false;
   const start = TrainingCore.weekStart(new Date());
   const today = localDateValue(new Date());
-  const plan = acceptedPlans[localDateValue(start)];
+  const walking = state.activityMode === "walk";
+  const list = walking ? model.walks : model.runs;
+  const noun = (count) => walking ? (count === 1 ? "walk" : "walks") : (count === 1 ? "run" : "runs");
+  // Saved plans are running plans, so walk mode compares with the recent average.
+  const plan = walking ? null : acceptedPlans[localDateValue(start)];
   const days = Array.from({ length: 7 }, (_, index) => new Date(start.getFullYear(), start.getMonth(), start.getDate() + index));
   const byDay = new Map();
-  model.runs.forEach((run) => {
+  list.forEach((run) => {
     const key = localDateValue(parseActivityDate(run));
     if (key >= localDateValue(days[0]) && key <= localDateValue(days[6])) byDay.set(key, [...(byDay.get(key) || []), run]);
   });
@@ -441,7 +469,7 @@ function renderThisWeek(model) {
   const doneRuns = [...byDay.values()].flat().length;
   const planned = plan?.sessions?.filter((session) => session.kind === "run") || [];
   const fourWeekStart = new Date(start); fourWeekStart.setDate(fourWeekStart.getDate() - 28);
-  const recent = model.runs.filter((run) => { const date = parseActivityDate(run); return date >= fourWeekStart && date < start; });
+  const recent = list.filter((run) => { const date = parseActivityDate(run); return date >= fourWeekStart && date < start; });
   const average = recent.reduce((sum, run) => sum + miles(run.distance), 0) / 4;
   const target = planned.length ? planned.reduce((sum, session) => sum + (Number(session.miles) || 0), 0) : average;
   const targetRuns = planned.length || Math.round(recent.length / 4);
@@ -450,9 +478,9 @@ function renderThisWeek(model) {
   const range = `${start.toLocaleDateString(undefined, { month: "short", day: "numeric" })}–${end.toLocaleDateString(undefined, start.getMonth() === end.getMonth() ? { day: "numeric" } : { month: "short", day: "numeric" })}`;
   host.innerHTML = `
     <div class="week-head">
-      <div><h2>This week <span>${range}</span></h2>
-      <p>${target ? `${displayDistance(doneMiles, 1)} of ${displayDistance(target, 0)} ${planned.length ? "planned" : "(your 4-week average)"} · ${doneRuns} of ${targetRuns} run${targetRuns === 1 ? "" : "s"}` : `${displayDistance(doneMiles, 1)} · ${doneRuns} run${doneRuns === 1 ? "" : "s"}`}</p></div>
-      <a class="today-link" href="#planning">${plan ? "Open plan" : "Plan this week"} <span aria-hidden="true">→</span></a>
+      <div><h2>This week${walking ? " · walks" : ""} <span>${range}</span></h2>
+      <p>${target ? `${displayDistance(doneMiles, 1)} of ${displayDistance(target, 0)} ${planned.length ? "planned" : "(your 4-week average)"} · ${doneRuns} of ${targetRuns} ${noun(targetRuns)}` : `${displayDistance(doneMiles, 1)} · ${doneRuns} ${noun(doneRuns)}`}</p></div>
+      ${walking ? '<a class="today-link" href="#runs">See walks <span aria-hidden="true">→</span></a>' : `<a class="today-link" href="#planning">${plan ? "Open plan" : "Plan this week"} <span aria-hidden="true">→</span></a>`}
     </div>
     <div class="week-meter" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(progress * 100)}" aria-label="Weekly distance ${Math.round(progress * 100)}% of target"><span style="width:${progress * 100}%"></span></div>
     <ol class="week-days">${days.map((day) => {
@@ -491,14 +519,16 @@ function renderFitness() {
 }
 
 // Effort-based type for any run; falls back to the source label before a model exists.
+// Effort-based type for any run or walk; computed on the fly before a model exists.
 function runType(run) {
   const model = fitnessModel();
-  return model?.types.get(String(run.id)) || FitnessCore.classifyRunType(run, model?.typeContext || {});
+  return model?.types.get(String(run.id))
+    || (isWalk(run) ? FitnessCore.classifyWalkType(run, model?.walkContext || {}) : FitnessCore.classifyRunType(run, model?.typeContext || {}));
 }
 
 function runTypeChip(run) {
   const type = runType(run);
-  return `<span class="type-chip type-${type.group}" title="Classified from effort and distance">${type.label}</span>`;
+  return `<span class="type-chip type-${type.group}" title="${isWalk(run) ? "Classified from distance and climb" : "Classified from effort and distance"}">${type.label}</span>`;
 }
 
 // Readiness only steers the current and next week; further out it says nothing.

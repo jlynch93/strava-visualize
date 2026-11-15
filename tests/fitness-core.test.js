@@ -97,3 +97,25 @@ test("run types come from effort and distance, not names", () => {
   assert.equal(fit.classifyRunType({ distance: 8000, moving_time: 2400 }, context).key, "easy");
   assert.equal(fit.classifyRunType({ distance: 8000, moving_time: 2700 }, context).key, "recovery");
 });
+
+test("walks and hikes are recognized and typed on the same groups as runs", () => {
+  assert.equal(fit.isWalk({ sport_type: "Walk" }), true);
+  assert.equal(fit.isWalk({ type: "Hike" }), true);
+  assert.equal(fit.isWalk({ sport_type: "Run" }), false);
+  assert.equal(fit.isWalk({ sport_type: "TrailRun" }), false);
+  const context = { typicalMeters: 4000 };
+  assert.equal(fit.classifyWalkType({ sport_type: "Walk", distance: 4000 }, context).key, "walk");
+  assert.equal(fit.classifyWalkType({ sport_type: "Walk", distance: 9000 }, context).key, "long-walk");
+  assert.equal(fit.classifyWalkType({ sport_type: "Hike", distance: 5000 }, context).key, "hike");
+  // A steep walk reads as a hike even when the source called it a walk.
+  assert.equal(fit.classifyWalkType({ sport_type: "Walk", distance: 5000, total_elevation_gain: 300 }, context).key, "hike");
+  for (const type of Object.values(fit.WALK_TYPES)) assert.ok(["easy", "long", "quality"].includes(type.group));
+});
+
+test("walk load uses the same scale as runs", () => {
+  // An hour of walking at a low heart rate is light next to an hour at threshold.
+  const walk = fit.runLoad({ moving_time: 3600, distance: 5500, average_heartrate: 50 + 0.4 * 140 }, profile);
+  const threshold = fit.runLoad({ moving_time: 3600, distance: 15000, average_heartrate: 50 + 0.88 * 140 }, profile);
+  assert.ok(walk.load > 5 && walk.load < 35, `walk load ${walk.load}`);
+  assert.ok(threshold.load > walk.load * 3);
+});

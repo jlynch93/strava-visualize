@@ -184,6 +184,7 @@ function applyDisplayUnits(root = document.querySelector("#app")) {
   let node;
   while ((node = walker.nextNode())) {
     if (node.parentElement?.closest("script, style, input, textarea, [data-unit-skip], [data-native-units]")) continue;
+    const walkWords = state.activityMode === "walk" && !node.parentElement?.closest("[data-mode-skip], #fitness, #planning, .app-footer, .brand-lockup, select");
     const old = unitText.get(node);
     const original = old && node.nodeValue === old.output ? old.original : node.nodeValue;
     let output = original;
@@ -201,6 +202,11 @@ function applyDisplayUnits(root = document.querySelector("#app")) {
         return `${(value * factor).toLocaleString(undefined, { maximumFractionDigits: unit === "in" || unit === "min/mi" ? 1 : unit === "sec/mi" ? 0 : 2 })} ${label}`;
       });
       output = output.replace(/\bMileage\b/g, "Distance").replace(/\bmileage\b/g, "distance").replace(/\bMiles\b/g, "Kilometers").replace(/\bmi\b/g, "km").replace(/\bft\b/g, "m");
+    }
+    // Walk mode reviews walks through the same views; the words follow the data.
+    if (walkWords) {
+      output = output.replace(/\bRunning\b/g, "Walking").replace(/\brunning\b/g, "walking")
+        .replace(/\bRuns\b/g, "Walks").replace(/\bruns\b/g, "walks").replace(/\bRun\b/g, "Walk").replace(/\brun\b/g, "walk");
     }
     unitText.set(node, { original, output });
     if (node.nodeValue !== output) node.nodeValue = output;
@@ -384,7 +390,7 @@ async function hydrateRunDetail(run, session) {
 }
 function requestImportReview(activities, skipped) {
   const dialog = document.querySelector("#importReview");
-  document.querySelector("#importSummary").textContent = `${activities.length} valid activities; ${skipped} invalid rows skipped. ${activities.filter(isRun).length} running activities. ${activities.filter((run) => state.rawActivities.some((old) => String(old.id) === String(run.id))).length} existing activity IDs will be updated when merging.`;
+  document.querySelector("#importSummary").textContent = `${activities.length} valid activities; ${skipped} invalid rows skipped. ${activities.filter(isRun).length} runs and ${activities.filter(isWalk).length} walks. ${activities.filter((run) => state.rawActivities.some((old) => String(old.id) === String(run.id))).length} existing activity IDs will be updated when merging.`;
   document.querySelector("#importMode").value = state.rawActivities.length && state.dataSource !== "demo" ? "merge" : "replace";
   dialog.showModal();
   return new Promise((resolve) => { pendingImport = resolve; });
