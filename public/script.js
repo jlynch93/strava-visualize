@@ -156,10 +156,19 @@ const METRICS = {
   loadPerMile: { label: "Time per distance", unit: "min/mi", value: (b) => b.distanceMiles ? b.trainingLoad / b.distanceMiles : 0, format: (v) => `${v.toFixed(1)} min/mi` },
 };
 
+const phoneLayout = window.matchMedia("(max-width: 700px)");
+let statusTimer;
 function setStatus(message, isError = false, scopeId) {
   els.status.textContent = message || "";
   els.status.classList.toggle("error", isError);
   els.status.hidden = actionFeedback(message || "", isError, scopeId);
+  // On phones the status is a toast above the tab bar: confirmations fade on
+  // their own; errors stay until tapped.
+  clearTimeout(statusTimer);
+  els.status.classList.remove("toast-dismissed");
+  if (message && !isError && phoneLayout.matches) {
+    statusTimer = setTimeout(() => { if (els.status.textContent === message) els.status.classList.add("toast-dismissed"); }, 4500);
+  }
 }
 
 function miles(meters) {
@@ -2652,6 +2661,8 @@ function renderAccountControls() {
   if (els.emptyConnectButton) els.emptyConnectButton.textContent = signedIn ? "Sync activities" : "Sign in to get started";
   els.accountButton.hidden = !signedIn;
   els.accountButton.textContent = user?.displayName || "Account";
+  // Phones show initials in a circle; the name stays the button's text for assistive tech.
+  els.accountButton.dataset.initials = String(user?.displayName || "Account").split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0].toUpperCase()).join("") || "A";
 }
 
 function providerButton(provider) {
@@ -3180,6 +3191,12 @@ els.rangeSelect.addEventListener("change", () => {
     state.ledgerPage = 0;
     render();
   });
+});
+
+els.status.addEventListener("click", () => { if (phoneLayout.matches) els.status.classList.add("toast-dismissed"); });
+document.querySelector("#ledgerOptionsToggle").addEventListener("click", (event) => {
+  const open = document.querySelector("#ledgerControls").classList.toggle("show-options");
+  event.currentTarget.setAttribute("aria-expanded", String(open));
 });
 
 document.querySelector("#activityModeControl").addEventListener("change", (event) => {

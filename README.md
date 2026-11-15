@@ -73,6 +73,20 @@ Below the readiness strip, **This week** shows distance and runs completed
 against this week's saved plan (or your 4-week average when there is no plan),
 with a Monday–Sunday strip of what you ran and what is still planned.
 
+**On phones** (700px and narrower) the layout is rearranged so data comes first:
+
+- The header is one row, with settings behind a gear icon and your account as initials.
+- A tab bar for Overview, Fitness, Plan and Runs (or Walks) is pinned to the bottom.
+- The Runs/Walks switch and the date range stay at the top of the screen while you scroll.
+- Page titles are hidden visually but still read by screen readers.
+- Sync confirmations appear briefly above the tab bar; errors stay until tapped.
+- This week shows all seven days in a single row.
+- The Runs list hides sort, type, export and copy link behind **Sort & filter**,
+  and each run takes two lines.
+- Plan opens on the week's sessions; goals and the check-in follow.
+
+Desktop is unchanged; all of this lives in `public/mobile.css`.
+
 **Runs and walks** are reviewed separately and processed the same way. When your
 history includes walks or hikes (from Strava, Garmin, or an import), a **Runs /
 Walks** switch appears beside the range. It shows how many of each you have.

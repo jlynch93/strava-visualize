@@ -488,7 +488,8 @@ function renderThisWeek(model) {
       const runs = byDay.get(key) || [];
       const session = plan?.sessions?.find((item) => item.date === key);
       const future = key > today;
-      const runText = runs.map((run) => `${runTypeChip(run)}<strong>${displayDistance(miles(run.distance), 1)}</strong>`).join("");
+      // The unit is its own span so narrow day cells can drop it (the summary line names it).
+      const runText = runs.map((run) => { const [value, unit] = displayDistance(miles(run.distance), 1).split(" "); return `${runTypeChip(run)}<strong>${value}<span class="unit"> ${unit}</span></strong>`; }).join("");
       const planText = session ? (session.kind === "run" ? `<small>${escapeHtml(session.title)}${session.miles ? ` · ${displayDistance(session.miles, 1)}` : ""}</small>` : "<small>Rest</small>") : "";
       const state = runs.length ? "done" : future ? (session?.kind === "run" ? "planned" : "upcoming") : session?.kind === "run" ? "missed" : "rest";
       const label = { done: "", planned: "", upcoming: "", missed: "<small>Not run</small>", rest: "<small>Rest</small>" }[state];

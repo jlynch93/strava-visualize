@@ -1,0 +1,184 @@
+/*
+ * Phone layout. Loads last and owns everything at <= 700px, so the desktop
+ * stylesheets stay as they are. Goals: data on the first screen, navigation in
+ * thumb reach, filters always reachable, one action per row at most.
+ */
+
+/* Desktop: the phone-only pieces stay out of the way. */
+.nav-icon, .ledger-options-toggle { display: none; }
+.summary-icon { display: none; }
+
+@media (max-width: 700px) {
+  :root { --tabbar-height: 62px; --safe-bottom: env(safe-area-inset-bottom, 0px); }
+  body { padding-bottom: calc(var(--tabbar-height) + var(--safe-bottom) + 8px); }
+  .app { padding-top: 8px; }
+
+  /* Visually hidden, still announced. */
+  .toolbar .control > label, .mode-control legend, .run-search > label,
+  #overview > .overview-head, #fitness > .overview-head {
+    position: absolute !important; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+  }
+
+  /* ---------- Header: one row ---------- */
+  .app-header {
+    display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-areas: "brand actions" "status status";
+    gap: 2px 10px; align-items: center; margin: 0 0 4px; padding: 0 0 8px;
+  }
+  .brand-lockup { grid-area: brand; }
+  .brand-wordmark { font-size: 1.15rem; }
+  /* Demo data is offered on the empty screen; once history is loaded it is not a header action. */
+  body.has-history .actions > #demoButton { display: none; }
+  .app-header > .header-actions { display: contents; }
+  #sourceStatus { grid-area: status; padding-left: 2px; font-size: .72rem; color: var(--ink-faint); }
+  #sourceStatus:empty { display: none; }
+  .actions { grid-area: actions; display: flex; flex-wrap: nowrap; justify-content: flex-end; align-items: center; gap: 6px; width: auto; min-width: 0; }
+  .actions > button, .actions > .file-button { min-height: 40px; padding: 8px 12px; font-size: .82rem; white-space: nowrap; }
+  /* Account: initials in a circle; the full name stays the accessible name. */
+  .actions > .account-button:not([hidden]) {
+    display: inline-grid; place-items: center; width: 40px; min-width: 40px; height: 40px; padding: 0; border-radius: 50%;
+    border: 1px solid var(--rule-strong); font-size: 0; overflow: hidden;
+  }
+  .actions > .account-button::before { content: attr(data-initials); font-size: .8rem; font-weight: 760; letter-spacing: .02em; }
+  .data-menu > summary { display: grid; place-items: center; width: 40px; min-height: 40px; height: 40px; padding: 0; border-radius: 50%; }
+  .data-menu .summary-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .summary-icon { display: block; width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+  /* Settings open as a sheet from the bottom, above the tab bar. */
+  .data-menu-panel {
+    position: fixed; top: auto; right: 0; bottom: 0; left: 0; z-index: 60; width: 100%; max-height: 82vh;
+    padding: 20px 16px calc(20px + var(--safe-bottom)); border-radius: 14px 14px 0 0;
+  }
+
+  /* ---------- Tab bar: thumb reach, every screen ---------- */
+  .app-nav {
+    position: fixed; right: 0; bottom: 0; left: 0; z-index: 40;
+    display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; width: auto; height: calc(var(--tabbar-height) + var(--safe-bottom));
+    padding: 0 6px var(--safe-bottom); background: color-mix(in oklch, var(--surface) 94%, transparent);
+    border-top: 1px solid var(--rule); backdrop-filter: blur(10px);
+  }
+  .app-nav a {
+    position: relative; display: flex; flex-direction: column; gap: 3px; align-items: center; justify-content: center;
+    min-height: var(--tabbar-height); padding: 6px 2px; border-radius: 0; background: transparent !important;
+    color: var(--ink-faint); font-size: .68rem; font-weight: 700; text-align: center;
+  }
+  .app-nav a[aria-current] { color: var(--ink-strong); }
+  .app-nav a[aria-current]::before { position: absolute; top: 0; left: 28%; right: 28%; height: 3px; border-radius: 0 0 3px 3px; background: var(--teal); content: ""; }
+  .nav-icon { display: block; width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .modal-open .app-nav { visibility: hidden; }
+
+  /* ---------- Filters: one compact row that stays reachable ---------- */
+  .toolbar {
+    position: sticky; top: 0; z-index: 20; display: block; margin: 0 -16px 12px; padding: 8px 16px;
+    background: color-mix(in oklch, var(--paper) 94%, transparent); border-bottom: 1px solid var(--rule); backdrop-filter: blur(10px);
+  }
+  .toolbar-controls { display: flex; flex-wrap: nowrap; gap: 8px; width: 100%; }
+  .toolbar-controls .control { min-width: 0; }
+  .toolbar-controls > .control:not(.mode-control) { flex: 1 1 0; }
+  .mode-control { flex: none; }
+  .mode-switch { height: 40px; }
+  .mode-switch span { padding: 0 10px; font-size: .82rem; }
+  .toolbar-controls select, .toolbar-controls input { height: 40px; }
+  body.is-custom-range .toolbar-controls { display: grid; grid-template-columns: 1fr 1fr; }
+  body.is-custom-range .toolbar-controls .control:first-child { grid-column: auto; }
+  body.is-custom-range .mode-control { grid-column: 1 / -1; }
+
+  /* ---------- Status: a toast above the tab bar ---------- */
+  .status:not([hidden]):not(:empty) {
+    position: fixed; right: 12px; bottom: calc(var(--tabbar-height) + var(--safe-bottom) + 10px); left: 12px; z-index: 45;
+    margin: 0; padding: 12px 14px; border: 0; border-radius: 10px; background: var(--panel-ink); color: oklch(95% 0.008 135);
+    box-shadow: 0 10px 28px rgba(0, 0, 0, .3); font-size: .82rem; transition: opacity 240ms var(--ease), transform 240ms var(--ease);
+  }
+  .status.error:not([hidden]) { box-shadow: inset 4px 0 0 var(--red), 0 10px 28px rgba(0, 0, 0, .3); }
+  .status.toast-dismissed { opacity: 0; transform: translateY(8px); pointer-events: none; }
+
+  /* ---------- Overview ---------- */
+  .today-strip { gap: 10px; margin-bottom: 12px; padding: 14px; }
+  .today-readiness { gap: 12px; align-items: flex-start; }
+  .today-score { width: 54px; height: 54px; border-width: 4px; font-size: 1.25rem; }
+  .today-readiness strong { font-size: 1rem; }
+  .today-readiness p { font-size: .8rem; }
+  .today-facts { justify-content: space-between; gap: 8px; }
+  .today-facts dd { font-size: 1.05rem; }
+  .today-strip .today-link, .this-week .today-link { justify-self: start; min-height: 40px; padding: 8px 0; border: 0; background: none; color: var(--teal); }
+
+  .this-week { margin: 0 0 12px; padding: 14px; }
+  .week-head { flex-wrap: nowrap; align-items: flex-start; }
+  .week-head h2 span { display: block; margin: 2px 0 0; }
+  .week-head p { font-size: .8rem; }
+  .week-head .today-link { flex: none; min-height: 40px; padding: 4px 0; }
+  .week-meter { margin: 10px 0 12px; }
+  /* The week reads as a week: seven narrow days in one row. */
+  .week-days { grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+  .week-day { justify-items: center; gap: 4px; min-height: 64px; padding: 6px 2px; text-align: center; font-size: .72rem; }
+  .week-day-name { font-size: .64rem; letter-spacing: 0; }
+  .week-day.is-today .week-day-name { font-size: 0; }
+  .week-day.is-today .week-day-name::before { content: "Today"; font-size: .64rem; }
+  .week-day strong { font-size: .8rem; white-space: nowrap; }
+  .week-day strong .unit { display: none; }
+  .week-day small { display: none; }
+  .week-day .type-chip { width: 10px; height: 10px; margin: 0; padding: 0; border: 0; font-size: 0; }
+  .week-day .type-chip::before { left: 2px; width: 6px; height: 6px; }
+  .week-day.day-missed::after { content: "–"; color: var(--orange); font-weight: 700; }
+
+  .block-review { padding: 16px 14px; }
+  .key-runs { margin: 16px 0; }
+
+  /* ---------- Runs list: the list first ---------- */
+  .ledger-controls { display: flex; flex-wrap: wrap; gap: 8px; }
+  .ledger-controls > .run-search { flex: 1 1 0; min-width: 0; }
+  .ledger-options-toggle { display: inline-flex; flex: none; align-items: center; min-height: 40px; align-self: end; }
+  .ledger-controls:not(.show-options) > :not(.run-search):not(.ledger-options-toggle) { display: none; }
+  .ledger-controls.show-options > :not(.run-search):not(.ledger-options-toggle) { flex: 1 1 calc(50% - 4px); min-width: 0; }
+  .ledger-controls.show-options > .ledger-options-toggle { background: var(--paper-deep); }
+  .activity-row {
+    grid-template-columns: minmax(0, 1fr) auto auto 28px; grid-template-areas: "name name name go" "date dist pace go";
+    gap: 4px 12px; align-items: center; padding: 12px 0;
+  }
+  .activity-row td:nth-child(1) { grid-area: go; justify-self: end; }
+  .activity-row td:nth-child(2) { grid-area: date; color: var(--ink-faint); font-size: .76rem; white-space: nowrap; }
+  .activity-row td:nth-child(3) { grid-area: name; overflow: hidden; color: var(--ink-strong); font-size: .95rem; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+  .activity-row td:nth-child(4) { grid-area: dist; }
+  .activity-row td:nth-child(5) { grid-area: pace; }
+  .activity-row td:nth-child(4), .activity-row td:nth-child(5) { color: var(--ink); font-size: .8rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .activity-row td:nth-child(4)::before, .activity-row td:nth-child(5)::before { display: none !important; }
+  .activity-row .type-chip { margin-left: 4px; }
+
+  /* ---------- Plan: this week's sessions first ---------- */
+  /* Matches dashboard.css "body.has-history #planning:not([hidden])" so the order applies. */
+  body.has-history #planning:not([hidden]) { display: flex; flex-direction: column; padding: 16px 14px; }
+  #planning > .panel-heading { order: 0; }
+  #planProgress { order: 1; }
+  #planHistoryWarning { order: 2; }
+  #planActions { order: 3; }
+  #acceptedPlan { order: 4; }
+  #planDraftReview { order: 5; }
+  #planStart { order: 6; margin-top: 16px; }
+  #planning .coaching-grid { order: 7; }
+  #planningContext { order: 8; }
+  /* Week controls: ‹ week label › on one row, actions underneath. */
+  #planActions { display: grid; grid-template-columns: 44px minmax(0, 1fr) 44px; gap: 8px; align-items: center; }
+  #planWeekLabel { grid-column: 2; grid-row: 1; font-size: .9rem; text-align: center; }
+  #previousPlanWeek, #nextPlanWeek { grid-row: 1; width: 44px; min-width: 44px; height: 44px; padding: 0; font-size: 0; }
+  #previousPlanWeek { grid-column: 1; }
+  #nextPlanWeek { grid-column: 3; }
+  #previousPlanWeek::before, #nextPlanWeek::before { font-size: 1.5rem; line-height: 1; }
+  /* Decorative arrows: the empty alt text keeps the accessible name "Previous week". */
+  #previousPlanWeek::before { content: "‹"; content: "‹" / ""; }
+  #nextPlanWeek::before { content: "›"; content: "›" / ""; }
+  #planActions > button:not(#previousPlanWeek):not(#nextPlanWeek) { grid-column: 1 / -1; min-height: 44px; }
+  #planActions > #acceptPlanButton:not([hidden]) + #replacePlanButton[hidden] + #copyPlanButton,
+  #planActions > #copyPlanButton { grid-column: auto / span 3; }
+  .plan-draft { padding: 16px 14px; }
+
+  /* ---------- Fitness ---------- */
+  .readiness-hero { padding: 16px 14px; }
+
+  /* Comfortable touch targets for what remains. */
+  button, select, summary, .file-button { min-height: 40px; }
+  .app-footer { padding-bottom: 8px; }
+}
+
+/* Narrowest phones (iPhone SE/mini): the counts give way so the range stays readable. */
+@media (max-width: 400px) {
+  .mode-switch small { display: none; }
+  .mode-switch span { padding: 0 9px; }
+}

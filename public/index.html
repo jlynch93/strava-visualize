@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="theme-color" content="#eef2ec" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#0d181c" media="(prefers-color-scheme: dark)">
     <title>Runlore · Every run adds to the story</title>
@@ -24,6 +24,7 @@
     <link rel="stylesheet" href="/charts.css">
     <link rel="stylesheet" href="/fitness.css">
     <link rel="stylesheet" href="/theme.css">
+    <link rel="stylesheet" href="/mobile.css">
   </head>
   <body class="is-loading">
     <!--
@@ -48,10 +49,10 @@
           <span class="brand-wordmark">runlore</span>
         </a>
         <nav class="app-nav" aria-label="Dashboard sections">
-          <a href="#overview">Overview</a>
-          <a href="#fitness">Fitness</a>
-          <a href="#planning">Plan</a>
-          <a href="#runs">Runs</a>
+          <a href="#overview"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 13h4v7H4zM10 8h4v12h-4zM16 4h4v16h-4z"/></svg><span>Overview</span></a>
+          <a href="#fitness"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 12h4l2-6 4 12 2-6h6"/></svg><span>Fitness</span></a>
+          <a href="#planning"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/></svg><span>Plan</span></a>
+          <a href="#runs"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg><span>Runs</span></a>
         </nav>
         <div class="header-actions">
           <span id="heroStatus" class="live-indicator">Ready for training data</span>
@@ -406,8 +407,9 @@
           <h2 id="runsTitle">Run ledger</h2>
           <span id="activityCount">No activities loaded</span>
         </div>
-        <div class="ledger-controls">
+        <div id="ledgerControls" class="ledger-controls">
           <div class="control run-search"><label for="runSearch">Find a run</label><input id="runSearch" type="search" placeholder="Search by run name" autocomplete="off"></div>
+          <button id="ledgerOptionsToggle" class="ledger-options-toggle ghost-action" type="button" aria-expanded="false" aria-controls="ledgerControls">Sort &amp; filter</button>
           <div class="control"><label for="runSort">Sort by</label><select id="runSort"><option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="distance">Longest distance</option><option value="pace">Fastest pace</option></select></div>
           <button id="exportButton" class="ghost-action" type="button">Export CSV</button>
           <button id="copyViewButton" class="ghost-action" type="button">Copy view link</button>
