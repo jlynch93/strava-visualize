@@ -75,7 +75,10 @@ function mockGarmin(t, { userId = "garmin-user-1", backfillStatus = 202, callbac
       return Response.json({ access_token: "garmin-access", refresh_token: "garmin-refresh", expires_in: 86400, scope: "ACTIVITY_EXPORT" });
     }
     if (target.pathname.endsWith("/user/id")) return Response.json({ userId });
-    if (target.pathname.includes("/backfill/activities")) return new Response(backfillStatus === 202 ? "" : "{}", { status: backfillStatus });
+    if (target.pathname.includes("/backfill/activities")) {
+      const status = typeof backfillStatus === "function" ? backfillStatus() : backfillStatus;
+      return new Response(status === 202 ? "" : "{}", { status });
+    }
     if (target.pathname.endsWith("/user/registration")) return new Response(null, { status: 204 });
     if (target.pathname.includes("/activities")) return Response.json(callbackData);
     return Response.json({});
@@ -305,4 +308,149 @@ test("Disconnecting Garmin deregisters at Garmin and deletes its stored activiti
 test("The webhook route is handled by the Worker before static assets", () => {
   const config = JSON.parse(fs.readFileSync(path.resolve(__dirname, "../wrangler.jsonc"), "utf8"));
   assert.ok(config.assets.run_worker_first.includes("/webhooks/*"));
+});
+
+/* ---------- Background history import ---------- */
+
+const sql = (testEnv, query, ...params) => testEnv.DB.prepare(query).bind(...params).run();
+const job = (testEnv) => testEnv.DB.prepare("SELECT * FROM sync_jobs").first();
+const activities = async (worker, testEnv, session, query = "") =>
+  (await worker.fetch(request(`/api/activities?provider=garmin${query}`, { cookie: session }), testEnv)).json();
+
+test("Sign-in does not wait for Garmin: the history import runs after the response", async (t) => {
+  const worker = await workerPromise;
+  const testEnv = env();
+  let release;
+  const gate = new Promise((resolve) => { release = resolve; });
+  const calls = mockGarmin(t);
+  const realFetch = globalThis.fetch;
+  // Hold every backfill request until the redirect has been returned.
+  t.mock.method(globalThis, "fetch", async (url, options) => {
+    if (String(url).includes("/backfill/activities")) await gate;
+    return realFetch(url, options);
+  });
+  const pending = [];
+  const ctx = { waitUntil: (promise) => pending.push(promise) };
+  const login = await worker.fetch(request("/auth/garmin/login"), testEnv);
+  const state = new URL(login.headers.get("location")).searchParams.get("state");
+  const cookies = [cookieValue(login, "sv_oauth_state"), cookieValue(login, "sv_oauth_verifier")].join("; ");
+  const callback = await worker.fetch(request(`/auth/garmin/callback?code=code&state=${state}`, { cookie: cookies }), testEnv, ctx);
+  assert.equal(callback.headers.get("location"), "/?signedin=garmin");
+  assert.equal(pending.length, 1, "The import was handed to waitUntil.");
+  assert.equal((await job(testEnv)).status, "requesting");
+
+  release();
+  await Promise.all(pending);
+  const done = await job(testEnv);
+  assert.equal(done.status, "requested");
+  assert.equal(done.windows_done, 4);
+  assert.equal(calls.filter((call) => call.url.pathname.includes("/backfill/activities")).length, 4);
+});
+
+test("A failed history window is retried by the cron trigger and resumes where it stopped", async (t) => {
+  const worker = await workerPromise;
+  const testEnv = env();
+  let status = 202, served = 0;
+  // Garmin accepts two windows, then starts failing (rate limited).
+  const calls = mockGarmin(t, { backfillStatus: () => (++served > 2 ? status : 202) });
+  t.mock.method(console, "warn", () => {});
+  status = 429;
+  const { session } = await signIn(worker, testEnv);
+  let current = await job(testEnv);
+  assert.equal(current.status, "requesting");
+  assert.equal(current.windows_done, 2);
+  assert.equal(current.attempts, 1);
+  assert.match(current.last_error, /429|Garmin/);
+  assert.equal((await activities(worker, testEnv, session)).sync.state, "importing");
+
+  status = 202;
+  await worker.scheduled({ cron: "*/10 * * * *" }, testEnv);
+  current = await job(testEnv);
+  assert.equal(current.status, "requested");
+  assert.equal(current.windows_done, 4);
+  const windows = calls.filter((call) => call.url.pathname.includes("/backfill/activities"))
+    .map((call) => call.url.searchParams.get("summaryEndTimeInSeconds"));
+  assert.equal(new Set(windows).size, 4, "Each window is requested once it succeeds; none are skipped.");
+});
+
+test("After repeated failures the import reports failed instead of retrying forever", async (t) => {
+  const worker = await workerPromise;
+  const testEnv = env();
+  mockGarmin(t, { backfillStatus: 500 });
+  t.mock.method(console, "warn", () => {});
+  const { session } = await signIn(worker, testEnv);
+  for (let round = 0; round < 8; round += 1) await worker.scheduled({ cron: "*/10 * * * *" }, testEnv);
+  const current = await job(testEnv);
+  assert.equal(current.status, "failed");
+  assert.equal(current.attempts, 6);
+  const list = await activities(worker, testEnv, session);
+  assert.equal(list.sync.state, "failed");
+  assert.ok(list.sync.error);
+});
+
+test("The arrival cursor finds backfilled history that started long before the last sync", async (t) => {
+  const worker = await workerPromise;
+  const testEnv = env();
+  mockGarmin(t);
+  const { session } = await signIn(worker, testEnv);
+  await worker.fetch(webhook({ activities: [summary()] }), testEnv);
+  // Pretend the first delivery was a while ago.
+  await sql(testEnv, "UPDATE activities SET updated_at = updated_at - 120");
+  const first = await activities(worker, testEnv, session);
+  assert.equal(first.activities.length, 1);
+  const cursor = first.sync.cursor;
+  assert.ok(cursor);
+
+  // Garmin now pushes a 2020 activity from the history backfill.
+  await worker.fetch(webhook({ activities: [summary({ activityId: 200, summaryId: "s-200", activityName: "Old marathon", startTimeInSeconds: Date.UTC(2020, 3, 5, 12) / 1000 })] }), testEnv);
+  const recentByStart = await activities(worker, testEnv, session, `&after=${cursor}`);
+  assert.equal(recentByStart.activities.length, 0, "A start-time window misses backfilled history.");
+  const sinceCursor = await activities(worker, testEnv, session, `&changed_since=${first.sync.cursor + 1}`);
+  assert.deepEqual(sinceCursor.activities.map((activity) => activity.name), ["Old marathon"]);
+  assert.ok(sinceCursor.sync.cursor > cursor);
+});
+
+test("Sync status moves from importing to idle once requests are done and arrivals stop", async (t) => {
+  const worker = await workerPromise;
+  const testEnv = env();
+  mockGarmin(t);
+  const { session } = await signIn(worker, testEnv);
+  const start = await activities(worker, testEnv, session);
+  assert.equal(start.sync.state, "importing");
+  assert.equal(start.sync.windowsDone, 4);
+  assert.equal(start.sync.windowsTotal, 4);
+  await worker.fetch(webhook({ activities: [summary()] }), testEnv);
+  // An hour later: the requests are long done and nothing new has arrived.
+  await sql(testEnv, "UPDATE sync_jobs SET updated_at = updated_at - 3600");
+  await sql(testEnv, "UPDATE activities SET updated_at = updated_at - 3600");
+  const later = await activities(worker, testEnv, session);
+  assert.equal(later.sync.state, "idle");
+  assert.equal(later.sync.stored, 1);
+});
+
+test("Disconnecting Garmin removes its import job", async (t) => {
+  const worker = await workerPromise;
+  const testEnv = env();
+  mockGarmin(t);
+  const { session: stravaSession } = await signIn(worker, testEnv, "strava");
+  await signIn(worker, testEnv, "garmin", stravaSession);
+  assert.ok(await job(testEnv));
+  const removed = await worker.fetch(request("/api/connections/garmin", { cookie: stravaSession, method: "DELETE" }), testEnv);
+  assert.equal(removed.status, 200);
+  assert.equal(await job(testEnv), null);
+});
+
+test("Before migration 0004 is applied, sign-in, listing and disconnect keep working", async (t) => {
+  const worker = await workerPromise;
+  const testEnv = env();
+  testEnv.DB.prepare("DROP TABLE sync_jobs").run();
+  const calls = mockGarmin(t);
+  const { session: stravaSession } = await signIn(worker, testEnv, "strava");
+  await signIn(worker, testEnv, "garmin", stravaSession);
+  assert.equal(calls.filter((call) => call.url.pathname.includes("/backfill/activities")).length, 4, "History is still requested.");
+  const list = await activities(worker, testEnv, stravaSession);
+  assert.equal(list.sync.state, "idle");
+  assert.equal(await worker.scheduled({ cron: "*/10 * * * *" }, testEnv), undefined);
+  const removed = await worker.fetch(request("/api/connections/garmin", { cookie: stravaSession, method: "DELETE" }), testEnv);
+  assert.equal(removed.status, 200);
 });

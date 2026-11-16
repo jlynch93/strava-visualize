@@ -15,8 +15,11 @@ import { handleGarminWebhook } from "./webhooks.js";
 import { handleGetState, handlePutState } from "./state.js";
 import { withSecurityHeaders } from "./security.js";
 import { deleteExpiredSessions } from "./session.js";
+import { retryPendingSyncJobs } from "./sync.js";
 
-async function handleRequest(request, env) {
+export const SYNC_RETRY_CRON = "*/10 * * * *";
+
+async function handleRequest(request, env, ctx) {
   const url = new URL(request.url);
   const { pathname } = url;
   const method = request.method;
@@ -37,12 +40,12 @@ async function handleRequest(request, env) {
 
   const authRoute = pathname.match(/^\/auth\/([a-z]+)\/(login|callback)$/);
   if (authRoute) {
-    return authRoute[2] === "login" ? handleLogin(env, request, authRoute[1]) : handleCallback(env, request, authRoute[1]);
+    return authRoute[2] === "login" ? handleLogin(env, request, authRoute[1]) : handleCallback(env, request, authRoute[1], ctx);
   }
   // Original single-provider paths, kept so existing Strava app settings and
   // STRAVA_REDIRECT_URI values continue to work.
   if (pathname === "/auth/login") return handleLogin(env, request, "strava");
-  if (pathname === "/auth/callback") return handleCallback(env, request, "strava");
+  if (pathname === "/auth/callback") return handleCallback(env, request, "strava", ctx);
   if (pathname === "/auth/logout") return handleLogout(env, request);
 
   const garminWebhook = pathname.match(/^\/webhooks\/garmin\/([^/]+)$/);
@@ -69,9 +72,9 @@ async function handleRequest(request, env) {
   return asset;
 }
 
-async function respond(request, env) {
+async function respond(request, env, ctx) {
   try {
-    return await handleRequest(request, env);
+    return await handleRequest(request, env, ctx);
   } catch (error) {
     const status = Number(error.status) || 500;
     if (status >= 500) {
@@ -85,13 +88,18 @@ async function respond(request, env) {
 }
 
 export default {
-  async fetch(request, env) {
-    return withSecurityHeaders(await respond(request, env), request);
+  async fetch(request, env, ctx) {
+    return withSecurityHeaders(await respond(request, env, ctx), request);
   },
 
-  // Cron trigger (see wrangler.jsonc): remove expired sign-in sessions.
+  // Cron triggers (see wrangler.jsonc): every 10 minutes, retry history
+  // imports that still have windows to request; daily, remove expired sessions.
   async scheduled(controller, env) {
-    const removed = await deleteExpiredSessions(env);
-    console.log(JSON.stringify({ event: "sessions_cleaned", removed }));
+    const retried = await retryPendingSyncJobs(env);
+    if (retried) console.log(JSON.stringify({ event: "sync_jobs_retried", count: retried }));
+    if (controller?.cron !== SYNC_RETRY_CRON) {
+      const removed = await deleteExpiredSessions(env);
+      console.log(JSON.stringify({ event: "sessions_cleaned", removed }));
+    }
   }
 };

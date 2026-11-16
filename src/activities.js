@@ -2,6 +2,7 @@ import { appError, json } from "./http.js";
 import { getStoredActivity, listConnections, listStoredActivities } from "./db.js";
 import { getProvider } from "./providers/index.js";
 import { providerAccessToken, requireUser } from "./auth.js";
+import { syncStatus } from "./sync.js";
 
 function pageLimit(value, fallback, maximum) {
   const numeric = Number(value || fallback);
@@ -40,6 +41,9 @@ export async function handleActivities(env, request) {
     const result = await listStoredActivities(env, userId, provider.id, {
       after: epochParam(after),
       before: epochParam(before),
+      // Arrival-time cursor: history pushed later (backfill) is still found,
+      // even though it started long before the last sync.
+      changedSince: epochParam(url.searchParams.get("changed_since")),
       limit: perPage * maxPages
     });
     return json({
@@ -47,7 +51,9 @@ export async function handleActivities(env, request) {
       activities: result.activities,
       truncated: result.truncated,
       // Lets the client explain that history is still being delivered.
-      connectedAt: connection.created_at
+      connectedAt: connection.created_at,
+      // importing / idle / failed, progress, and the next changed_since cursor.
+      sync: await syncStatus(env, userId, provider.id)
     });
   }
 

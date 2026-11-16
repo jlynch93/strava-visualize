@@ -284,8 +284,23 @@ mapped to Strava's field names. No GPS routes or samples are stored.
   Both push (data in the body) and ping (callback URL) modes are handled. The
   secret in the path is what authenticates Garmin's requests, so use a long
   random value.
-- **Backfill:** connecting Garmin requests about a year of history in 90-day
-  windows. It arrives through the webhook over the following minutes.
+- **History import (background job):** connecting Garmin starts a job
+  (`sync_jobs`, `migrations/0004_sync_jobs.sql`) that asks Garmin for about a
+  year of history in four 90-day windows. Sign-in does not wait: the requests
+  run after the redirect is sent (`ctx.waitUntil`). Each window is recorded
+  as it succeeds; a failed one (for example, rate limiting) is retried by the
+  `*/10 * * * *` cron trigger, which resumes where it stopped, up to six
+  attempts before the job reports `failed`. The history itself arrives
+  through the webhook over the following minutes.
+- **Live arrivals:** `/api/activities` accepts `changed_since=<cursor>`
+  (arrival time, not start time, so backfilled history is found) and returns
+  `sync: { state, cursor, windowsDone, windowsTotal, stored }`. While `state`
+  is `importing`, the dashboard checks for arrivals every 15 seconds (45 after
+  five minutes) and shows "Importing history… N so far". Afterwards it keeps
+  checking every 3 minutes, so new Garmin uploads appear on their own. Checks
+  pause while the tab is hidden. Strava, fetched on demand under a shared
+  rate limit, is never polled; it refreshes quietly when you return to the
+  tab after 15 minutes.
 - **Disconnecting** Garmin, deleting the account, a Garmin deregistration, or
   removing the `ACTIVITY_EXPORT` permission deletes the stored activities. A
   deregistration also deletes the profile if Garmin was its only sign-in.

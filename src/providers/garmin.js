@@ -170,22 +170,22 @@ export default {
     return toTokens(data, tokens.refreshToken);
   },
 
-  // Asks Garmin to push recent history. Each request covers at most 90 days;
-  // the activities arrive later through the webhook.
-  async onConnected(env, config, tokens) {
-    const end = Math.floor(Date.now() / 1000);
-    for (let window = 0; window < BACKFILL_WINDOWS; window += 1) {
-      const windowEnd = end - window * BACKFILL_WINDOW;
-      const params = new URLSearchParams({
-        summaryStartTimeInSeconds: String(windowEnd - BACKFILL_WINDOW),
-        summaryEndTimeInSeconds: String(windowEnd)
-      });
-      try {
-        await apiRequest(tokens.accessToken, `/backfill/activities?${params}`);
-      } catch (error) {
-        // 409 means this window was already requested; keep going.
-        if (error.status !== 409) throw error;
-      }
+  // History import (see src/sync.js). Garmin cannot list activities on demand;
+  // instead each request asks it to push one window of at most 90 days to the
+  // webhook. The job records progress so a failed window is retried later.
+  backfill: { windows: BACKFILL_WINDOWS, windowSeconds: BACKFILL_WINDOW },
+
+  async requestBackfillWindow(accessToken, anchorEnd, index) {
+    const windowEnd = anchorEnd - index * BACKFILL_WINDOW;
+    const params = new URLSearchParams({
+      summaryStartTimeInSeconds: String(windowEnd - BACKFILL_WINDOW),
+      summaryEndTimeInSeconds: String(windowEnd)
+    });
+    try {
+      await apiRequest(accessToken, `/backfill/activities?${params}`);
+    } catch (error) {
+      // 409 means this window was already requested, which is the goal anyway.
+      if (error.status !== 409) throw error;
     }
   },
 

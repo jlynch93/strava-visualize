@@ -102,6 +102,65 @@ export async function deleteConnection(env, userId, provider) {
     db.prepare("DELETE FROM activities WHERE user_id = ? AND provider = ?").bind(userId, provider),
     db.prepare("DELETE FROM provider_connections WHERE user_id = ? AND provider = ?").bind(userId, provider)
   ]);
+  // Separate, so a database without migration 0004 can still disconnect.
+  await ignoreMissingTable(() => db.prepare("DELETE FROM sync_jobs WHERE user_id = ? AND provider = ?").bind(userId, provider).run());
+}
+
+// Migrations are applied by hand in production, so code can deploy before a
+// new table exists. Callers that can work without the table use this.
+export function isMissingTable(error) {
+  return /no such table/i.test(String(error?.message || error));
+}
+
+async function ignoreMissingTable(work, fallback = null) {
+  try { return await work(); } catch (error) { if (isMissingTable(error)) return fallback; throw error; }
+}
+
+/* ---------- Background history imports ---------- */
+
+// Starts (or restarts, on reconnect) a history import for this provider.
+export async function startSyncJob(env, userId, provider, { anchorEnd, windowsTotal }) {
+  const timestamp = now();
+  await requireDb(env)
+    .prepare(`INSERT INTO sync_jobs (user_id, provider, anchor_end, windows_total, windows_done, attempts, status, last_error, created_at, updated_at)
+      VALUES (?, ?, ?, ?, 0, 0, 'requesting', NULL, ?, ?)
+      ON CONFLICT (user_id, provider) DO UPDATE SET
+        anchor_end = excluded.anchor_end, windows_total = excluded.windows_total, windows_done = 0, attempts = 0,
+        status = 'requesting', last_error = NULL, created_at = excluded.created_at, updated_at = excluded.updated_at`)
+    .bind(userId, provider, anchorEnd, windowsTotal, timestamp, timestamp)
+    .run();
+}
+
+export async function getSyncJob(env, userId, provider) {
+  return requireDb(env)
+    .prepare("SELECT * FROM sync_jobs WHERE user_id = ? AND provider = ?")
+    .bind(userId, provider)
+    .first();
+}
+
+export async function updateSyncJob(env, userId, provider, { windowsDone, attempts, status, lastError = null }) {
+  await requireDb(env)
+    .prepare("UPDATE sync_jobs SET windows_done = ?, attempts = ?, status = ?, last_error = ?, updated_at = ? WHERE user_id = ? AND provider = ?")
+    .bind(windowsDone, attempts, status, lastError, now(), userId, provider)
+    .run();
+}
+
+// Jobs with windows left to request; the cron trigger retries these.
+export async function listPendingSyncJobs(env, limit = 20) {
+  const { results } = await requireDb(env)
+    .prepare("SELECT * FROM sync_jobs WHERE status = 'requesting' ORDER BY updated_at LIMIT ?")
+    .bind(limit)
+    .all();
+  return results || [];
+}
+
+// How much has arrived, and when the newest arrival was stored.
+export async function storedActivityStats(env, userId, provider) {
+  const row = await requireDb(env)
+    .prepare("SELECT COUNT(*) AS count, MAX(updated_at) AS last_received FROM activities WHERE user_id = ? AND provider = ?")
+    .bind(userId, provider)
+    .first();
+  return { count: Number(row?.count) || 0, lastReceivedAt: Number(row?.last_received) || null };
 }
 
 export async function findUserIdByProviderUser(env, provider, providerUserId) {
@@ -128,9 +187,15 @@ export async function deleteActivities(env, userId, provider) {
 
 // Newest first, like Strava's activity list. `truncated` is true when more
 // than `limit` activities match.
-export async function listStoredActivities(env, userId, provider, { after, before, limit }) {
+export async function listStoredActivities(env, userId, provider, { after, before, changedSince, limit }) {
   const conditions = ["user_id = ?", "provider = ?"];
   const params = [userId, provider];
+  // Arrival time, inclusive: rows stored in the cursor's own second are sent
+  // again and de-duplicated by id on the client, so nothing is skipped.
+  if (Number.isFinite(changedSince)) {
+    conditions.push("updated_at >= ?");
+    params.push(changedSince);
+  }
   if (Number.isFinite(after)) {
     conditions.push("start_time > ?");
     params.push(after);

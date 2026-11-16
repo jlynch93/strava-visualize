@@ -16,6 +16,9 @@ import garmin from "./garmin.js";
 // Optional:
 //   pkce: true                      -> login sends a S256 code challenge
 //   onConnected(env, config, tokens, userId) -> after a connection is saved
+//   backfill: { windows } + requestBackfillWindow(accessToken, anchorEnd, index)
+//                                   -> history import run as a background job
+//                                      with retries (src/sync.js)
 //   onDisconnect(config, accessToken)        -> before a connection is removed
 //
 // Activities use Strava's field names, which the dashboard's

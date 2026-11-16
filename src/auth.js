@@ -1,4 +1,5 @@
 import { appError, cookie, json, parseCookies, redirect } from "./http.js";
+import { startHistoryImport } from "./sync.js";
 import { hasEncryptionKey, randomToken, sha256 } from "./crypto.js";
 import {
   createUser,
@@ -128,7 +129,7 @@ function authFailure(request, code) {
   return redirect(`/?auth_error=${code}`, clearOauthCookies(request));
 }
 
-export async function handleCallback(env, request, providerId) {
+export async function handleCallback(env, request, providerId, ctx) {
   const provider = getProvider(providerId);
   if (!provider) return json({ error: "Unknown provider." }, 404);
   const platform = platformError(env);
@@ -162,16 +163,17 @@ export async function handleCallback(env, request, providerId) {
     cookies.push(await createSession(env, userId, request));
   }
   await upsertConnection(env, userId, provider.id, account, tokens);
-  await runConnectedHook(env, provider, config, tokens, userId);
+  await runConnectedHook(env, request, provider, config, tokens, userId, ctx);
   return redirect(signedInUserId ? `/?connected=${provider.id}` : `/?signedin=${provider.id}`, cookies);
 }
 
-// Lets a provider start work after a connection is saved (Garmin requests a
-// history backfill). A failure here must not undo a successful sign-in.
-async function runConnectedHook(env, provider, config, tokens, userId) {
-  if (!provider.onConnected) return;
+// Lets a provider start work after a connection is saved. Garmin's history
+// import runs as a background job (src/sync.js) after the redirect is sent.
+// A failure here must not undo a successful sign-in.
+async function runConnectedHook(env, request, provider, config, tokens, userId, ctx) {
   try {
-    await provider.onConnected(env, config, tokens, userId);
+    if (provider.requestBackfillWindow) await startHistoryImport(env, request, provider, userId, ctx);
+    else if (provider.onConnected) await provider.onConnected(env, config, tokens, userId);
   } catch (error) {
     console.warn(`${provider.name} post-connect step failed: ${error.message}`);
   }

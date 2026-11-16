@@ -2572,21 +2572,33 @@ function finishLoading() {
 
 function clearProviderCache() {
   try { sessionStorage.removeItem(PROVIDER_CACHE_KEY); } catch { /* Storage may be unavailable. */ }
+  state.syncCursor = {};
+  state.importStatus = null;
+  stopArrivalWatcher();
 }
 
-async function fetchActivities(mode = "recent", providerId = state.activeProvider) {
+// background: a quiet refresh (the arrival watcher, or returning to the tab):
+// no button changes or progress message, and a message only for news.
+async function fetchActivities(mode = "recent", providerId = state.activeProvider, { background = false } = {}) {
   if (state.syncing) return;
   const provider = providerId || state.account.connections[0]?.provider;
   if (!provider) return;
   state.syncing = true;
-  els.connectButton.disabled = true;
-  els.connectButton.textContent = "Syncing…";
-  setStatus(`Pulling activities from ${providerName(provider)}...`);
+  if (!background) {
+    els.connectButton.disabled = true;
+    els.connectButton.textContent = "Syncing…";
+    setStatus(`Pulling activities from ${providerName(provider)}...`);
+  }
   try {
     const name = providerName(provider);
     const params = new URLSearchParams({ provider, pages: "8", per_page: "100" });
     const previous = state.dataSource === provider ? state.rawActivities : [];
-    if (previous.length) {
+    // Providers that store pushed data (Garmin) return an arrival cursor. It
+    // finds history delivered after the last sync whatever its start date.
+    const cursor = state.syncCursor?.[provider];
+    const byArrival = mode === "recent" && previous.length && Number.isFinite(cursor);
+    if (byArrival) params.set("changed_since", String(cursor));
+    else if (previous.length) {
       if (mode === "older") params.set("before", String(Math.floor(Math.min(...previous.map((run) => new Date(run.start_date || run.start_date_local).valueOf())) / 1000)));
       else if (mode === "full") params.set("after", String(Math.floor(Math.min(...previous.map((run) => new Date(run.start_date || run.start_date_local).valueOf())) / 1000) - 1));
       else params.set("after", String(Math.floor((new Date(state.lastSync || Date.now()).valueOf() - 7 * 86400000) / 1000)));
@@ -2608,8 +2620,11 @@ async function fetchActivities(mode = "recent", providerId = state.activeProvide
     const incoming = data.activities.map(normalizeActivity);
     incoming.forEach((run) => state.activityDetails?.delete(String(run.id)));
     // A completed refresh replaces its queried interval, reflecting deletions and edits.
+    // Arrival-cursor refreshes only add and update, so everything is kept.
     const after = Number(params.get("after") || 0) * 1000;
-    const kept = mode !== "older" && !data.truncated ? previous.filter((run) => new Date(run.start_date || run.start_date_local).valueOf() <= after) : previous;
+    const kept = !byArrival && mode !== "older" && !data.truncated ? previous.filter((run) => new Date(run.start_date || run.start_date_local).valueOf() <= after) : previous;
+    const knownIds = new Set(previous.map((run) => String(run.id)));
+    const newCount = incoming.filter((run) => !knownIds.has(String(run.id))).length;
     state.rawActivities = TrainingCore.mergeActivities(kept, incoming);
     state.dataSource = provider;
     state.activeProvider = provider;
@@ -2618,23 +2633,106 @@ async function fetchActivities(mode = "recent", providerId = state.activeProvide
     else if (data.truncated) state.historyTruncated = true;
     const oldest = state.rawActivities.length ? Math.min(...state.rawActivities.map((run) => parseActivityDate(run).valueOf())) : Date.now();
     historyCoverage = { start: state.historyTruncated ? new Date(oldest).toISOString() : "1970-01-01T00:00:00.000Z", end: new Date().toISOString() };
-    try { sessionStorage.setItem(PROVIDER_CACHE_KEY, JSON.stringify({ provider, activities: state.rawActivities, lastSync: state.lastSync, truncated: state.historyTruncated, coverage: historyCoverage })); } catch { /* A full sync remains available without a cache. */ }
-    state.ledgerPage = 0;
-    syncRangeInputs();
-    const recentlyConnected = data.connectedAt && Date.now() / 1000 - Number(data.connectedAt) < 24 * 60 * 60;
-    if (!state.rawActivities.length && recentlyConnected) {
-      setStatus(`${name} is still sending your history. It can take a few minutes to arrive; sync again shortly.`);
+    const wasImporting = state.importStatus?.provider === provider && state.importStatus.state === "importing";
+    state.syncCursor = { ...state.syncCursor };
+    if (data.sync) {
+      state.syncCursor[provider] = data.sync.cursor;
+      state.importStatus = { ...data.sync, provider };
+    } else {
+      delete state.syncCursor[provider];
+      state.importStatus = null;
+    }
+    try { sessionStorage.setItem(PROVIDER_CACHE_KEY, JSON.stringify({ provider, activities: state.rawActivities, lastSync: state.lastSync, truncated: state.historyTruncated, coverage: historyCoverage, cursor: state.syncCursor[provider] ?? null, sync: data.sync || null })); } catch { /* A full sync remains available without a cache. */ }
+    if (!background || newCount) {
+      // Background refreshes keep the reader's place unless something arrived.
+      if (!background) state.ledgerPage = 0;
+      syncRangeInputs();
+    }
+    const importing = data.sync?.state === "importing";
+    if (background) {
+      if (wasImporting && data.sync?.state === "idle") setStatus(`${name} history imported: ${state.rawActivities.length} activities.`);
+      else if (data.sync?.state === "failed" && wasImporting) setStatus(`${name} stopped sending history. Disconnect and reconnect ${name} to try again.`, true);
+      else if (newCount && !importing) setStatus(`${newCount} new ${newCount === 1 ? "activity" : "activities"} from ${name}.`);
+    } else if (importing) {
+      setStatus(`${name} is sending your history. New activities appear here as they arrive${state.rawActivities.length ? ` (${state.rawActivities.length} so far)` : ""}.`);
+    } else if (data.sync?.state === "failed") {
+      setStatus(`${name} history import stopped: ${data.sync.error || "the request failed"}. Disconnect and reconnect ${name} to try again.`, true);
     } else {
       setStatus(`Loaded ${incoming.length} activities from ${name}; ${state.rawActivities.length} in history.${state.historyTruncated ? " Load older activities to extend the history." : ""}`);
     }
-    render();
+    if (!background || newCount) render();
+    watchArrivals(provider, data.sync);
   } finally {
     state.syncing = false;
     renderSyncInfo();
-    els.connectButton.disabled = false;
+    if (!background) els.connectButton.disabled = false;
     renderAccountControls();
   }
 }
+
+/*
+ * Arrival watcher. Garmin pushes activities to the server whenever it likes
+ * (history right after connecting, new activities after each upload); this
+ * checks for arrivals with the cheap changed_since query: every 15s while a
+ * history import is under way, every 45s after five minutes of it, and every
+ * 3 minutes otherwise. It pauses while the tab is hidden. Strava, which is
+ * fetched on demand under a shared rate limit, is never polled.
+ */
+const arrivalWatcher = { timer: null, provider: null, startedAt: 0, lastCheck: 0, importing: false };
+
+function watchArrivals(provider, sync) {
+  if (!sync) { stopArrivalWatcher(); return; }
+  const importing = sync.state === "importing";
+  if (importing && !(arrivalWatcher.importing && arrivalWatcher.provider === provider)) arrivalWatcher.startedAt = Date.now();
+  arrivalWatcher.provider = provider;
+  arrivalWatcher.importing = importing;
+  arrivalWatcher.lastCheck = Date.now();
+  scheduleArrivalCheck();
+}
+
+function arrivalDelay() {
+  if (!arrivalWatcher.importing) return 180_000;
+  return Date.now() - arrivalWatcher.startedAt < 5 * 60_000 ? 15_000 : 45_000;
+}
+
+function scheduleArrivalCheck(delay = arrivalDelay()) {
+  clearTimeout(arrivalWatcher.timer);
+  arrivalWatcher.timer = setTimeout(checkArrivals, delay);
+}
+
+function stopArrivalWatcher() {
+  clearTimeout(arrivalWatcher.timer);
+  Object.assign(arrivalWatcher, { timer: null, provider: null, importing: false });
+}
+
+async function checkArrivals() {
+  const provider = arrivalWatcher.provider;
+  if (!provider || !state.account.signedIn || state.dataSource !== provider) { stopArrivalWatcher(); return; }
+  if (document.hidden) return; // Resumed when the tab is visible again.
+  if (state.syncing) { scheduleArrivalCheck(5_000); return; }
+  arrivalWatcher.lastCheck = Date.now();
+  try {
+    await fetchActivities("recent", provider, { background: true });
+  } catch (error) {
+    if (!state.account.signedIn) { stopArrivalWatcher(); setStatus(error.message, true); return; }
+    scheduleArrivalCheck(60_000);
+  }
+}
+
+// Coming back to the tab: catch up on what arrived while away.
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden || !state.account.signedIn || state.syncing) return;
+  if (arrivalWatcher.provider) {
+    if (Date.now() - arrivalWatcher.lastCheck > 30_000) checkArrivals();
+    else scheduleArrivalCheck();
+    return;
+  }
+  // Strava has no arrival feed; refresh quietly if the last sync is stale.
+  const age = Date.now() - new Date(state.lastSync || 0).valueOf();
+  if (state.dataSource && state.dataSource === state.activeProvider && age > 15 * 60_000) {
+    fetchActivities("recent", state.activeProvider, { background: true }).catch(() => { /* The manual sync button still works. */ });
+  }
+});
 
 async function readApiJson(response) {
   const text = await response.text();
@@ -2763,9 +2861,13 @@ async function loadAccount({ sync = true } = {}) {
   state.freshAuth = false;
   if (usable) {
     state.rawActivities = cached.activities.map(normalizeActivity); state.dataSource = cached.provider; state.lastSync = cached.lastSync; state.historyTruncated = cached.truncated; historyCoverage = cached.coverage;
+    if (Number.isFinite(cached.cursor)) state.syncCursor = { ...state.syncCursor, [cached.provider]: cached.cursor };
+    if (cached.sync) state.importStatus = { ...cached.sync, provider: cached.provider };
     syncRangeInputs(); render(); finishLoading();
     const age = Date.now() - new Date(cached.lastSync).valueOf();
     if (!Number.isFinite(age) || age < 0 || age > 5 * 60 * 1000) await fetchActivities("recent", state.activeProvider);
+    // A fresh cache skips the fetch; keep watching for arrivals regardless.
+    else if (cached.sync) { watchArrivals(cached.provider, cached.sync); if (cached.sync.state === "importing") scheduleArrivalCheck(2_000); }
   } else {
     await fetchActivities("recent", state.activeProvider);
   }

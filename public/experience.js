@@ -222,7 +222,13 @@ function renderSyncInfo() {
   document.querySelector("#fullSyncButton").hidden = !hasProviderConnection();
   document.querySelector("#removeSavedButton").hidden = !preferences.rememberImports;
   const source = isProviderSource() ? providerName(state.dataSource) : state.dataSource === "import" ? "Imported history" : state.dataSource === "demo" ? "Demo history" : "No history loaded";
-  document.querySelector("#sourceStatus").textContent = `${source}${state.lastSync ? ` · Synced ${new Date(state.lastSync).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : ""}`;
+  // While a provider is still sending history, say so instead of "Synced".
+  const importing = state.importStatus?.state === "importing" && state.importStatus.provider === state.dataSource;
+  const sourceStatus = document.querySelector("#sourceStatus");
+  sourceStatus.classList.toggle("is-importing", importing);
+  sourceStatus.textContent = importing
+    ? `${source} · Importing history… ${count.toLocaleString()} so far`
+    : `${source}${state.lastSync ? ` · Synced ${new Date(state.lastSync).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : ""}`;
   const demoParent = isProviderSource() || state.dataSource === "import" ? document.querySelector("#dataMenuActions") : document.querySelector(".header-actions .actions");
   if (els.demoButton.parentElement !== demoParent) demoParent.append(els.demoButton);
   const connectParent = state.dataSource === "import" ? document.querySelector("#dataMenuActions") : document.querySelector(".header-actions .actions");
