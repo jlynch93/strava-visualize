@@ -449,8 +449,36 @@ test("Before migration 0004 is applied, sign-in, listing and disconnect keep wor
   await signIn(worker, testEnv, "garmin", stravaSession);
   assert.equal(calls.filter((call) => call.url.pathname.includes("/backfill/activities")).length, 4, "History is still requested.");
   const list = await activities(worker, testEnv, stravaSession);
-  assert.equal(list.sync.state, "idle");
+  assert.equal(list.sync.state, "importing", "A new connection with nothing stored is still waiting for Garmin.");
   assert.equal(await worker.scheduled({ cron: "*/10 * * * *" }, testEnv), undefined);
   const removed = await worker.fetch(request("/api/connections/garmin", { cookie: stravaSession, method: "DELETE" }), testEnv);
   assert.equal(removed.status, 200);
+});
+
+test("A Garmin connection without an import job gets one on its next sync", async (t) => {
+  const worker = await workerPromise;
+  const testEnv = env();
+  const calls = mockGarmin(t);
+  const { session } = await signIn(worker, testEnv);
+  // As if it connected before migration 0004: no job row.
+  await sql(testEnv, "DELETE FROM sync_jobs");
+  const before = calls.filter((call) => call.url.pathname.includes("/backfill/activities")).length;
+  const list = await activities(worker, testEnv, session);
+  assert.equal(list.sync.state, "importing");
+  const current = await job(testEnv);
+  assert.equal(current.status, "requested");
+  assert.equal(calls.filter((call) => call.url.pathname.includes("/backfill/activities")).length - before, 4);
+  // Only once: the job now exists.
+  await activities(worker, testEnv, session);
+  assert.equal(calls.filter((call) => call.url.pathname.includes("/backfill/activities")).length - before, 4);
+});
+
+test("An old connection that never received anything reports idle, not importing", async (t) => {
+  const worker = await workerPromise;
+  const testEnv = env();
+  mockGarmin(t);
+  const { session } = await signIn(worker, testEnv);
+  await sql(testEnv, "UPDATE provider_connections SET created_at = created_at - 3 * 86400");
+  await sql(testEnv, "UPDATE sync_jobs SET updated_at = updated_at - 3 * 86400");
+  assert.equal((await activities(worker, testEnv, session)).sync.state, "idle");
 });

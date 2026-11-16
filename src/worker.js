@@ -29,7 +29,7 @@ async function handleRequest(request, env, ctx) {
   if (pathname === "/api/me" && method === "DELETE") return handleDeleteAccount(env, request);
   const connectionRoute = pathname.match(/^\/api\/connections\/([a-z]+)$/);
   if (connectionRoute && method === "DELETE") return handleDisconnect(env, request, connectionRoute[1]);
-  if (pathname === "/api/activities") return handleActivities(env, request);
+  if (pathname === "/api/activities") return handleActivities(env, request, ctx);
   const activityRoute = pathname.match(/^\/api\/activities\/(\d+)$/);
   if (activityRoute && method === "GET") return handleActivity(env, request, activityRoute[1]);
   if (pathname === "/api/weather" && method === "GET") return handleWeather(request);

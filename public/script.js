@@ -2655,6 +2655,8 @@ async function fetchActivities(mode = "recent", providerId = state.activeProvide
       else if (newCount && !importing) setStatus(`${newCount} new ${newCount === 1 ? "activity" : "activities"} from ${name}.`);
     } else if (importing) {
       setStatus(`${name} is sending your history. New activities appear here as they arrive${state.rawActivities.length ? ` (${state.rawActivities.length} so far)` : ""}.`);
+    } else if (data.sync && !state.rawActivities.length) {
+      setStatus(`${name} is connected but has not sent any activities yet. If this lasts more than an hour, check the webhook endpoints in the ${name} developer portal.`);
     } else if (data.sync?.state === "failed") {
       setStatus(`${name} history import stopped: ${data.sync.error || "the request failed"}. Disconnect and reconnect ${name} to try again.`, true);
     } else {

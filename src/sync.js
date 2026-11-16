@@ -67,8 +67,22 @@ export async function retryPendingSyncJobs(env) {
   return jobs.length;
 }
 
+// A connection made before migration 0004 (or whose job row was lost) has no
+// job, so nothing would ever retry its history. Start one the next time it is
+// read; afterwards the row exists and this does nothing.
+export async function ensureHistoryImport(env, request, provider, userId, ctx) {
+  if (!provider.requestBackfillWindow) return;
+  let job;
+  try { job = await getSyncJob(env, userId, provider.id); } catch (error) { if (isMissingTable(error)) return; throw error; }
+  if (!job) await startHistoryImport(env, request, provider, userId, ctx);
+}
+
+// Garmin can take a while to start sending after a connection; until then an
+// empty history means "waiting", not "nothing there".
+const NEW_CONNECTION_SECONDS = 24 * 60 * 60;
+
 // What the client needs to decide whether to keep watching for arrivals.
-export async function syncStatus(env, userId, providerId) {
+export async function syncStatus(env, userId, providerId, { connectedAt } = {}) {
   const [job, stats] = await Promise.all([
     getSyncJob(env, userId, providerId).catch((error) => { if (isMissingTable(error)) return null; throw error; }),
     storedActivityStats(env, userId, providerId)
@@ -79,6 +93,7 @@ export async function syncStatus(env, userId, providerId) {
   if (job?.status === "requesting") state = "importing";
   else if (job?.status === "failed") state = "failed";
   else if ((job && current - Number(job.updated_at) < ARRIVAL_GRACE_SECONDS) || arriving) state = "importing";
+  else if (!stats.count && connectedAt && current - Number(connectedAt) < NEW_CONNECTION_SECONDS) state = "importing";
   return {
     state,
     windowsDone: Number(job?.windows_done) || 0,

@@ -2,7 +2,7 @@ import { appError, json } from "./http.js";
 import { getStoredActivity, listConnections, listStoredActivities } from "./db.js";
 import { getProvider } from "./providers/index.js";
 import { providerAccessToken, requireUser } from "./auth.js";
-import { syncStatus } from "./sync.js";
+import { ensureHistoryImport, syncStatus } from "./sync.js";
 
 function pageLimit(value, fallback, maximum) {
   const numeric = Number(value || fallback);
@@ -28,7 +28,7 @@ async function resolveProvider(env, userId, url) {
   return { provider, connection };
 }
 
-export async function handleActivities(env, request) {
+export async function handleActivities(env, request, ctx) {
   const userId = await requireUser(env, request);
   const url = new URL(request.url);
   const { provider, connection } = await resolveProvider(env, userId, url);
@@ -38,6 +38,12 @@ export async function handleActivities(env, request) {
   const before = url.searchParams.get("before");
 
   if (provider.storesActivities) {
+    try {
+      await ensureHistoryImport(env, request, provider, userId, ctx);
+    } catch (error) {
+      // Listing what has arrived must not fail because a history request did.
+      console.warn(JSON.stringify({ event: "history_import_start_failed", provider: provider.id, message: error.message }));
+    }
     const result = await listStoredActivities(env, userId, provider.id, {
       after: epochParam(after),
       before: epochParam(before),
@@ -53,7 +59,7 @@ export async function handleActivities(env, request) {
       // Lets the client explain that history is still being delivered.
       connectedAt: connection.created_at,
       // importing / idle / failed, progress, and the next changed_since cursor.
-      sync: await syncStatus(env, userId, provider.id)
+      sync: await syncStatus(env, userId, provider.id, { connectedAt: connection.created_at })
     });
   }
 
