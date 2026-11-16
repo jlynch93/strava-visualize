@@ -413,3 +413,18 @@ body.is-loading .onboarding { display: none; }
 .account-fine-print + .account-section-title { margin-top: 20px; padding-top: 14px; border-top: 1px solid var(--rule); }
 .install-help { margin: 0 0 18px; color: var(--ink-soft); font-size: .86rem; line-height: 1.45; }
 .connection-list + .account-section-title { margin-top: 18px; }
+
+/* Wider screens: the account is a chip (initials + name), and the brand and
+   tabs sit on the same line as the buttons instead of floating above it. */
+@media (min-width: 701px) {
+  .app-header { align-items: end; }
+  .actions { align-items: center; }
+  .actions > .account-button:not([hidden]) {
+    display: inline-flex; align-items: center; gap: 8px; height: 38px; padding: 0 12px 0 5px;
+    border: 1px solid var(--rule-strong); border-radius: 999px; line-height: 1;
+  }
+  .actions > .account-button::before {
+    flex: none; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%;
+    background: var(--ink-strong); color: var(--surface); content: attr(data-initials); font-size: .68rem; font-weight: 760; letter-spacing: .02em;
+  }
+}
