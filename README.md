@@ -73,6 +73,35 @@ Below the readiness strip, **This week** shows distance and runs completed
 against this week's saved plan (or your 4-week average when there is no plan),
 with a Monday–Sunday strip of what you ran and what is still planned.
 
+**Races and the training cycle.** Plan → **Races** holds your season: name,
+date, distance and priority. An **A** race is the goal the cycle builds toward,
+a **B** race is a tune-up with a short taper and recovery, and a **C** race is
+run through. The next A race sets the phase:
+
+| Phase | When |
+|---|---|
+| Base | more than 12 weeks out |
+| Build | 6 to 12 weeks out |
+| Peak | the last 5 weeks before the taper |
+| Taper | the final 7 days (5K, 10K), 10 days (half) or 14 days (marathon) |
+| Race week | the final 7 days |
+| Recovery | after any race, about a day per 3 km (less for B and C races) |
+
+A B race inside its own short taper reads as a tune-up, and recovery takes
+precedence over everything.
+
+Readiness weighs fatigue against what the phase calls for. In a build, some
+fatigue is expected and costs little. In a taper or race week, fatigue counts
+for more, because the aim is to arrive fresh. Early in recovery, readiness never
+reads "Primed", however fresh you feel. A **Training cycle** factor explains the
+phase, and the advice changes with it.
+
+Fitness shows a timeline from base to recovery, marking today and any tune-ups,
+and Overview names the phase next to readiness. A race in the planned week
+takes its day on the plan calendar. A goal race saved before the race calendar
+moves over as the A race. Races sync with your account like goals and check-ins.
+Without races, readiness works exactly as before.
+
 **On phones** (700px and narrower) the layout is rearranged so data comes first:
 
 - The header is one row, with settings behind a gear icon and your account as initials.

@@ -232,3 +232,51 @@
   .fitness-table td:last-child, .fitness-table th:last-child { display: none; }
   #trainingPaces .fitness-table td:last-child, #trainingPaces .fitness-table th:last-child { display: table-cell; font-size: .78rem; }
 }
+
+/* ---------- Training cycle ---------- */
+.cycle-chip { display: inline-block; margin: 2px auto 8px; padding: 3px 10px; border: 1px solid var(--rule-strong); border-radius: 999px; color: var(--ink); font-size: .78rem; font-weight: 650; }
+.cycle-chip.phase-taper, .cycle-chip.phase-race-week, .cycle-chip.phase-race-day { border-color: var(--teal); }
+.cycle-chip.phase-recovery { border-color: var(--orange); }
+.cycle-timeline { padding-top: 26px; }
+.cycle-track { position: relative; }
+/* One ordered hue: deeper teal as the race gets closer; recovery is neutral. */
+.cycle-bar { display: flex; gap: 2px; height: 28px; margin: 0; padding: 0; list-style: none; }
+.cycle-segment { display: flex; align-items: center; min-width: 0; padding-left: 8px; border-radius: 4px; color: var(--ink-strong); font-size: .72rem; font-weight: 700; white-space: nowrap; overflow: hidden; }
+.cycle-base { background: oklch(90% 0.04 190); }
+.cycle-build { background: oklch(80% 0.07 190); }
+.cycle-peak { background: oklch(68% 0.09 190); }
+.cycle-taper { background: oklch(56% 0.1 190); color: #fff; }
+.cycle-race-week { background: oklch(44% 0.09 200); color: #fff; }
+.cycle-recovery { background: var(--surface-muted); color: var(--ink-soft); }
+.cycle-segment.is-current { box-shadow: inset 0 0 0 2px var(--ink-strong); }
+.cycle-today, .cycle-goal, .cycle-race { position: absolute; top: -24px; bottom: -6px; width: 0; border-left: 2px solid var(--ink-strong); }
+.cycle-today b, .cycle-goal b, .cycle-race b { position: absolute; top: 0; left: 0; transform: translateX(-50%); padding: 1px 6px; border-radius: 4px; background: var(--ink-strong); color: var(--surface); font-size: .66rem; white-space: nowrap; }
+.cycle-goal { border-left-style: solid; border-color: var(--teal); }
+.cycle-goal b { background: var(--teal); color: #fff; }
+.cycle-race { border-left: 2px dashed var(--ink-faint); }
+.cycle-race b { background: var(--surface); color: var(--ink-strong); box-shadow: inset 0 0 0 1px var(--rule-strong); }
+.cycle-axis { position: relative; display: flex; justify-content: space-between; margin-top: 10px; color: var(--ink-faint); font-size: .74rem; }
+.cycle-axis-race { position: absolute; top: 0; transform: translateX(-50%); color: var(--ink-strong); font-weight: 650; white-space: nowrap; }
+.cycle-next { margin: 10px 0 0; color: var(--ink-soft); font-size: .86rem; }
+.cycle-next strong { color: var(--ink-strong); }
+
+/* ---------- Races (Plan) ---------- */
+.race-list { display: grid; gap: 8px; margin: 0 0 16px; padding: 0; list-style: none; }
+.race-item { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto auto; gap: 10px; align-items: center; padding: 8px 10px; border: 1px solid var(--rule); border-radius: 6px; background: var(--surface); }
+.race-item.past { opacity: .6; }
+.race-item strong { display: block; color: var(--ink-strong); font-size: .9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.race-item small { color: var(--ink-soft); font-size: .76rem; }
+.race-priority { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; font-size: .8rem; font-weight: 800; }
+.race-priority.priority-A { background: var(--teal); color: #fff; }
+.race-priority.priority-B { background: var(--teal-soft); color: var(--ink-strong); box-shadow: inset 0 0 0 1px var(--teal); }
+.race-priority.priority-C { background: var(--surface-muted); color: var(--ink-soft); box-shadow: inset 0 0 0 1px var(--rule-strong); }
+.race-phase { color: var(--teal); font-size: .74rem; font-style: normal; font-weight: 700; }
+.race-remove { min-height: 32px; padding: 4px 10px; border: 1px solid var(--rule-strong); border-radius: 6px; background: transparent; color: var(--ink-soft); font-size: .76rem; }
+.race-empty { padding: 10px; border: 1px dashed var(--rule-strong); border-radius: 6px; color: var(--ink-soft); font-size: .84rem; list-style: none; }
+.race-form { display: grid; gap: 6px; }
+@media (max-width: 520px) {
+  .race-item { grid-template-columns: 30px minmax(0, 1fr) auto; }
+  .race-phase { grid-column: 2; grid-row: 2; }
+}
+.cycle-today.lean-right b { transform: translateX(3px); }
+.cycle-goal.lean-left b { transform: translateX(calc(-100% - 3px)); }

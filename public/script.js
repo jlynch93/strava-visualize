@@ -75,9 +75,8 @@ const els = {
   goalForm: document.querySelector("#goalForm"),
   goalMode: document.querySelector("#goalMode"),
   goalMiles: document.querySelector("#goalMiles"),
-  goalRaceName: document.querySelector("#goalRaceName"),
-  goalRaceDistance: document.querySelector("#goalRaceDistance"),
-  goalRaceDate: document.querySelector("#goalRaceDate"),
+  raceForm: document.querySelector("#raceForm"),
+  raceList: document.querySelector("#raceList"),
   goalRunDays: document.querySelector("#goalRunDays"),
   goalLongRunDay: document.querySelector("#goalLongRunDay"),
   goalAvailability: document.querySelector("#goalAvailability"),
@@ -104,23 +103,52 @@ const els = {
 };
 
 const CONTEXT_STORAGE_KEY = "run-trends-coaching-context-v1";
+// Declared before loadCoachingContext() runs below: sanitizing saved races reads it.
+const RACE_DISTANCES = ["5K", "10K", "Half marathon", "Marathon", "Other"];
 let coachingContext = loadCoachingContext();
 
 function loadCoachingContext() {
   try {
     return sanitizeCoachingContext(JSON.parse(localStorage.getItem(CONTEXT_STORAGE_KEY)));
-  } catch { return { goal: {}, checkin: {}, plan: {} }; }
+  } catch { return { goal: {}, checkin: {}, plan: {}, races: [] }; }
+}
+
+function sanitizeRace(race) {
+  if (!race || typeof race !== "object" || !/^\d{4}-\d{2}-\d{2}$/.test(race.date) || !Number.isFinite(Date.parse(race.date))) return null;
+  return {
+    id: String(race.id || `${race.date}-${race.name || ""}`).slice(0, 80),
+    name: String(race.name || "").trim().slice(0, 48),
+    date: race.date,
+    distance: RACE_DISTANCES.includes(race.distance) ? race.distance : "Other",
+    priority: ["A", "B", "C"].includes(race.priority) ? race.priority : "A"
+  };
 }
 
 function sanitizeCoachingContext(saved) {
-  const defaults = { goal: {}, checkin: {}, plan: {} };
+  const defaults = { goal: {}, checkin: {}, plan: {}, races: [] };
   if (!saved || typeof saved !== "object" || Array.isArray(saved)) return defaults;
   const record = (value) => value && typeof value === "object" && !Array.isArray(value)
     ? Object.fromEntries(Object.entries(value)
       .filter(([, field]) => typeof field === "string" || typeof field === "number")
       .map(([key, field]) => [key, String(field)]))
     : {};
-  return { goal: record(saved.goal), checkin: record(saved.checkin), plan: record(saved.plan) };
+  const goal = record(saved.goal);
+  let races = (Array.isArray(saved.races) ? saved.races : []).map(sanitizeRace).filter(Boolean).slice(0, 30);
+  // Before the race calendar, one goal race lived in the goal itself: it becomes the A race.
+  if (!races.length && goal.raceDate) {
+    const legacy = sanitizeRace({ id: "goal-race", name: goal.raceName || goal.event, date: goal.raceDate, distance: goal.raceDistance, priority: "A" });
+    if (legacy) races = [legacy];
+  }
+  return { goal, checkin: record(saved.checkin), plan: record(saved.plan), races };
+}
+
+function raceList() {
+  return [...(coachingContext.races || [])].sort((a, b) => a.date.localeCompare(b.date));
+}
+
+function raceLabel(race) {
+  const name = race.name || race.distance || "Race";
+  return `${name}${race.name && race.distance && race.distance !== "Other" ? ` · ${race.distance}` : ""}`;
 }
 
 function saveCoachingContext() {
@@ -130,9 +158,6 @@ function saveCoachingContext() {
 function syncCoachingInputs() {
   els.goalMode.value = coachingContext.goal.mode || "auto";
   els.goalMiles.value = coachingContext.goal.miles ? (preferences.units === "metric" ? (Number(coachingContext.goal.miles) * 1.609344).toFixed(1) : coachingContext.goal.miles) : "";
-  els.goalRaceName.value = coachingContext.goal.raceName || coachingContext.goal.event || "";
-  els.goalRaceDistance.value = coachingContext.goal.raceDistance || "";
-  els.goalRaceDate.value = coachingContext.goal.raceDate || "";
   els.goalRunDays.value = coachingContext.goal.runDays || "";
   els.goalLongRunDay.value = coachingContext.goal.longRunDay || "Sat";
   els.goalAvailability.value = coachingContext.goal.availability || "";
@@ -598,6 +623,7 @@ function render() {
   renderHeroStatus(summary);
   renderBlockReview(summary, previous);
   renderCoachingWorkspace(currentTrainingSummary());
+  renderRaceList();
   renderTrainingTexture();
   renderKeyRuns();
   renderIntel(summary, previous, start, end);
@@ -1231,7 +1257,8 @@ function renderCoachingWorkspace(summary) {
     : `Manual override: ${intent}. Auto recommends ${recommendation.intent} because ${recommendation.reason}`;
   const range = intent === "build" ? `${goalMiles.toFixed(0)}–${(goalMiles * 1.08).toFixed(0)}` : intent === "recover" ? `${(goalMiles * 0.7).toFixed(0)}–${(goalMiles * 0.85).toFixed(0)}` : `${(goalMiles * 0.9).toFixed(0)}–${goalMiles.toFixed(0)}`;
   const raceLead = race ? `${race.label} is ${race.weeks} week${race.weeks === 1 ? "" : "s"} away (${race.phase} phase). ` : "";
-  const calendar = renderRecommendedCalendar(intent, summary, goalMiles, race);
+  // A race that falls in the planned week takes its day; otherwise the goal race context.
+  const calendar = renderRecommendedCalendar(intent, summary, goalMiles, raceInPlanWeek() || race);
   const longRunCopy = calendar.longRunDay ? ` ${calendar.longRunDay} long run: up to ${displayDistance(calendar.longRunMiles, 1)}.` : "";
   const availabilityCopy = calendar.availabilityLimited ? " Your availability limits the number of runs; adjust mileage to match." : "";
   els.planDraftCopy.textContent = `${raceLead}${intent[0].toUpperCase() + intent.slice(1)} week draft: ${range} mi across ${calendar.plannedRuns} planned run${calendar.plannedRuns === 1 ? "" : "s"}.${longRunCopy} Session distances total ${displayDistance(calendar.totalMiles)}.${availabilityCopy} Review the draft against your schedule and how you feel.`;
@@ -1253,7 +1280,8 @@ function renderRecommendedCalendar(intent, summary, targetMiles, race) {
   const longIndex = chosenLongIndex >= 0 ? chosenLongIndex : 5;
   const available = String(coachingContext.goal.availability || "").toLowerCase().match(/mon|tue|wed|thu|fri|sat|sun/g);
   const isAvailable = (index) => !available?.length || available.includes(dayNames[index].toLowerCase());
-  const raceIndex = race ? dates.findIndex((date) => localDateValue(date) === coachingContext.goal.raceDate) : -1;
+  const raceDate = race?.date || coachingContext.goal.raceDate;
+  const raceIndex = race ? dates.findIndex((date) => localDateValue(date) === raceDate) : -1;
   const recovery = intent === "recover" || (activeCheckin().outcome === "missed" && activeCheckin().missedReason !== "schedule");
   // Readiness in the "hold steady" band keeps the week but drops its hard session.
   const readinessToday = planReadiness();
@@ -1311,17 +1339,40 @@ function recommendIntent(summary, race) {
   return { intent: "maintain", reason: "the available workload data does not support a stronger change" };
 }
 
+// The race the plan builds toward: the next A race, else the next race.
+// Weeks and phase drive the plan's intent; the date marks the calendar.
 function raceContext() {
-  const goal = coachingContext.goal || {};
-  if (!goal.raceDate) return null;
-  const date = new Date(`${goal.raceDate}T00:00:00`);
-  if (Number.isNaN(date.valueOf())) return null;
-  const days = Math.ceil((date - new Date()) / 86400000);
-  if (days < 0) return null;
+  const today = localDateValue(new Date());
+  const upcoming = raceList().filter((race) => race.date >= today);
+  const race = upcoming.find((candidate) => candidate.priority === "A") || upcoming[0];
+  if (!race) return null;
+  const days = Math.ceil((new Date(`${race.date}T00:00:00`) - new Date()) / 86400000);
   const weeks = Math.max(0, Math.ceil(days / 7));
   const phase = weeks <= 2 ? "taper / race" : weeks <= 5 ? "peak" : weeks <= 12 ? "build" : "base";
-  const name = goal.raceName || goal.raceDistance || "Race";
-  return { weeks, phase, label: `${name}${goal.raceDistance && goal.raceName ? ` · ${goal.raceDistance}` : ""}` };
+  return { weeks, phase, label: raceLabel(race), date: race.date, priority: race.priority };
+}
+
+// The most important race inside the planned week, so the calendar can mark it.
+function raceInPlanWeek() {
+  const start = selectedPlanStart();
+  const end = new Date(start); end.setDate(end.getDate() + 6);
+  const [from, to] = [localDateValue(start), localDateValue(end)];
+  const race = raceList().filter((candidate) => candidate.date >= from && candidate.date <= to).sort((a, b) => a.priority.localeCompare(b.priority))[0];
+  return race ? { label: `${raceLabel(race)}${race.priority === "A" ? "" : ` (${race.priority} race)`}`, date: race.date, priority: race.priority } : null;
+}
+
+function renderRaceList() {
+  if (!els.raceList) return;
+  const today = localDateValue(new Date());
+  const recentCutoff = new Date(); recentCutoff.setDate(recentCutoff.getDate() - 30);
+  const races = raceList().filter((race) => race.date >= localDateValue(recentCutoff));
+  const phase = FitnessCore.trainingPhase(raceList());
+  els.raceList.innerHTML = races.length ? races.map((race) => {
+    const past = race.date < today;
+    const date = new Date(`${race.date}T00:00:00`).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" });
+    const current = phase?.race && phase.race.date === race.date && phase.race.name === race.name ? `<em class="race-phase phase-${phase.key}">${escapeHtml(phase.label)}</em>` : "";
+    return `<li class="race-item${past ? " past" : ""}"><span class="race-priority priority-${race.priority}" title="${race.priority === "A" ? "Goal race" : race.priority === "B" ? "Tune-up race" : "Training race"}">${race.priority}</span><div><strong>${escapeHtml(race.name || race.distance)}</strong><small>${escapeHtml(date)} · ${escapeHtml(race.distance)}${past ? " · done" : ""}</small></div>${current}<button type="button" class="race-remove" data-race-id="${escapeHtml(race.id)}" aria-label="Remove ${escapeHtml(race.name || race.distance)} on ${escapeHtml(date)}">Remove</button></li>`;
+  }).join("") : '<li class="race-empty">No races yet. Add your goal race (A) and readiness follows your training cycle: base, build, peak, taper and recovery.</li>';
 }
 
 function runsForBucket(bucket) {
@@ -3158,12 +3209,40 @@ els.workoutModal.addEventListener("click", (event) => {
 
 els.goalForm.addEventListener("submit", (event) => {
   event.preventDefault();
-  coachingContext.goal = { mode: els.goalMode.value, miles: els.goalMiles.value ? String(Number(els.goalMiles.value) / (preferences.units === "metric" ? 1.609344 : 1)) : "", raceName: els.goalRaceName.value.trim(), raceDistance: els.goalRaceDistance.value, raceDate: els.goalRaceDate.value, runDays: els.goalRunDays.value, longRunDay: els.goalLongRunDay.value, availability: els.goalAvailability.value.trim() };
+  coachingContext.goal = { mode: els.goalMode.value, miles: els.goalMiles.value ? String(Number(els.goalMiles.value) / (preferences.units === "metric" ? 1.609344 : 1)) : "", runDays: els.goalRunDays.value, longRunDay: els.goalLongRunDay.value, availability: els.goalAvailability.value.trim() };
   const saved = saveCoachingContext();
   state.renderedInsightFingerprint = "";
   render();
   setStatus(saved ? "Training goal saved in this browser." : "Goal updated in this tab. Browser storage failed; back up your goals before closing.", !saved);
   if (saved) buttonFeedback(els.goalForm.querySelector("button[type='submit']"), "Goal saved");
+});
+
+els.raceForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  const race = sanitizeRace({
+    id: crypto.randomUUID(),
+    name: els.raceForm.raceName.value.trim(),
+    date: els.raceForm.raceDate.value,
+    distance: els.raceForm.raceDistance.value,
+    priority: els.raceForm.racePriority.value
+  });
+  if (!race) { setStatus("Choose a race date.", true, "raceForm"); return; }
+  coachingContext.races = [...(coachingContext.races || []), race];
+  const saved = saveCoachingContext();
+  fitnessModelCache.key = "";
+  els.raceForm.reset();
+  render();
+  setStatus(saved ? `${raceLabel(race)} added as your ${race.priority} race.` : "Race added in this tab. Browser storage failed; back up your goals before closing.", !saved, "raceForm");
+});
+
+els.raceList.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-race-id]");
+  if (!button) return;
+  coachingContext.races = (coachingContext.races || []).filter((race) => race.id !== button.dataset.raceId);
+  saveCoachingContext();
+  fitnessModelCache.key = "";
+  render();
+  setStatus("Race removed.");
 });
 
 els.checkinForm.addEventListener("submit", (event) => {

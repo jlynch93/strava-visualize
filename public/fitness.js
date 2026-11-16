@@ -41,7 +41,7 @@ function fitnessModel() {
     .sort((a, b) => parseActivityDate(a) - parseActivityDate(b));
   const runs = dated.filter(isRun);
   const walks = dated.filter(isWalk);
-  const key = JSON.stringify([runs.length, walks.length, runs[0]?.id, runs.at(-1)?.id, runs.at(-1)?.moving_time, walks.at(-1)?.id, athleteProfile, activeCheckin(), new Date().toDateString()]);
+  const key = JSON.stringify([runs.length, walks.length, runs[0]?.id, runs.at(-1)?.id, runs.at(-1)?.moving_time, walks.at(-1)?.id, athleteProfile, activeCheckin(), coachingContext.races, new Date().toDateString()]);
   if (fitnessModelCache.key === key) return fitnessModelCache.model;
   const model = buildFitnessModel(runs, walks);
   fitnessModelCache = { key, model };
@@ -97,16 +97,18 @@ function buildFitnessModel(runs, walks = []) {
   const historyDays = Math.round((today - firstDay) / 86400000);
   const newestRun = parseActivityDate(everything.at(-1));
   const stale = (today - newestRun) / 86400000 > 10;
+  // Where today sits in the race season changes what "ready" means.
+  const phase = FitnessCore.trainingPhase(raceList());
   const readiness = stale ? null : FitnessCore.readiness({
     form: latest?.form, fitness: latest?.fitness, acwr: historyDays >= 28 ? ratios.acwr : null,
     hoursSinceHard: lastHard ? (Date.now() - lastHard.date) / 3600000 : historyDays >= 14 ? 24 * 14 : null,
-    checkin: activeCheckin(), monotony: ratios.monotony
+    checkin: activeCheckin(), monotony: ratios.monotony, phase
   });
   const recentWalks = walks.filter((walk) => parseActivityDate(walk) >= recentCutoff).length;
   const loadSources = runLoads.filter((item) => item.date >= recentCutoff).reduce((counts, item) => ({ ...counts, [item.source]: (counts[item.source] || 0) + 1 }), {});
   return {
     runs, walks, runLoads, runDayLoads, walkDayLoads, recentWalks, profile, vo2Points, types, typeContext, walkContext, vo2, fitnessVdot, thresholdSpeed, loads, loadSeries, latest, ratios, readiness,
-    lastHard, historyDays, stale, newestRun, loadSources,
+    lastHard, historyDays, stale, newestRun, loadSources, phase,
     hrCoverage: everything.filter((activity) => activity.average_heartrate).length / everything.length
   };
 }
@@ -153,6 +155,7 @@ function renderReadinessHero(model) {
       <p class="eyebrow">Readiness to train · today</p>
       ${readinessGauge(readiness)}
       <p class="readiness-verdict status-text-${readiness.key}"><span aria-hidden="true">${READINESS_ICON[readiness.key]}</span> ${escapeHtml(readiness.label)}</p>
+      ${model.phase ? `<p class="cycle-chip phase-${model.phase.key}">${escapeHtml(model.phase.label)} · ${escapeHtml(model.phase.detail)}</p>` : ""}
       <p class="readiness-advice">${escapeHtml(readiness.advice)}</p>
     </div>
     <div class="readiness-factors">
@@ -436,7 +439,7 @@ function renderTodayStrip(model) {
   host.innerHTML = `
     <div class="today-readiness ${readiness ? `status-${readiness.key}` : ""}">
       <span class="today-score">${readiness ? readiness.score : "–"}</span>
-      <div><span class="today-label">Readiness today</span><strong>${readiness ? `<span aria-hidden="true">${READINESS_ICON[readiness.key]}</span> ${escapeHtml(readiness.label)}` : "Needs recent runs"}</strong><p>${readiness ? escapeHtml(readiness.advice) : "Sync recent activity to see how ready you are."}</p></div>
+      <div><span class="today-label">Readiness today${model.phase ? ` · ${escapeHtml(model.phase.label)}` : ""}</span><strong>${readiness ? `<span aria-hidden="true">${READINESS_ICON[readiness.key]}</span> ${escapeHtml(readiness.label)}` : "Needs recent runs"}</strong><p>${readiness ? escapeHtml(readiness.advice) : "Sync recent activity to see how ready you are."}</p></div>
     </div>
     <dl class="today-facts">
       <div><dt>VO2 max (est.)</dt><dd>${model.vo2 ? model.vo2.value.toFixed(1) : "–"}</dd></div>
@@ -497,6 +500,66 @@ function renderThisWeek(model) {
     }).join("")}</ol>`;
 }
 
+/*
+ * Training-cycle timeline toward the next A race: base, build, peak, taper,
+ * race week and recovery as one segmented bar, with today and any B/C races
+ * marked, and when the next phases start written out underneath.
+ */
+function renderCycle(model) {
+  const panel = document.querySelector("#cyclePanel");
+  if (!panel) return;
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const iso = localDateValue(today);
+  const races = raceList();
+  const goal = races.find((race) => race.priority === "A" && race.date >= iso)
+    || (model?.phase?.key === "recovery" && model.phase.race.priority === "A" ? model.phase.race : null);
+  panel.hidden = !goal;
+  if (!goal) return;
+  const dayMs = 86400000;
+  const raceDay = new Date(`${goal.date}T00:00:00`);
+  const offset = (days) => new Date(raceDay.valueOf() + days * dayMs);
+  const taper = FitnessCore.taperDays(goal), recovery = FitnessCore.recoveryDays(goal);
+  const start = new Date(Math.min(today.valueOf() - 7 * dayMs, offset(-16 * 7).valueOf()));
+  const end = offset(recovery);
+  const span = end - start;
+  const pct = (date) => Math.max(0, Math.min(100, (date - start) / span * 100));
+  const phases = [
+    { key: "base", label: "Base", from: start, to: offset(-12 * 7) },
+    { key: "build", label: "Build", from: offset(-12 * 7), to: offset(-5 * 7) },
+    { key: "peak", label: "Peak", from: offset(-5 * 7), to: offset(-taper) },
+    { key: "taper", label: "Taper", from: offset(-taper), to: offset(-7) },
+    { key: "race-week", label: "Race week", from: offset(-Math.min(7, taper)), to: raceDay },
+    { key: "recovery", label: "Recovery", from: raceDay, to: end }
+  ].filter((phase) => phase.to > phase.from && phase.to > start)
+    .map((phase) => ({ ...phase, from: new Date(Math.max(phase.from, start)) }));
+  const current = model?.phase?.key;
+  const fmt = (date) => date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  const segments = phases.map((phase) => {
+    const width = pct(phase.to) - pct(phase.from);
+    const active = phase.key === current || (current === "race-day" && phase.key === "race-week");
+    return `<li class="cycle-segment cycle-${phase.key}${active ? " is-current" : ""}" style="width:${width}%" title="${phase.label}: ${fmt(phase.from)} – ${fmt(phase.to)}"><span>${width > 9 ? phase.label : ""}</span></li>`;
+  }).join("");
+  const others = races.filter((race) => race.priority !== "A" && new Date(`${race.date}T00:00:00`) >= start && new Date(`${race.date}T00:00:00`) <= end);
+  const ticks = others.map((race) => `<span class="cycle-race priority-${race.priority}" style="left:${pct(new Date(`${race.date}T00:00:00`))}%" title="${escapeHtml(race.name || race.distance)} (${race.priority}) · ${fmt(new Date(`${race.date}T00:00:00`))}"><b>${race.priority}</b></span>`).join("");
+  const upcoming = phases.filter((phase) => phase.from > today && phase.key !== "race-week").slice(0, 3)
+    .map((phase) => `${phase.label} from ${fmt(phase.from)}`);
+  const daysTo = Math.round((raceDay - today) / dayMs);
+  // Today and the race pins lean apart when they would overlap.
+  const near = Math.abs(pct(today) - pct(raceDay)) < 8;
+  document.querySelector("#cycleSummary").textContent = daysTo >= 0
+    ? `${raceLabel(goal)} on ${raceDay.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}: ${daysTo === 0 ? "today" : `${daysTo} days to go`}. Readiness weighs fatigue against what this phase calls for.`
+    : `Recovering from ${raceLabel(goal)}. Readiness keeps you easy until recovery ends.`;
+  document.querySelector("#cycleTimeline").innerHTML = `
+    <div class="cycle-track">
+      <ol class="cycle-bar" aria-label="Training phases toward ${escapeHtml(raceLabel(goal))}">${segments}</ol>
+      <span class="cycle-today${near ? " lean-right" : ""}" style="left:${pct(today)}%"><b>Today</b></span>
+      <span class="cycle-goal${near ? " lean-left" : ""}" style="left:${pct(raceDay)}%" title="${escapeHtml(raceLabel(goal))}"><b>A</b></span>
+      ${ticks}
+    </div>
+    <div class="cycle-axis"><span>${fmt(start)}</span><span class="cycle-axis-race" style="left:${pct(raceDay)}%">${fmt(raceDay)} · race</span></div>
+    <p class="cycle-next">${model?.phase ? `<strong>Now: ${escapeHtml(model.phase.label)}.</strong> ` : ""}${upcoming.length ? escapeHtml(upcoming.join(" · ")) + "." : ""}${others.length ? ` Tune-ups: ${others.map((race) => `${escapeHtml(race.name || race.distance)} (${race.priority}, ${fmt(new Date(`${race.date}T00:00:00`))})`).join(", ")}.` : ""}</p>`;
+}
+
 function renderFitness() {
   const section = document.querySelector("#fitness");
   if (!section) return;
@@ -509,6 +572,7 @@ function renderFitness() {
   body.hidden = !model; empty.hidden = Boolean(model);
   if (!model) return;
   renderReadinessHero(model);
+  renderCycle(model);
   renderFitnessKpis(model);
   renderDataNotes(model);
   renderPredictions(model);

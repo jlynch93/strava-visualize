@@ -119,3 +119,62 @@ test("walk load uses the same scale as runs", () => {
   assert.ok(walk.load > 5 && walk.load < 35, `walk load ${walk.load}`);
   assert.ok(threshold.load > walk.load * 3);
 });
+
+/* ---------- Training cycle ---------- */
+
+const day = (offset) => { const date = new Date(2026, 10, 16); date.setDate(date.getDate() + offset); return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`; };
+const TODAY = new Date(2026, 10, 16, 9);
+const marathon = (offset, priority = "A") => ({ name: "City Marathon", date: day(offset), distance: "Marathon", priority });
+
+test("the next A race sets the phase from base to race day", () => {
+  assert.equal(fit.trainingPhase([], TODAY), null);
+  assert.equal(fit.trainingPhase([marathon(120)], TODAY).key, "base");
+  assert.equal(fit.trainingPhase([marathon(56)], TODAY).key, "build");
+  assert.equal(fit.trainingPhase([marathon(30)], TODAY).key, "peak");
+  assert.equal(fit.trainingPhase([marathon(12)], TODAY).key, "taper", "A marathon tapers for two weeks.");
+  assert.equal(fit.trainingPhase([{ ...marathon(12), distance: "10K" }], TODAY).key, "peak", "A 10K tapers for one week.");
+  assert.equal(fit.trainingPhase([marathon(5)], TODAY).key, "race-week");
+  const raceDay = fit.trainingPhase([marathon(0)], TODAY);
+  assert.equal(raceDay.key, "race-day");
+  assert.equal(raceDay.detail, "City Marathon today");
+});
+
+test("tune-up races get a short taper, and every race is followed by recovery", () => {
+  const tuneUp = fit.trainingPhase([marathon(60), { name: "Turkey Trot", date: day(3), distance: "5K", priority: "B" }], TODAY);
+  assert.equal(tuneUp.key, "tune-up");
+  assert.equal(tuneUp.label, "B race");
+  // Outside the tune-up's own taper, the A race decides.
+  assert.equal(fit.trainingPhase([marathon(60), { name: "Turkey Trot", date: day(10), distance: "5K", priority: "B" }], TODAY).key, "build");
+  const recovery = fit.trainingPhase([marathon(-3), marathon(150)], TODAY);
+  assert.equal(recovery.key, "recovery");
+  assert.equal(recovery.daysSince, 3);
+  assert.equal(recovery.total, fit.recoveryDays(marathon(0)));
+  assert.ok(fit.recoveryDays(marathon(0)) > fit.recoveryDays({ distance: "5K", priority: "A" }));
+  assert.ok(fit.recoveryDays({ distance: "Marathon", priority: "C" }) < fit.recoveryDays(marathon(0)));
+  // Recovery ends; the next A race takes over.
+  assert.equal(fit.trainingPhase([marathon(-20), marathon(150)], TODAY).key, "base");
+});
+
+test("the same fatigue reads differently in a build than in a taper", () => {
+  const tired = { form: -10, fitness: 50, acwr: 1.1, hoursSinceHard: 60 };
+  const build = fit.readiness({ ...tired, phase: fit.trainingPhase([marathon(56)], TODAY) });
+  const taper = fit.readiness({ ...tired, phase: fit.trainingPhase([marathon(10)], TODAY) });
+  assert.ok(build.score > taper.score + 10, `build ${build.score} vs taper ${taper.score}`);
+  assert.match(build.factors.find((factor) => factor.key === "form").detail, /on target for build/);
+  assert.match(build.advice, /^Build phase/);
+  assert.match(taper.advice, /^Taper/);
+  const freshTaper = fit.readiness({ form: 8, fitness: 50, acwr: 0.8, hoursSinceHard: 72, phase: fit.trainingPhase([marathon(10)], TODAY) });
+  assert.ok(freshTaper.score >= 75, `fresh taper ${freshTaper.score}`);
+  assert.equal(freshTaper.factors.find((factor) => factor.key === "cycle").label, "Training cycle");
+});
+
+test("early race recovery is never a day for quality", () => {
+  const fresh = { form: 12, fitness: 50, acwr: 0.7, hoursSinceHard: 96 };
+  const recovering = fit.readiness({ ...fresh, phase: fit.trainingPhase([marathon(-2)], TODAY) });
+  assert.ok(recovering.score <= 54);
+  assert.notEqual(recovering.key, "primed");
+  assert.match(recovering.advice, /Recovering from your race/);
+  // Without races, the same numbers are primed, as before.
+  assert.equal(fit.readiness(fresh).key, "primed");
+  assert.equal(fit.readiness(fresh).phase, null);
+});

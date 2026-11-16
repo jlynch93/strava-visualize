@@ -270,6 +270,14 @@
           <ul id="fitnessNotes" class="fitness-notes" hidden></ul>
           <div id="fitnessKpis" class="fitness-kpis" aria-label="Current fitness metrics"></div>
 
+          <section id="cyclePanel" class="fitness-panel" aria-labelledby="cycleTitle" hidden>
+            <div class="fitness-panel-head">
+              <div><h2 id="cycleTitle">Training cycle</h2><p id="cycleSummary">Readiness follows where you are in the cycle toward your goal race.</p></div>
+              <a class="today-link" href="#planning">Edit races <span aria-hidden="true">→</span></a>
+            </div>
+            <div id="cycleTimeline" class="cycle-timeline"></div>
+          </section>
+
           <section class="fitness-panel" aria-labelledby="vo2Title">
             <div class="fitness-panel-head">
               <div><h2 id="vo2Title">Estimated VO2 max</h2><p>Your aerobic ceiling in ml/kg/min. Rolling 6-week estimate from pace and heart rate; VDOT comes from your best effort.</p></div>
@@ -330,12 +338,19 @@
 
             <label for="goalMode">Block intent</label><select id="goalMode"><option value="auto">Auto — use my context</option><option value="build">Build</option><option value="maintain">Maintain</option><option value="recover">Recover</option></select><p id="intentRecommendation" class="context-muted"></p>
             <label for="goalMiles">Weekly distance target</label><input id="goalMiles" type="number" min="0" step="0.1" placeholder="Optional">
-            <label for="goalRaceName">Race name</label><input id="goalRaceName" type="text" maxlength="48" placeholder="e.g. City Marathon">
-            <div class="goal-race-fields"><div><label for="goalRaceDistance">Race distance</label><select id="goalRaceDistance"><option value="">Not set</option><option value="5K">5K</option><option value="10K">10K</option><option value="Half marathon">Half marathon</option><option value="Marathon">Marathon</option><option value="Other">Other</option></select></div><div><label for="goalRaceDate">Race date</label><input id="goalRaceDate" type="date"></div></div>
             <div class="goal-race-fields"><div><label for="goalRunDays">Max runs / week</label><select id="goalRunDays"><option value="">Use recent pattern</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option></select></div><div><label for="goalLongRunDay">Long-run day</label><select id="goalLongRunDay"><option value="Sat">Saturday</option><option value="Sun">Sunday</option><option value="Fri">Friday</option></select></div></div>
             <label for="goalAvailability">Available days</label><input id="goalAvailability" type="text" maxlength="40" placeholder="e.g. Mon, Tue, Thu, Sat">
             <button type="submit" class="context-save">Save goal</button>
           </form></details>
+          <details id="racesDisclosure" class="context-disclosure"><summary>Races<span>Your season sets the training cycle</span></summary><div class="context-card races-card">
+            <ul id="raceList" class="race-list" aria-label="Your races"></ul>
+            <form id="raceForm" class="race-form">
+              <label for="raceName">Race name</label><input id="raceName" type="text" maxlength="48" placeholder="e.g. City Marathon">
+              <div class="goal-race-fields"><div><label for="raceDistance">Distance</label><select id="raceDistance"><option value="5K">5K</option><option value="10K">10K</option><option value="Half marathon" selected>Half marathon</option><option value="Marathon">Marathon</option><option value="Other">Other</option></select></div><div><label for="raceDate">Date</label><input id="raceDate" type="date" required></div></div>
+              <label for="racePriority">Priority</label><select id="racePriority"><option value="A">A · goal race (shapes the whole cycle)</option><option value="B">B · tune-up (short taper and recovery)</option><option value="C">C · training race (run through it)</option></select>
+              <button type="submit" class="context-save">Add race</button>
+            </form>
+          </div></details>
           <details class="context-disclosure"><summary>Weekly check-in<span>How you feel matters</span></summary><form id="checkinForm" class="context-card">
 
             <label for="checkinFeel">How did this block feel?</label><select id="checkinFeel"><option value="">Not logged</option><option value="1">1 · very hard</option><option value="2">2 · hard</option><option value="3">3 · manageable</option><option value="4">4 · good</option><option value="5">5 · strong</option></select>

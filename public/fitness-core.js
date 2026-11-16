@@ -236,13 +236,114 @@
    * Readiness to train, 0-100. Four transparent factors, each scored 0-100 and
    * weighted. Missing factors are dropped and the weights renormalized.
    */
-  function readiness({ form, fitness, acwr, hoursSinceHard, checkin, monotony }) {
+  /* ---------- Training cycle ---------- */
+
+  const RACE_KM = { "5K": 5, "10K": 10, "Half marathon": 21.1, "Marathon": 42.2 };
+  const raceKm = (race) => RACE_KM[race.distance] || Number(race.km) || 10;
+  // Easy days after a race: roughly a day per 3 km, less for tune-up races.
+  const recoveryDays = (race) => Math.max(2, Math.round(raceKm(race) / 3 * (race.priority === "A" ? 1 : race.priority === "B" ? 0.7 : 0.5)));
+  // Days of reduced load before a race: two weeks for a marathon A race,
+  // a few days for a tune-up.
+  const taperDays = (race) => race.priority === "A" ? (raceKm(race) >= 40 ? 14 : raceKm(race) >= 20 ? 10 : 7) : race.priority === "B" ? 4 : 2;
+  const dayIndex = (value) => {
+    const date = new Date(value instanceof Date ? value : `${value}T00:00:00`);
+    return Math.floor(new Date(date.getFullYear(), date.getMonth(), date.getDate()).valueOf() / DAY);
+  };
+
+  /*
+   * Where today sits in the training cycle. Races: [{ name, date (YYYY-MM-DD),
+   * distance, priority A|B|C }]. The next A race sets the phase (base, build,
+   * peak, taper, race week); a B race gets a short taper of its own; any race
+   * is followed by recovery that takes precedence. Null without races.
+   */
+  function trainingPhase(races, today = new Date()) {
+    const now = dayIndex(today);
+    const list = (Array.isArray(races) ? races : [])
+      .filter((race) => race && /^\d{4}-\d{2}-\d{2}$/.test(race.date))
+      .map((race) => ({ ...race, priority: ["A", "B", "C"].includes(race.priority) ? race.priority : "A", day: dayIndex(race.date) }))
+      .sort((a, b) => a.day - b.day);
+    if (!list.length) return null;
+    const label = (race) => race.name || race.distance || "Race";
+    const recent = list.filter((race) => race.day < now && now - race.day <= recoveryDays(race)).at(-1);
+    if (recent) {
+      const total = recoveryDays(recent), since = now - recent.day;
+      return { key: "recovery", label: "Recovery", race: recent, daysSince: since, daysLeft: total - since, total,
+        detail: `${since} day${since === 1 ? "" : "s"} after ${label(recent)} · easy for ${total - since} more` };
+    }
+    const nextA = list.find((race) => race.priority === "A" && race.day >= now);
+    const nextAny = list.find((race) => race.day >= now);
+    if (nextAny && nextAny.day === now) return { key: "race-day", label: "Race day", race: nextAny, daysTo: 0, detail: `${label(nextAny)} today` };
+    if (nextA) {
+      const daysTo = nextA.day - now, weeks = Math.ceil(daysTo / 7);
+      const away = `${label(nextA)} in ${daysTo <= 14 ? `${daysTo} days` : `${weeks} weeks`}`;
+      if (daysTo <= 7) return { key: "race-week", label: "Race week", race: nextA, daysTo, detail: away };
+      if (daysTo <= taperDays(nextA)) return { key: "taper", label: "Taper", race: nextA, daysTo, detail: away };
+    }
+    // A tune-up race inside its own short taper.
+    const tuneUp = list.find((race) => race.priority !== "A" && race.day > now && race.day - now <= taperDays(race));
+    if (tuneUp) {
+      const daysTo = tuneUp.day - now;
+      return { key: "tune-up", label: `${tuneUp.priority} race`, race: tuneUp, daysTo, detail: `${label(tuneUp)} in ${daysTo} day${daysTo === 1 ? "" : "s"}` };
+    }
+    if (!nextA) return null;
+    const daysTo = nextA.day - now, weeks = Math.ceil(daysTo / 7);
+    const detail = `${label(nextA)} in ${weeks} weeks`;
+    if (weeks <= 5) return { key: "peak", label: "Peak", race: nextA, daysTo, detail };
+    if (weeks <= 12) return { key: "build", label: "Build", race: nextA, daysTo, detail };
+    return { key: "base", label: "Base", race: nextA, daysTo, detail };
+  }
+
+  // The form (fitness minus fatigue, relative to fitness) each phase aims for.
+  // Building means carrying some fatigue; tapering means shedding it.
+  const PHASE_FORM_TARGET = {
+    base: [-0.2, 0.1], build: [-0.25, 0.05], peak: [-0.15, 0.05],
+    "tune-up": [-0.05, 0.2], taper: [0, 0.25], "race-week": [0.05, 0.3], "race-day": [0.05, 0.35], recovery: [-0.3, 0.3]
+  };
+
+  function formScore(ratio, phase) {
+    const target = phase && PHASE_FORM_TARGET[phase.key];
+    if (!target) return clamp(70 + ratio * 150, 0, 100); // No race: the general scale.
+    const [low, high] = target;
+    // Being tired close to a race costs more than being tired mid-build.
+    const steep = ["taper", "race-week", "race-day", "tune-up"].includes(phase.key) ? 260 : 170;
+    if (ratio < low) return clamp(95 - (low - ratio) * steep, 0, 95);
+    if (ratio > high) return clamp(95 - (ratio - high) * 90, 40, 95);
+    return 95;
+  }
+
+  // How the phase itself bears on a hard session today (shown as a factor).
+  function phaseFactor(phase) {
+    if (!phase) return null;
+    let score = 85;
+    if (phase.key === "recovery") score = clamp(25 + 70 * (phase.daysSince / phase.total), 25, 95);
+    else if (phase.key === "race-day") score = 100;
+    else if (phase.key === "race-week" || phase.key === "taper") score = 90;
+    else if (phase.key === "tune-up") score = 75;
+    return { key: "cycle", label: "Training cycle", weight: 0.2, score, detail: `${phase.label} · ${phase.detail}` };
+  }
+
+  const PHASE_ADVICE = {
+    base: { primed: "Base phase: a good day for a longer aerobic run or a steady effort.", ready: "Base phase: keep building easy volume; one steady run this week is plenty." },
+    build: { primed: "Build phase: a good day for a key session.", ready: "Build phase: some fatigue is expected. Train as planned and protect your easy days.", steady: "Build phase, but carrying a lot of fatigue: make today easy and move the key session." },
+    peak: { primed: "Peak block: a good day for your race-specific session.", ready: "Peak block: train as planned; the long run and race-pace work matter most now.", steady: "Peak block and tired: keep the long run, drop extra intensity this week." },
+    taper: { primed: "Taper: keep a little intensity (short race-pace reps) and cut the volume.", ready: "Taper: shorter runs with a few strides. Fitness is banked; let fatigue fall.", steady: "Taper is still clearing fatigue: easy and short until it lifts.", recover: "Taper with high fatigue: rest more. Nothing done now adds fitness for race day." },
+    "race-week": { primed: "Race week: short runs, a few strides, sleep. You're ready.", ready: "Race week: keep runs short and easy; add a few strides two days out.", steady: "Race week and still tired: cut the remaining runs to easy 20–30 minutes.", recover: "Race week with high fatigue: rest. Arriving fresh matters more than any run now." },
+    "race-day": { primed: "Race day. Warm up well and trust the training.", ready: "Race day. Start controlled; let the second half decide it.", steady: "Race day. Start conservatively and run by feel.", recover: "Race day. Start conservatively and run by feel." },
+    "tune-up": { primed: "Tune-up race ahead: keep the next days light and skip hard sessions.", ready: "Tune-up race ahead: easy runs until then.", steady: "Tune-up race ahead and tired: rest or very easy until race day." },
+    recovery: { primed: "Recovering from your race: easy running only, even though you feel good.", ready: "Recovering from your race: easy running only until recovery ends.", steady: "Recovering from your race: easy and short, or rest.", recover: "Recovering from your race: rest. Hard training now delays the rebound." }
+  };
+
+  function readiness({ form, fitness, acwr, hoursSinceHard, checkin, monotony, phase = null }) {
     const factors = [];
     if (Number.isFinite(form) && Number.isFinite(fitness)) {
       const ratio = form / Math.max(fitness, 10);
-      factors.push({ key: "form", label: "Form", weight: 0.4, score: clamp(70 + ratio * 150, 0, 100),
-        detail: formZone(form, fitness).label });
+      const zone = formZone(form, fitness);
+      const expected = phase && PHASE_FORM_TARGET[phase.key] && ratio >= PHASE_FORM_TARGET[phase.key][0] && ratio <= PHASE_FORM_TARGET[phase.key][1];
+      factors.push({ key: "form", label: "Form", weight: 0.4, score: formScore(ratio, phase),
+        detail: expected && phase.key !== "recovery" ? `${zone.label} · on target for ${phase.label.toLowerCase()}` : zone.label });
     }
+    const cycle = phaseFactor(phase);
+    if (cycle) factors.push(cycle);
     if (Number.isFinite(acwr)) {
       const score = acwr < 0.8 ? 85 : acwr <= 1.3 ? 100 : acwr <= 1.5 ? 100 - (acwr - 1.3) / 0.2 * 50 : clamp(50 - (acwr - 1.5) / 0.5 * 50, 0, 50);
       factors.push({ key: "acwr", label: "Load ramp", weight: 0.25, score,
@@ -266,11 +367,16 @@
     if (!factors.length) return null;
     const totalWeight = factors.reduce((sum, factor) => sum + factor.weight, 0);
     const score = Math.round(factors.reduce((sum, factor) => sum + factor.score * factor.weight, 0) / totalWeight);
-    const band = score >= 75 ? { key: "primed", label: "Primed", advice: "A good day for quality: intervals, tempo, or a race-pace long run." }
-      : score >= 55 ? { key: "ready", label: "Ready", advice: "Train as planned. Keep easy days genuinely easy." }
-        : score >= 35 ? { key: "steady", label: "Hold steady", advice: "Keep today easy or short. Save the hard session for later this week." }
+    let finalScore = score;
+    // Early post-race recovery is never a day for quality, however fresh it feels.
+    if (phase?.key === "recovery" && phase.daysSince < phase.total * 0.6) finalScore = Math.min(score, 54);
+    const band = finalScore >= 75 ? { key: "primed", label: "Primed", advice: "A good day for quality: intervals, tempo, or a race-pace long run." }
+      : finalScore >= 55 ? { key: "ready", label: "Ready", advice: "Train as planned. Keep easy days genuinely easy." }
+        : finalScore >= 35 ? { key: "steady", label: "Hold steady", advice: "Keep today easy or short. Save the hard session for later this week." }
           : { key: "recover", label: "Recover", advice: "Rest, or a very easy 20–30 minutes. Fatigue is well above your base." };
-    return { score, ...band, factors };
+    const phaseAdvice = phase && PHASE_ADVICE[phase.key];
+    const advice = phaseAdvice ? phaseAdvice[band.key] || phaseAdvice.steady || band.advice : band.advice;
+    return { score: finalScore, ...band, advice, factors, phase };
   }
 
   /* ---------- Run type ---------- */
@@ -338,7 +444,8 @@
     oxygenCost, sustainableFraction, vdotFromPerformance, speedForOxygen, predictRaceSeconds, trainingPaces,
     estimateMaxHr, heartRateReserve, runVo2Estimate, runVdot, percentile, vo2Series,
     runLoad, dailyLoads, loadSeries, workloadRatios, formZone, readiness, dayKey, finite,
-    RUN_TYPES, classifyRunType, isWalk, WALK_TYPES, classifyWalkType
+    RUN_TYPES, classifyRunType, isWalk, WALK_TYPES, classifyWalkType,
+    trainingPhase, recoveryDays, taperDays
   };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.FitnessCore = api;
