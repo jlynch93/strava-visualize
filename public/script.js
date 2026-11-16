@@ -2909,7 +2909,8 @@ function openAccountDialog() {
 }
 
 async function loadAccount({ sync = true } = {}) {
-  const response = await fetch("/api/status");
+  // A failed request (not a failed response) means the server could not be reached.
+  const response = await fetch("/api/status").catch(() => { throw new Error(OFFLINE_MESSAGE); });
   const data = await readApiJson(response);
   state.account.loaded = true;
   state.analysisService = data.analysisService || "Configured Ollama service";
@@ -3542,8 +3543,8 @@ render();
 consumeAuthResult();
 // Never leave the loading state up indefinitely, even if the network stalls.
 const loadingFallback = setTimeout(finishLoading, 12_000);
-const OFFLINE_MESSAGE = "You're offline. Runlore will load your runs when you're back online.";
-loadAccount().catch((error) => setStatus(navigator.onLine === false ? OFFLINE_MESSAGE : error.message, true)).finally(() => { clearTimeout(loadingFallback); finishLoading(); });
+const OFFLINE_MESSAGE = "Runlore can't be reached, so you may be offline. Your runs will load when the connection returns.";
+loadAccount().catch((error) => setStatus(error.message, true)).finally(() => { clearTimeout(loadingFallback); finishLoading(); });
 
 let chartResizeTimer;
 let lastChartWidth = document.querySelector("#app").clientWidth;

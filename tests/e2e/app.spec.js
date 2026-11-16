@@ -27,7 +27,7 @@ test("the app shell opens offline, and account requests never go through the cac
   await context.setOffline(true);
   await page.reload();
   await expect(page.getByRole("button", { name: "Preview demo data", exact: true })).toBeVisible();
-  await expect(page.locator("body")).toContainText("You're offline");
+  await expect(page.locator("body")).toContainText("you may be offline");
   // The shell still works with data already on the device.
   await page.getByRole("button", { name: "Preview demo data", exact: true }).click();
   await expect(page.locator("#activityCount")).toContainText(/runs in range/);
