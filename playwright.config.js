@@ -11,6 +11,9 @@ module.exports = defineConfig({
   use: {
     baseURL: "http://127.0.0.1:43174",
     browserName: "chromium",
+    // The service worker would sit between tests and their mocked routes;
+    // tests/e2e/app.spec.js turns it on to test it.
+    serviceWorkers: "block",
     trace: "on-first-retry",
     screenshot: "only-on-failure"
   },

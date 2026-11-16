@@ -549,3 +549,34 @@ function initializeExperience() {
 function validPlans(plans) {
   return plans && typeof plans === "object" && !Array.isArray(plans) && Object.entries(plans).every(([key, plan]) => /^\d{4}-\d{2}-\d{2}$/.test(key) && typeof plan?.savedAt === "string" && Number.isFinite(Date.parse(plan.savedAt)) && Array.isArray(plan.sessions) && plan.sessions.length <= 14 && plan.sessions.every((session) => session && typeof session.title === "string" && session.title.length <= 100 && /^\d{4}-\d{2}-\d{2}$/.test(session.date) && Number.isFinite(Date.parse(session.date)) && ["run", "rest"].includes(session.kind) && Number.isFinite(session.miles) && session.miles >= 0 && session.miles <= 500 && ["planned", "completed", "skipped"].includes(session.status)));
 }
+
+/* ---------- Installed app ---------- */
+
+const installedApp = window.matchMedia?.("(display-mode: standalone)").matches || navigator.standalone === true;
+let installPrompt = null;
+
+// The service worker keeps the app shell on the device (see sw.js).
+if ("serviceWorker" in navigator && (location.protocol === "https:" || ["localhost", "127.0.0.1"].includes(location.hostname))) {
+  window.addEventListener("load", () => { navigator.serviceWorker.register("/sw.js").catch(() => { /* The site works without it. */ }); });
+}
+
+// Chrome and Edge offer their own install prompt; hold it for the Account dialog.
+window.addEventListener("beforeinstallprompt", (event) => { event.preventDefault(); installPrompt = event; });
+window.addEventListener("appinstalled", () => { installPrompt = null; });
+
+// How to install on this device, or "" when installed or not possible.
+function installHelpMarkup() {
+  if (installedApp) return "";
+  const iOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  if (installPrompt) return '<h3 class="account-section-title">Get the app</h3><p class="install-help">Install Runlore on this device for a full-screen app with its own icon. <button type="button" class="link-action" data-action="install-app">Install Runlore</button></p>';
+  if (iOS) return '<h3 class="account-section-title">Get the app</h3><p class="install-help">In Safari, tap <strong>Share</strong>, then <strong>Add to Home Screen</strong>. Runlore opens full screen with its own icon.</p>';
+  return "";
+}
+
+document.addEventListener("click", async (event) => {
+  if (!event.target.closest?.('[data-action="install-app"]') || !installPrompt) return;
+  const prompt = installPrompt;
+  installPrompt = null;
+  await prompt.prompt();
+  event.target.closest(".install-help")?.remove();
+});

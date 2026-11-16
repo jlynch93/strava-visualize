@@ -2875,7 +2875,8 @@ function renderAccountDialog() {
       <div class="provider-list">${buttons || `<p class="account-error">${escapeHtml(state.account.error || "Sign-in is not available on this server.")}</p>`}</div>
       ${buttons && state.account.error ? `<p class="account-error">${escapeHtml(state.account.error)}</p>` : ""}
       <p class="account-fine-print">Runlore only reads your activities. It never posts to your accounts. <a href="/privacy">Privacy policy</a></p>
-      ${runnerDetailsMarkup(false)}`;
+      ${runnerDetailsMarkup(false)}
+      ${installHelpMarkup()}`;
     return;
   }
   const rows = providers.map((provider) => {
@@ -2895,6 +2896,7 @@ function renderAccountDialog() {
     ${runnerDetailsMarkup(true)}
     <h3 class="account-section-title">Connected accounts</h3>
     <ul class="connection-list">${rows}</ul>
+    ${installHelpMarkup()}
     <div class="account-actions">
       <a class="ghost-action" href="/auth/logout">Sign out</a>
       <button class="link-action danger" type="button" data-action="delete-account">Delete account</button>
@@ -3540,7 +3542,8 @@ render();
 consumeAuthResult();
 // Never leave the loading state up indefinitely, even if the network stalls.
 const loadingFallback = setTimeout(finishLoading, 12_000);
-loadAccount().catch((error) => setStatus(error.message, true)).finally(() => { clearTimeout(loadingFallback); finishLoading(); });
+const OFFLINE_MESSAGE = "You're offline. Runlore will load your runs when you're back online.";
+loadAccount().catch((error) => setStatus(navigator.onLine === false ? OFFLINE_MESSAGE : error.message, true)).finally(() => { clearTimeout(loadingFallback); finishLoading(); });
 
 let chartResizeTimer;
 let lastChartWidth = document.querySelector("#app").clientWidth;
@@ -3559,3 +3562,9 @@ new ResizeObserver(() => {
     if (activeView === "fitness") renderFitness();
   }, 120);
 }).observe(document.querySelector("#app"));
+
+// Back online (an installed app often opens without a connection): load what was missed.
+window.addEventListener("online", () => {
+  if (state.account.loaded) return;
+  loadAccount().catch((error) => setStatus(error.message, true));
+});

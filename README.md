@@ -137,6 +137,16 @@ race in the next six months it **projects to race day**: your usual daily load
 45% in race week. The dashed lines and faded form bars are that projection, and
 the note under the chart gives the race-day form and its assumptions.
 
+**Installable app.** Runlore is a progressive web app: on an iPhone, Safari's
+**Share → Add to Home Screen** gives a full-screen app with its own icon
+(Account shows the steps, or an Install button where the browser offers one).
+`public/site.webmanifest` describes it, and the service worker
+(`public/sw.js`) keeps the app shell on the device so it opens instantly and
+still opens offline. Requests to `/api`, `/auth` and `/webhooks` never pass
+through its cache, so account data is always live and nothing private is
+stored by it. Offline, the app says so and loads your runs when the
+connection returns.
+
 **On phones** (700px and narrower) the layout is rearranged so data comes first:
 
 - The header is one row, with settings behind a gear icon and your account as initials.

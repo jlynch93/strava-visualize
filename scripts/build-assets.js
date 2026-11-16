@@ -32,5 +32,5 @@ const SECURITY_HEADERS = [
   "  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()",
   "  Strict-Transport-Security: max-age=31536000; includeSubDomains"
 ];
-fs.writeFileSync(path.join(output, "_headers"), [...SECURITY_HEADERS, "/", "  Cache-Control: no-store", "/index.html", "  Cache-Control: no-store", ...Object.values(manifest).flatMap((file) => [`/${file}`, "  Cache-Control: public, max-age=31536000, immutable"])].join("\n") + "\n");
+fs.writeFileSync(path.join(output, "_headers"), [...SECURITY_HEADERS, "/", "  Cache-Control: no-store", "/index.html", "  Cache-Control: no-store", "/sw.js", "  Cache-Control: no-cache", ...Object.values(manifest).flatMap((file) => [`/${file}`, "  Cache-Control: public, max-age=31536000, immutable"])].join("\n") + "\n");
 console.log(`Built ${Object.keys(manifest).length} fingerprinted assets in .build/public.`);

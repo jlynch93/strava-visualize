@@ -411,3 +411,5 @@ body.is-loading .onboarding { display: none; }
 @keyframes runlore-pulse { 0%, 100% { opacity: .55; transform: scale(.96); } 50% { opacity: 1; transform: scale(1); } }
 @media (prefers-reduced-motion: reduce) { .app-loading-mark { animation: none; } }
 .account-fine-print + .account-section-title { margin-top: 20px; padding-top: 14px; border-top: 1px solid var(--rule); }
+.install-help { margin: 0 0 18px; color: var(--ink-soft); font-size: .86rem; line-height: 1.45; }
+.connection-list + .account-section-title { margin-top: 18px; }
