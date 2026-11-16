@@ -113,6 +113,22 @@ function loadCoachingContext() {
   } catch { return { goal: {}, checkin: {}, plan: {}, races: [] }; }
 }
 
+// "3:30:00" or "24:30" -> seconds; null when empty or not a time.
+function parseRaceTime(value) {
+  const parts = String(value || "").trim().split(":");
+  if (!parts[0] || parts.length < 2 || parts.length > 3 || !parts.every((part) => /^\d{1,2}$/.test(part))) return null;
+  const numbers = parts.map(Number);
+  if (numbers.slice(1).some((part) => part > 59)) return null;
+  const seconds = numbers.reduce((total, part) => total * 60 + part, 0);
+  return seconds >= 5 * 60 && seconds <= 30 * 3600 ? seconds : null;
+}
+
+function formatRaceClock(seconds) {
+  const total = Math.round(seconds);
+  const hours = Math.floor(total / 3600), minutes = Math.floor(total % 3600 / 60), secs = total % 60;
+  return hours ? `${hours}:${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}` : `${minutes}:${String(secs).padStart(2, "0")}`;
+}
+
 function sanitizeRace(race) {
   if (!race || typeof race !== "object" || !/^\d{4}-\d{2}-\d{2}$/.test(race.date) || !Number.isFinite(Date.parse(race.date))) return null;
   return {
@@ -121,6 +137,7 @@ function sanitizeRace(race) {
     date: race.date,
     distance: RACE_DISTANCES.includes(race.distance) ? race.distance : "Other",
     priority: ["A", "B", "C"].includes(race.priority) ? race.priority : "A",
+    ...(Number.isInteger(race.goalSeconds) && race.goalSeconds >= 300 && race.goalSeconds <= 108000 ? { goalSeconds: race.goalSeconds } : {}),
     // A race found through search keeps its RunSignup page.
     ...(/^https:\/\/runsignup\.com\//.test(String(race.url || "")) ? { url: String(race.url).slice(0, 300) } : {})
   };
@@ -1373,7 +1390,7 @@ function renderRaceList() {
     const past = race.date < today;
     const date = new Date(`${race.date}T00:00:00`).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" });
     const current = phase?.race && phase.race.date === race.date && phase.race.name === race.name ? `<em class="race-phase phase-${phase.key}">${escapeHtml(phase.label)}</em>` : "";
-    return `<li class="race-item${past ? " past" : ""}"><span class="race-priority priority-${race.priority}" title="${race.priority === "A" ? "Goal race" : race.priority === "B" ? "Tune-up race" : "Training race"}">${race.priority}</span><div><strong>${escapeHtml(race.name || race.distance)}</strong><small>${escapeHtml(date)} · ${escapeHtml(race.distance)}${past ? " · done" : ""}${race.url ? ` · <a href="${escapeHtml(race.url)}" target="_blank" rel="noopener noreferrer">RunSignup<span class="visually-hidden"> page for ${escapeHtml(race.name || race.distance)}</span> ↗</a>` : ""}</small></div>${current}<button type="button" class="race-remove" data-race-id="${escapeHtml(race.id)}" aria-label="Remove ${escapeHtml(race.name || race.distance)} on ${escapeHtml(date)}">Remove</button></li>`;
+    return `<li class="race-item${past ? " past" : ""}"><span class="race-priority priority-${race.priority}" title="${race.priority === "A" ? "Goal race" : race.priority === "B" ? "Tune-up race" : "Training race"}">${race.priority}</span><div><strong>${escapeHtml(race.name || race.distance)}</strong><small>${escapeHtml(date)} · ${escapeHtml(race.distance)}${race.goalSeconds ? ` · goal ${escapeHtml(formatRaceClock(race.goalSeconds))}` : ""}${past ? " · done" : ""}${race.url ? ` · <a href="${escapeHtml(race.url)}" target="_blank" rel="noopener noreferrer">RunSignup<span class="visually-hidden"> page for ${escapeHtml(race.name || race.distance)}</span> ↗</a>` : ""}</small></div>${current}<button type="button" class="race-remove" data-race-id="${escapeHtml(race.id)}" aria-label="Remove ${escapeHtml(race.name || race.distance)} on ${escapeHtml(date)}">Remove</button></li>`;
   }).join("") : '<li class="race-empty">No races yet. Add your goal race (A) and readiness follows your training cycle: base, build, peak, taper and recovery.</li>';
 }
 
@@ -3227,8 +3244,10 @@ els.raceForm.addEventListener("submit", (event) => {
     date: els.raceForm.raceDate.value,
     distance: els.raceForm.raceDistance.value,
     priority: els.raceForm.racePriority.value,
-    url: els.raceForm.dataset.url || ""
+    url: els.raceForm.dataset.url || "",
+    goalSeconds: parseRaceTime(els.raceForm.raceGoalTime.value) ?? undefined
   });
+  if (els.raceForm.raceGoalTime.value.trim() && !race?.goalSeconds) { setStatus("Enter the goal time as h:mm:ss or mm:ss, for example 3:30:00 or 24:30.", true, "raceForm"); return; }
   if (!race) { setStatus("Choose a race date.", true, "raceForm"); return; }
   delete els.raceForm.dataset.url;
   // The search did its job: clear it for the next race.

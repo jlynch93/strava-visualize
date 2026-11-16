@@ -289,11 +289,12 @@
           <section class="fitness-panel" aria-labelledby="loadTitle">
             <div class="fitness-panel-head">
               <div><h2 id="loadTitle">Fitness, fatigue &amp; form</h2><p>Fitness is your 6-week load, fatigue your last week. Form is the gap: positive is fresh, negative means you're carrying fatigue.</p></div>
-              <div class="chart-legend"><span class="legend-item"><i class="key fitness-line"></i>Fitness (42-day)</span><span class="legend-item"><i class="key fatigue-line"></i>Fatigue (7-day)</span></div>
+              <div class="chart-legend"><span class="legend-item"><i class="key fitness-line"></i>Fitness (42-day)</span><span class="legend-item"><i class="key fatigue-line"></i>Fatigue (7-day)</span><span id="projectionLegend" class="legend-item" hidden><i class="key projection-key"></i>Projected to race day</span></div>
             </div>
             <div id="loadChart" class="fitness-chart"></div>
             <h3 class="form-chart-title">Form <span>fitness − fatigue</span></h3>
             <div id="formChart" class="fitness-chart fitness-chart-short"></div>
+            <p id="raceDayProjection" class="race-projection" hidden></p>
           </section>
 
           <div class="fitness-columns">
@@ -359,6 +360,7 @@
               <label for="raceName">Race name</label><input id="raceName" type="text" maxlength="48" placeholder="e.g. City Marathon">
               <div class="goal-race-fields"><div><label for="raceDistance">Distance</label><select id="raceDistance"><option value="5K">5K</option><option value="10K">10K</option><option value="Half marathon" selected>Half marathon</option><option value="Marathon">Marathon</option><option value="Other">Other</option></select></div><div><label for="raceDate">Date</label><input id="raceDate" type="date" required></div></div>
               <label for="racePriority">Priority</label><select id="racePriority"><option value="A">A · goal race (shapes the whole cycle)</option><option value="B">B · tune-up (short taper and recovery)</option><option value="C">C · training race (run through it)</option></select>
+              <label for="raceGoalTime">Goal time (optional)</label><input id="raceGoalTime" type="text" inputmode="numeric" maxlength="8" placeholder="e.g. 3:30:00 or 24:30" autocomplete="off">
               <button type="submit" class="context-save">Add race</button>
             </form>
           </div></details>

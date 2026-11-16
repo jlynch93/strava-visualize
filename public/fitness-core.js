@@ -440,12 +440,49 @@
     return WALK_TYPES.walk;
   }
 
+  /* ---------- Race-day projection ---------- */
+
+  // Share of the usual daily load assumed in each part of the run-in.
+  const TAPER_LOAD = 0.65;
+  const RACE_WEEK_LOAD = 0.45;
+
+  /*
+   * Runs fitness and fatigue forward from today to race day, assuming the
+   * usual daily load until the taper, then TAPER_LOAD of it, then
+   * RACE_WEEK_LOAD in the final week. Form for a day is the previous day's
+   * fitness minus fatigue (as in loadSeries), so race-day form is how fresh
+   * you arrive. start: { fitness, fatigue } at the end of today.
+   */
+  function projectRaceDay({ start, usualLoad, today = new Date(), race }) {
+    if (!start || !race || !/^\d{4}-\d{2}-\d{2}$/.test(race.date)) return null;
+    const raceDay = dayIndex(race.date), now = dayIndex(today);
+    if (raceDay <= now) return null;
+    const taper = taperDays({ ...race, priority: race.priority || "A" });
+    const fitnessDecay = 1 - Math.exp(-1 / 42), fatigueDecay = 1 - Math.exp(-1 / 7);
+    let fitness = start.fitness, fatigue = start.fatigue;
+    const days = [];
+    for (let day = now + 1; day <= raceDay; day += 1) {
+      const daysTo = raceDay - day;
+      const stage = daysTo === 0 ? "race" : daysTo <= 7 ? "race-week" : daysTo <= taper ? "taper" : "usual";
+      const form = fitness - fatigue;
+      // Race day itself is not trained; its effort lands after the start line.
+      const load = stage === "race" ? 0 : (stage === "race-week" ? RACE_WEEK_LOAD : stage === "taper" ? TAPER_LOAD : 1) * Math.max(0, usualLoad || 0);
+      fitness += (load - fitness) * fitnessDecay;
+      fatigue += (load - fatigue) * fatigueDecay;
+      // Step from today's local date: day numbers are only used for differences.
+      const date = new Date(today.getFullYear(), today.getMonth(), today.getDate() + (day - now));
+      days.push({ date, stage, load, form, fitness, fatigue });
+    }
+    const last = days.at(-1);
+    return { days, raceDay: { form: last.form, fitness: last.fitness, zone: formZone(last.form, last.fitness) }, taperDays: taper };
+  }
+
   const api = {
     oxygenCost, sustainableFraction, vdotFromPerformance, speedForOxygen, predictRaceSeconds, trainingPaces,
     estimateMaxHr, heartRateReserve, runVo2Estimate, runVdot, percentile, vo2Series,
     runLoad, dailyLoads, loadSeries, workloadRatios, formZone, readiness, dayKey, finite,
     RUN_TYPES, classifyRunType, isWalk, WALK_TYPES, classifyWalkType,
-    trainingPhase, recoveryDays, taperDays
+    trainingPhase, recoveryDays, taperDays, projectRaceDay, TAPER_LOAD, RACE_WEEK_LOAD
   };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.FitnessCore = api;

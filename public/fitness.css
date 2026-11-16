@@ -306,3 +306,23 @@
    overflow their column. */
 .goal-race-fields > div { min-width: 0; }
 .goal-race-fields input, .goal-race-fields select { width: 100%; min-width: 0; max-width: 100%; }
+
+.race-projection { margin: 12px 0 0; padding: 12px 14px; border-left: 3px solid var(--teal); background: color-mix(in oklch, var(--teal) 7%, var(--surface)); color: var(--ink); font-size: .86rem; line-height: 1.5; }
+.race-projection[hidden] { display: none; }
+.race-projection strong { color: var(--ink-strong); }
+.race-projection span { display: block; margin-top: 4px; color: var(--ink-soft); font-size: .78rem; }
+
+/* ---------- Goal race predictions ---------- */
+.goal-races { display: grid; gap: 10px; margin-bottom: 14px; }
+.goal-race { padding: 12px 14px; border: 1px solid var(--rule); border-radius: 8px; background: var(--surface); }
+.goal-race header { display: flex; gap: 10px; align-items: center; }
+.goal-race header strong { display: block; color: var(--ink-strong); font-size: .92rem; }
+.goal-race header small { color: var(--ink-soft); font-size: .76rem; }
+.goal-race-time { margin: 8px 0 2px; color: var(--ink-strong); font-size: 1.6rem; font-weight: 760; letter-spacing: -0.02em; }
+.goal-race-time span { margin-left: 6px; color: var(--ink-soft); font-size: .8rem; font-weight: 600; letter-spacing: 0; }
+.goal-race-verdict, .goal-race-trend { margin: 2px 0 0; font-size: .82rem; }
+.goal-race-verdict.on-track span { color: var(--status-good); }
+.goal-race-verdict.off-track span { color: var(--status-critical); }
+.goal-race-trend { color: var(--ink-soft); }
+.fitness-table tr.is-goal th, .fitness-table tr.is-goal td { background: color-mix(in oklch, var(--teal) 9%, transparent); }
+.fitness-table tr.is-goal th::after { content: " · your race"; color: var(--teal); font-size: .7rem; font-weight: 700; }

@@ -178,3 +178,31 @@ test("early race recovery is never a day for quality", () => {
   assert.equal(fit.readiness(fresh).key, "primed");
   assert.equal(fit.readiness(fresh).phase, null);
 });
+
+test("projecting to race day: a taper turns build fatigue into race-day freshness", () => {
+  const race = { name: "City Marathon", date: day(56), distance: "Marathon", priority: "A" };
+  // Mid-build: fatigue above fitness (negative form) on a steady 60/day.
+  const projection = fit.projectRaceDay({ start: { fitness: 50, fatigue: 62 }, usualLoad: 60, today: TODAY, race });
+  assert.equal(projection.days.length, 56);
+  assert.equal(projection.days.at(-1).stage, "race");
+  assert.equal(projection.taperDays, 14);
+  const stages = projection.days.map((point) => point.stage);
+  assert.equal(stages.filter((stage) => stage === "race-week").length, 7);
+  assert.equal(stages.filter((stage) => stage === "taper").length, 7);
+  assert.ok(projection.raceDay.form > 5, `race-day form ${projection.raceDay.form}`);
+  assert.ok(["ready", "fresh"].includes(projection.raceDay.zone.key));
+  // Without the taper the same runner would arrive balanced, not fresh.
+  const noTaperFatigue = projection.days.find((point) => point.stage === "taper").form;
+  assert.ok(projection.raceDay.form > noTaperFatigue + 5);
+  // Race day reports how you arrive: it is not trained itself.
+  assert.equal(projection.days.at(-1).load, 0);
+  assert.equal(fit.projectRaceDay({ start: { fitness: 50, fatigue: 50 }, usualLoad: 60, today: TODAY, race: { ...race, date: day(-1) } }), null);
+});
+
+test("projected days are consecutive local dates ending on race day", () => {
+  const race = { date: day(10), distance: "10K", priority: "A" };
+  const projection = fit.projectRaceDay({ start: { fitness: 40, fatigue: 40 }, usualLoad: 50, today: TODAY, race });
+  const local = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  assert.equal(local(projection.days[0].date), day(1));
+  assert.equal(local(projection.days.at(-1).date), race.date);
+});

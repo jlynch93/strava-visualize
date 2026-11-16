@@ -113,6 +113,17 @@ takes its day on the plan calendar. A goal race saved before the race calendar
 moves over as the A race. Races sync with your account like goals and check-ins.
 Without races, readiness works exactly as before.
 
+Each race can carry an optional **goal time** (h:mm:ss or mm:ss). Race
+predictions open with a card for each upcoming A or B race at a standard
+distance: the predicted time and pace, whether it is on track for the goal (or
+the VO2 max the goal needs), and how the prediction moved over six weeks.
+
+The fitness and fatigue chart marks today and every race in view, and with an A
+race in the next six months it **projects to race day**: your usual daily load
+(the last 28 days' average) until the taper starts, 65% of it in the taper and
+45% in race week. The dashed lines and faded form bars are that projection, and
+the note under the chart gives the race-day form and its assumptions.
+
 **On phones** (700px and narrower) the layout is rearranged so data comes first:
 
 - The header is one row, with settings behind a gear icon and your account as initials.

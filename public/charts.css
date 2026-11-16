@@ -176,3 +176,18 @@
 }
 @keyframes import-pulse { 0%, 100% { opacity: .35; transform: scale(.85); } 50% { opacity: 1; transform: scale(1); } }
 @media (prefers-reduced-motion: reduce) { .source-status.is-importing::before { animation: none; } }
+
+/* Projection (race-day run-in): dashed, so it reads as an estimate. */
+.series-line.projection { stroke-dasharray: 6 5; }
+.series-end.projection { fill: var(--surface); stroke-width: 2; }
+.series-end.fitness-line.projection { stroke: var(--series-a); }
+.series-end.fatigue-line.projection { stroke: var(--series-c); }
+.series-bar.form-projected { opacity: .4; }
+.key.projection-key { background: none; border-top: 2px dashed var(--ink-soft); height: 0; }
+/* Labelled vertical markers: races and today. */
+.chart-marker { stroke: var(--ink-faint); stroke-width: 1; stroke-dasharray: 3 3; pointer-events: none; }
+.chart-marker.marker-today { stroke: var(--ink-strong); stroke-dasharray: none; }
+.chart-marker.priority-A { stroke: var(--teal); stroke-width: 2; stroke-dasharray: none; }
+.chart-marker-label { fill: var(--ink-soft); font-size: 10px; font-weight: 700; pointer-events: none; }
+.chart-marker-label.priority-A { fill: var(--teal); }
+.chart-marker-label.marker-today { fill: var(--ink-strong); }

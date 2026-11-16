@@ -236,16 +236,57 @@ function renderVo2Chart(model, days) {
   });
 }
 
+// The A race the run-in is projected to: the next one within six months.
+function projectionRace() {
+  const today = localDateValue(new Date());
+  const horizon = new Date(); horizon.setDate(horizon.getDate() + 183);
+  return raceList().find((race) => race.priority === "A" && race.date > today && race.date <= localDateValue(horizon)) || null;
+}
+
+// Average daily load over the last 28 days: the "usual" load the projection assumes.
+function usualDailyLoad(model) {
+  let total = 0;
+  for (let offset = 0; offset < 28; offset += 1) {
+    const date = new Date(); date.setDate(date.getDate() - offset);
+    total += model.loads.get(FitnessCore.dayKey(date)) || 0;
+  }
+  return total / 28;
+}
+
 function renderLoadCharts(model, days) {
   const byDay = new Map(model.loadSeries.map((point) => [FitnessCore.dayKey(point.date), point]));
+  const todayKey = FitnessCore.dayKey(new Date());
+  const reachesToday = days.length && FitnessCore.dayKey(days.at(-1)) === todayKey;
+  const race = reachesToday && model.latest ? projectionRace() : null;
+  const usual = race ? usualDailyLoad(model) : 0;
+  const projection = race ? FitnessCore.projectRaceDay({ start: { fitness: model.latest.fitness, fatigue: model.latest.fatigue }, usualLoad: usual, race }) : null;
+  // Past days, then (when projecting) every day up to the race.
+  const dates = projection ? [...days, ...projection.days.map((point) => point.date)] : days;
+  const past = days.length;
   const points = days.map((day) => byDay.get(FitnessCore.dayKey(day)) || null);
-  const fitness = points.map((point) => point ? point.fitness : null);
-  const fatigue = points.map((point) => point ? point.fatigue : null);
-  const form = points.map((point) => point ? point.form : null);
+  const ahead = projection ? projection.days : [];
+  const fitness = [...points.map((point) => point ? point.fitness : null), ...ahead.map(() => null)];
+  const fatigue = [...points.map((point) => point ? point.fatigue : null), ...ahead.map(() => null)];
+  const form = [...points.map((point) => point ? point.form : null), ...ahead.map(() => null)];
+  // Projected lines start at today's value so they continue the actual ones.
+  const projected = (key) => projection ? [...points.map((point, index) => index === past - 1 && point ? point[key] : null), ...ahead.map((point) => point[key])] : [];
+  const projectedForm = projection ? [...points.map(() => null), ...ahead.map((point) => point.form)] : [];
+  const stageLabel = { usual: "Usual load", taper: `Taper (${Math.round(FitnessCore.TAPER_LOAD * 100)}% of usual)`, "race-week": `Race week (${Math.round(FitnessCore.RACE_WEEK_LOAD * 100)}% of usual)`, race: "Race day" };
+  const fmtDay = (date) => date.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
   const tooltip = (index) => {
+    if (index >= past) {
+      const point = ahead[index - past];
+      const zone = FitnessCore.formZone(point.form, point.fitness);
+      return { title: `${fmtDay(dates[index])} · projected`, rows: [
+        { label: "Form", value: `${signed(point.form, 0)} · ${zone.label}` },
+        { label: "Fitness", value: Math.round(point.fitness) },
+        { label: "Fatigue", value: Math.round(point.fatigue) },
+        { label: "Assumed load", value: `${point.load ? Math.round(point.load) : 0} · ${stageLabel[point.stage]}` }
+      ] };
+    }
     const point = points[index];
     const zone = point ? FitnessCore.formZone(point.form, point.fitness) : null;
-    return { title: days[index].toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" }), rows: point ? [
+    return { title: fmtDay(dates[index]), rows: point ? [
       { label: "Fitness", value: Math.round(point.fitness) },
       { label: "Fatigue", value: Math.round(point.fatigue) },
       { label: "Form", value: `${signed(point.form, 0)} · ${zone.label}` },
@@ -256,32 +297,102 @@ function renderLoadCharts(model, days) {
       ] : [])
     ] : [{ label: "Status", value: "Before your history" }] };
   };
+  // Races in view (any priority), plus today when the chart runs into the future.
+  const indexOf = new Map(dates.map((date, index) => [FitnessCore.dayKey(date), index]));
+  const markers = raceList()
+    .map((item) => ({ index: indexOf.get(item.date) ?? -1, label: `${item.priority} · ${(item.name || item.distance).slice(0, 18)}`, className: `marker-race priority-${item.priority}` }))
+    .filter((marker) => marker.index >= 0);
+  if (projection) markers.push({ index: past - 1, label: "Today", className: "marker-today" });
   timeChart(document.querySelector("#loadChart"), {
-    dates: days, yMin: 0, yFormat: (value) => Math.round(value), tooltip,
-    ariaLabel: "Fitness and fatigue over the selected window. Use arrow keys to move between days.",
+    dates, yMin: 0, yFormat: (value) => Math.round(value), tooltip, markers,
+    ariaLabel: projection
+      ? `Fitness and fatigue over the selected window, projected to ${raceLabel(race)}. Use arrow keys to move between days.`
+      : "Fitness and fatigue over the selected window. Use arrow keys to move between days.",
     series: [
-      { label: "Fitness (42-day)", short: "Fitness", className: "fitness-line", values: fitness },
-      { label: "Fatigue (7-day)", short: "Fatigue", className: "fatigue-line", values: fatigue }
+      { label: "Fitness (42-day)", short: "Fitness", className: "fitness-line", values: fitness, noEndLabel: Boolean(projection) },
+      { label: "Fatigue (7-day)", short: "Fatigue", className: "fatigue-line", values: fatigue, noEndLabel: Boolean(projection) },
+      ...(projection ? [
+        { label: "Projected fitness", short: "Fitness, race day", className: "fitness-line projection", values: projected("fitness") },
+        { label: "Projected fatigue", short: "Fatigue, race day", className: "fatigue-line projection", values: projected("fatigue") }
+      ] : [])
     ]
   });
-  const limit = Math.max(20, ...form.filter(Number.isFinite).map(Math.abs)) * 1.1;
+  const allForm = [...form, ...projectedForm].filter(Number.isFinite);
+  const limit = Math.max(20, ...allForm.map(Math.abs)) * 1.1;
   const scale = Math.max(10, ...fitness.filter(Number.isFinite));
   timeChart(document.querySelector("#formChart"), {
-    dates: days, yMin: -limit, yMax: limit, yFormat: (value) => signed(value, 0), tooltip, zeroLine: true, height: 150, endLabels: false, rightPad: 72,
+    dates, yMin: -limit, yMax: limit, yFormat: (value) => signed(value, 0), tooltip, zeroLine: true, height: 150, endLabels: false, rightPad: 72,
+    markers: markers.map((marker) => ({ ...marker, label: "" })),
     ariaLabel: "Form, fitness minus fatigue, over the selected window. Use arrow keys to move between days.",
     bands: [
       { from: scale * 0.05, to: limit, className: "band-fresh", label: "Fresh" },
       { from: -scale * 0.3, to: -scale * 0.1, className: "band-productive", label: "Building" },
       { from: -limit, to: -scale * 0.3, className: "band-overreaching", label: "Overreaching" }
     ],
-    series: [{ label: "Form", className: (value) => value >= 0 ? "form-positive" : "form-negative", values: form, kind: "bars" }]
+    series: [
+      { label: "Form", className: (value) => value >= 0 ? "form-positive" : "form-negative", values: form, kind: "bars" },
+      ...(projection ? [{ label: "Projected form", className: (value) => value >= 0 ? "form-projected form-positive" : "form-projected form-negative", values: projectedForm, kind: "bars" }] : [])
+    ]
   });
+  document.querySelector("#projectionLegend").hidden = !projection;
+  const summary = document.querySelector("#raceDayProjection");
+  summary.hidden = !projection;
+  if (projection) {
+    const arrive = projection.raceDay;
+    const taperStart = projection.days.find((point) => point.stage === "taper" || point.stage === "race-week");
+    const verdict = arrive.zone.key === "fresh" ? "Very fresh: you could hold a little more volume into the taper."
+      : arrive.zone.key === "ready" ? "That is where you want to be on race day."
+        : arrive.zone.key === "neutral" ? "Close, but a slightly deeper or longer taper would leave you fresher."
+          : "You would still be carrying fatigue: cut more in the taper, or start it earlier.";
+    summary.innerHTML = `<strong>Race-day form: ${escapeHtml(signed(arrive.form, 0))} (${escapeHtml(arrive.zone.label)})</strong> for ${escapeHtml(raceLabel(race))} on ${escapeHtml(fmtDay(new Date(`${race.date}T00:00:00`)))}. ${escapeHtml(verdict)} <span>Assumes your usual load (about ${Math.round(usual)} a day) until ${escapeHtml(taperStart ? fmtDay(taperStart.date) : "the taper")}, then ${Math.round(FitnessCore.TAPER_LOAD * 100)}% of it in the taper and ${Math.round(FitnessCore.RACE_WEEK_LOAD * 100)}% in race week.</span>`;
+  }
 }
 
 function formatRaceTime(seconds) {
   const total = Math.round(seconds);
   const hours = Math.floor(total / 3600), minutes = Math.floor(total % 3600 / 60), secs = total % 60;
   return hours ? `${hours}:${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}` : `${minutes}:${String(secs).padStart(2, "0")}`;
+}
+
+const RACE_METERS = { "5K": 5000, "10K": 10000, "Half marathon": 21097.5, "Marathon": 42195 };
+
+// Upcoming A and B races at a standard distance, with what fitness predicts.
+function goalRacePredictions(model) {
+  const today = localDateValue(new Date());
+  const ratio = model.vo2?.prior && model.vo2?.value ? model.vo2.prior / model.vo2.value : null;
+  return raceList()
+    .filter((race) => race.date >= today && race.priority !== "C" && RACE_METERS[race.distance])
+    .sort((a, b) => a.priority.localeCompare(b.priority) || a.date.localeCompare(b.date))
+    .slice(0, 3)
+    .map((race) => {
+      const meters = RACE_METERS[race.distance];
+      const predicted = FitnessCore.predictRaceSeconds(model.fitnessVdot, meters);
+      // Six weeks ago, scaled by how the VO2 max estimate has moved since.
+      const before = ratio ? FitnessCore.predictRaceSeconds(model.fitnessVdot * ratio, meters) : null;
+      const goalVdot = race.goalSeconds ? FitnessCore.vdotFromPerformance(meters, race.goalSeconds) : null;
+      const days = Math.round((new Date(`${race.date}T00:00:00`) - new Date(`${today}T00:00:00`)) / 86400000);
+      return { race, meters, predicted, before, goalVdot, days };
+    });
+}
+
+function goalRaceCard({ race, meters, predicted, before, goalVdot, days }) {
+  const clock = (seconds) => formatRaceTime(Math.abs(seconds));
+  const when = new Date(`${race.date}T00:00:00`).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+  const away = days === 0 ? "today" : days < 14 ? `${days} day${days === 1 ? "" : "s"}` : `${Math.round(days / 7)} weeks`;
+  let verdict = "";
+  if (race.goalSeconds) {
+    const margin = race.goalSeconds - predicted;
+    verdict = margin >= 0
+      ? `<p class="goal-race-verdict on-track"><span aria-hidden="true">▲</span> On track: ${clock(margin)} inside your ${formatRaceTime(race.goalSeconds)} goal.</p>`
+      : `<p class="goal-race-verdict off-track"><span aria-hidden="true">▼</span> ${clock(margin)} slower than your ${formatRaceTime(race.goalSeconds)} goal. It needs a VO2 max of about ${goalVdot.toFixed(1)}.</p>`;
+  }
+  const trend = before && Math.abs(before - predicted) >= 5
+    ? `<p class="goal-race-trend">${clock(before - predicted)} ${predicted < before ? "faster" : "slower"} than six weeks ago.</p>` : "";
+  return `<article class="goal-race">
+    <header><span class="race-priority priority-${race.priority}" aria-label="${race.priority} race">${race.priority}</span><div><strong>${escapeHtml(race.name || race.distance)}</strong><small>${escapeHtml(race.distance)} · ${escapeHtml(when)} · ${escapeHtml(away)}</small></div></header>
+    <p class="goal-race-time">${formatRaceTime(predicted)} <span>${formatPace(predicted / miles(meters))} predicted</span></p>
+    ${verdict}${trend}
+  </article>`;
 }
 
 function renderPredictions(model) {
@@ -291,9 +402,11 @@ function renderPredictions(model) {
     host.innerHTML = pacesHost.innerHTML = '<p class="context-muted">Predictions appear once there is a VO2 max estimate.</p>';
     return;
   }
-  host.innerHTML = `<table class="fitness-table"><thead><tr><th scope="col">Distance</th><th scope="col">Predicted time</th><th scope="col">Pace</th></tr></thead><tbody>${RACES.map((race) => {
+  const goals = goalRacePredictions(model);
+  const goalDistances = new Set(goals.map((goal) => goal.meters));
+  host.innerHTML = `${goals.length ? `<div class="goal-races">${goals.map(goalRaceCard).join("")}</div>` : ""}<table class="fitness-table"><thead><tr><th scope="col">Distance</th><th scope="col">Predicted time</th><th scope="col">Pace</th></tr></thead><tbody>${RACES.map((race) => {
     const seconds = FitnessCore.predictRaceSeconds(model.fitnessVdot, race.meters);
-    return `<tr><th scope="row">${race.label}</th><td>${formatRaceTime(seconds)}</td><td>${formatPace(seconds / miles(race.meters))}</td></tr>`;
+    return `<tr${goalDistances.has(race.meters) ? ' class="is-goal"' : ""}><th scope="row">${race.label}</th><td>${formatRaceTime(seconds)}</td><td>${formatPace(seconds / miles(race.meters))}</td></tr>`;
   }).join("")}</tbody></table>`;
   const paces = FitnessCore.trainingPaces(model.fitnessVdot);
   const perMile = (secondsPerMeter) => formatPace(secondsPerMeter * 1609.344);

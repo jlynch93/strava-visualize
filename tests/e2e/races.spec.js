@@ -171,3 +171,46 @@ test("editing a found race by hand drops its RunSignup link, and search failures
   await page.fill("#raceSearch", "another race");
   await expect(page.locator("#raceSearchStatus")).toContainText("Enter the race by hand");
 });
+
+test("an A race projects form to race day and marks the races on the load chart", async ({ page }) => {
+  await loadDemo(page);
+  await nav(page, "Plan");
+  await page.locator("#racesDisclosure > summary").click();
+  await addRace(page, { name: "City Marathon", offset: 56, distance: "Marathon", priority: "A" });
+  await addRace(page, { name: "Turkey Trot", offset: 21, distance: "10K", priority: "B" });
+  await nav(page, "Fitness");
+  await expect(page.locator("#projectionLegend")).toBeVisible();
+  await expect(page.locator("#raceDayProjection")).toContainText(/Race-day form: [+−-]?\d+ .* for City Marathon/);
+  await expect(page.locator("#raceDayProjection")).toContainText("65% of it in the taper");
+  const labels = page.locator("#loadChart .chart-marker-label");
+  for (const label of ["Today", "B · Turkey Trot", "A · City Marathon"]) await expect(labels.filter({ hasText: label })).toHaveCount(1);
+  await expect(page.locator("#loadChart .series-line.projection")).toHaveCount(2);
+});
+
+test("a goal time shows whether predictions are on track", async ({ page }) => {
+  await loadDemo(page);
+  await nav(page, "Plan");
+  await page.locator("#racesDisclosure > summary").click();
+  await page.fill("#raceGoalTime", "fast");
+  await addRace(page, { name: "Bad Goal", offset: 30, distance: "Half marathon", priority: "B" });
+  await expect(page.locator("#raceList .race-item")).toHaveCount(0);
+  await page.fill("#raceGoalTime", "9:00:00");
+  await addRace(page, { name: "City Marathon", offset: 56, distance: "Marathon", priority: "A" });
+  await expect(page.locator("#raceList")).toContainText("goal 9:00:00");
+  await page.fill("#raceGoalTime", "1:00:00");
+  await addRace(page, { name: "Dream Half", offset: 30, distance: "Half marathon", priority: "B" });
+  await nav(page, "Fitness");
+  const cards = page.locator(".goal-race");
+  await expect(cards).toHaveCount(2);
+  await expect(cards.nth(0)).toContainText("City Marathon");
+  await expect(cards.nth(0).locator(".goal-race-verdict.on-track")).toBeVisible();
+  await expect(cards.nth(1).locator(".goal-race-verdict.off-track")).toContainText("VO2 max");
+});
+
+test("without an A race there is no projection", async ({ page }) => {
+  await loadDemo(page);
+  await nav(page, "Fitness");
+  await expect(page.locator("#raceDayProjection")).toBeHidden();
+  await expect(page.locator("#projectionLegend")).toBeHidden();
+  await expect(page.locator(".goal-race")).toHaveCount(0);
+});

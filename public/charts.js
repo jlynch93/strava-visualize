@@ -61,15 +61,17 @@ function columnPath(left, top, width, bottom, radius = 4) {
  * Time chart with one y-axis. Lines share a crosshair tooltip; bars are drawn
  * from zero. Hover or focus the chart and use arrow keys to move between days.
  */
-function timeChart(container, { dates, series, yFormat, yMin, yMax, bands = [], tooltip, ariaLabel, height, zeroLine = false, endLabels = true, rightPad, yScale = 1 }) {
+// markers: [{ index, label, className }] draw labelled vertical lines (race
+// days, today). A series with noEndLabel is left out of the end labels.
+function timeChart(container, { dates, series, yFormat, yMin, yMax, bands = [], tooltip, ariaLabel, height, zeroLine = false, endLabels = true, rightPad, yScale = 1, markers = [] }) {
   if (!dates.length || !series.some((item) => item.values.some((value) => Number.isFinite(value)))) {
     renderEmpty(container, "Not enough data in this window yet.");
     return;
   }
   const { width, height: measured } = chartSize(container, 200);
   const chartHeight = height || measured;
-  const hasEndLabels = endLabels && series.some((item) => item.kind !== "bars" && item.kind !== "dots");
-  const pad = { top: 14, right: rightPad ?? (hasEndLabels ? 72 : 14), bottom: 26, left: 46 };
+  const hasEndLabels = endLabels && series.some((item) => item.kind !== "bars" && item.kind !== "dots" && !item.noEndLabel);
+  const pad = { top: markers.some((marker) => marker.label) ? 26 : 14, right: rightPad ?? (hasEndLabels ? 72 : 14), bottom: 26, left: 46 };
   const all = series.flatMap((item) => item.values.filter(Number.isFinite));
   let low = yMin ?? Math.min(...all, ...bands.map((band) => band.from).filter(Number.isFinite));
   let high = yMax ?? Math.max(...all);
@@ -94,6 +96,16 @@ function timeChart(container, { dates, series, yFormat, yMin, yMax, bands = [], 
     root.append(svg("text", { class: "label", x: pad.left - 8, y: y(tick) + 4, "text-anchor": "end" }, [document.createTextNode(yFormat(tick))]));
   });
   if (zeroLine && low < 0 && high > 0) root.append(svg("line", { class: "zero-line", x1: pad.left, x2: width - pad.right, y1: y(0), y2: y(0) }));
+  markers.forEach((marker) => {
+    if (!(marker.index >= 0 && marker.index < dates.length)) return;
+    const mx = x(marker.index);
+    root.append(svg("line", { class: `chart-marker ${marker.className || ""}`, x1: mx, x2: mx, y1: pad.top - (marker.label ? 4 : 0), y2: pad.top + innerHeight }));
+    if (marker.label) {
+      // Keep labels inside the plot: anchor at the end near the right edge.
+      const anchor = mx > width - pad.right - 60 ? "end" : mx < pad.left + 40 ? "start" : "middle";
+      root.append(svg("text", { class: `chart-marker-label ${marker.className || ""}`, x: mx, y: pad.top - 8, "text-anchor": anchor }, [document.createTextNode(marker.label)]));
+    }
+  });
   const labelEvery = Math.max(1, Math.ceil(dates.length / Math.max(2, Math.floor(innerWidth / 90))));
   dates.forEach((date, index) => {
     if (index % labelEvery === 0) root.append(svg("text", { class: "label", x: x(index), y: chartHeight - 6, "text-anchor": index === 0 ? "start" : "middle" }, [document.createTextNode(shortDate(date))]));
@@ -129,7 +141,7 @@ function timeChart(container, { dates, series, yFormat, yMin, yMax, bands = [], 
   });
   // End labels: value at the line end, nudged apart only when they would overlap.
   if (hasEndLabels) {
-    const labelled = series.filter((item) => item.labelY !== undefined && item.kind !== "bars" && item.kind !== "dots").sort((a, b) => a.labelY - b.labelY);
+    const labelled = series.filter((item) => item.labelY !== undefined && item.kind !== "bars" && item.kind !== "dots" && !item.noEndLabel).sort((a, b) => a.labelY - b.labelY);
     labelled.forEach((item, index) => {
       if (index && item.labelY - labelled[index - 1].labelY < 26) item.labelY = labelled[index - 1].labelY + 26;
       root.append(
