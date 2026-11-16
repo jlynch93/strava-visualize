@@ -139,7 +139,9 @@ function sanitizeRace(race) {
     priority: ["A", "B", "C"].includes(race.priority) ? race.priority : "A",
     ...(Number.isInteger(race.goalSeconds) && race.goalSeconds >= 300 && race.goalSeconds <= 108000 ? { goalSeconds: race.goalSeconds } : {}),
     // A race found through search keeps its RunSignup page.
-    ...(/^https:\/\/runsignup\.com\//.test(String(race.url || "")) ? { url: String(race.url).slice(0, 300) } : {})
+    ...(/^https:\/\/runsignup\.com\//.test(String(race.url || "")) ? { url: String(race.url).slice(0, 300) } : {}),
+    // Its RunSignup id finds past results for a projected finishing place.
+    ...(/^\d{1,9}$/.test(String(race.sourceId || "")) ? { sourceId: String(race.sourceId) } : {})
   };
 }
 
@@ -158,7 +160,10 @@ function sanitizeCoachingContext(saved) {
     const legacy = sanitizeRace({ id: "goal-race", name: goal.raceName || goal.event, date: goal.raceDate, distance: goal.raceDistance, priority: "A" });
     if (legacy) races = [legacy];
   }
-  return { goal, checkin: record(saved.checkin), plan: record(saved.plan), races };
+  const savedProfile = record(saved.profile), profile = {};
+  if (/^(19|20)\d{2}$/.test(savedProfile.birthYear)) profile.birthYear = savedProfile.birthYear;
+  if (["M", "F", "X"].includes(savedProfile.gender)) profile.gender = savedProfile.gender;
+  return { goal, checkin: record(saved.checkin), plan: record(saved.plan), races, ...(Object.keys(profile).length ? { profile } : {}) };
 }
 
 function raceList() {
@@ -3245,11 +3250,12 @@ els.raceForm.addEventListener("submit", (event) => {
     distance: els.raceForm.raceDistance.value,
     priority: els.raceForm.racePriority.value,
     url: els.raceForm.dataset.url || "",
+    sourceId: els.raceForm.dataset.sourceId || "",
     goalSeconds: parseRaceTime(els.raceForm.raceGoalTime.value) ?? undefined
   });
   if (els.raceForm.raceGoalTime.value.trim() && !race?.goalSeconds) { setStatus("Enter the goal time as h:mm:ss or mm:ss, for example 3:30:00 or 24:30.", true, "raceForm"); return; }
   if (!race) { setStatus("Choose a race date.", true, "raceForm"); return; }
-  delete els.raceForm.dataset.url;
+  delete els.raceForm.dataset.url; delete els.raceForm.dataset.sourceId;
   // The search did its job: clear it for the next race.
   document.querySelector("#raceSearch").value = "";
   renderRaceResults([]);
@@ -3313,7 +3319,7 @@ document.querySelector("#raceSearch").addEventListener("keydown", (event) => {
 });
 
 // Editing the name or date by hand makes it a different race: drop the link.
-["raceName", "raceDate"].forEach((field) => els.raceForm[field].addEventListener("input", () => { delete els.raceForm.dataset.url; }));
+["raceName", "raceDate"].forEach((field) => els.raceForm[field].addEventListener("input", () => { delete els.raceForm.dataset.url; delete els.raceForm.dataset.sourceId; }));
 
 document.querySelector("#raceResults").addEventListener("click", (event) => {
   const button = event.target.closest(".race-event");
@@ -3327,6 +3333,7 @@ document.querySelector("#raceResults").addEventListener("click", (event) => {
   els.raceForm.raceDate.value = chosen.date;
   els.raceForm.raceDistance.value = chosen.distance;
   if (race.url) els.raceForm.dataset.url = race.url; else delete els.raceForm.dataset.url;
+  if (race.url && race.id) els.raceForm.dataset.sourceId = race.id; else delete els.raceForm.dataset.sourceId;
   raceSearchStatus(`Filled in ${race.name} (${chosen.distance === "Other" ? chosen.name : chosen.distance}). Choose its priority, then Add race.`);
   els.raceForm.racePriority.focus();
 });

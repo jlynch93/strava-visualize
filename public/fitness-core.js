@@ -379,6 +379,39 @@
     return { score: finalScore, ...band, advice, factors, phase };
   }
 
+  /* ---------- Finishing place ---------- */
+
+  // Five-year age groups, as most races award them.
+  function ageGroup(age) {
+    if (!Number.isFinite(age) || age < 1) return null;
+    if (age < 15) return { from: 1, to: 14, label: "14 & under" };
+    if (age >= 80) return { from: 80, to: 200, label: "80+" };
+    const from = Math.floor(age / 5) * 5;
+    return { from, to: from + 4, label: `${from}–${from + 4}` };
+  }
+
+  // Where a finish time would have placed in a past field of
+  // [seconds, "M" | "F" | "X", age | null] rows: overall, among the same
+  // gender, and in the same gender's age group.
+  function projectPlace(field, seconds, { gender = null, age = null } = {}) {
+    if (!Array.isArray(field) || !field.length || !(seconds > 0)) return null;
+    const placeIn = (rows) => {
+      const ahead = rows.filter((row) => row[0] < seconds).length;
+      const of = Math.max(rows.length, ahead + 1);
+      return { place: ahead + 1, of, percent: Math.max(1, Math.round((ahead + 1) / of * 100)) };
+    };
+    const result = { overall: placeIn(field), gender: null, ageGroup: null };
+    if (!gender) return result;
+    const same = field.filter((row) => row[1] === gender);
+    if (same.length) result.gender = placeIn(same);
+    const group = ageGroup(age);
+    if (group && same.length) {
+      const peers = same.filter((row) => row[2] !== null && row[2] >= group.from && row[2] <= group.to);
+      result.ageGroup = { ...placeIn(peers), label: group.label, empty: !peers.length };
+    }
+    return result;
+  }
+
   /* ---------- Run type ---------- */
 
   const RUN_TYPES = {
@@ -482,7 +515,7 @@
     estimateMaxHr, heartRateReserve, runVo2Estimate, runVdot, percentile, vo2Series,
     runLoad, dailyLoads, loadSeries, workloadRatios, formZone, readiness, dayKey, finite,
     RUN_TYPES, classifyRunType, isWalk, WALK_TYPES, classifyWalkType,
-    trainingPhase, recoveryDays, taperDays, projectRaceDay, TAPER_LOAD, RACE_WEEK_LOAD
+    trainingPhase, recoveryDays, taperDays, projectRaceDay, TAPER_LOAD, RACE_WEEK_LOAD, ageGroup, projectPlace
   };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.FitnessCore = api;

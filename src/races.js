@@ -134,3 +134,105 @@ export async function handleRaceSearch(request, ctx) {
   }
   return result;
 }
+
+/* ---------- Past results: the field a runner would finish in ---------- */
+
+const RESULTS_CACHE_SECONDS = 7 * 24 * 60 * 60;
+const RESULTS_PAGE = 2500;
+const RESULTS_MAX_PAGES = 8;
+
+// "18:00.5", "1:44:58.9", "2:03:11" -> seconds. Null if not a time.
+export function parseResultSeconds(value) {
+  const match = String(value || "").trim().match(/^(?:(\d{1,2}):)?(\d{1,2}):(\d{2})(?:\.\d+)?$/);
+  if (!match) return null;
+  const seconds = Number(match[1] || 0) * 3600 + Number(match[2]) * 60 + Number(match[3]);
+  return seconds > 0 ? seconds : null;
+}
+
+// Past in-person editions of a race at this distance, newest first.
+export function pastEditions(race, km, today) {
+  const editions = [];
+  for (const event of Array.isArray(race?.events) ? race.events : []) {
+    if (!EVENT_TYPES.has(String(event?.event_type)) || /virtual/i.test(String(event?.name))) continue;
+    const date = isoDate(event.start_time);
+    if (!date || date >= today) continue;
+    const eventKm = parseDistanceKm(event.distance, event.name);
+    if (eventKm === null || Math.abs(eventKm - km) / km > 0.03) continue;
+    editions.push({ id: String(event.event_id), name: String(event.name || "").slice(0, 80), date });
+  }
+  return editions.sort((a, b) => b.date.localeCompare(a.date));
+}
+
+// Result rows -> [seconds, "M" | "F" | "X", age | null], fastest first.
+// Names, bibs and home towns never leave this function.
+export function anonymousField(results) {
+  const field = [];
+  for (const row of Array.isArray(results) ? results : []) {
+    const seconds = parseResultSeconds(row?.chip_time) ?? parseResultSeconds(row?.clock_time);
+    if (!seconds) continue;
+    const gender = row.gender === "M" || row.gender === "F" ? row.gender : "X";
+    const age = Number.isInteger(row.age) && row.age > 0 && row.age < 110 ? row.age : null;
+    field.push([seconds, gender, age]);
+  }
+  return field.sort((a, b) => a[0] - b[0]);
+}
+
+async function runsignupJson(url) {
+  let response;
+  try {
+    response = await fetch(url, { headers: { accept: "application/json" }, signal: AbortSignal.timeout(10_000) });
+  } catch {
+    throw appError("Past results are not responding right now.", 504);
+  }
+  if (!response.ok) throw appError("Past results are unavailable right now.", 502);
+  try { return await response.json(); } catch { throw appError("Past results returned an unreadable answer.", 502); }
+}
+
+async function editionField(raceId, eventId) {
+  const rows = [];
+  let best = null;
+  for (let page = 1; page <= RESULTS_MAX_PAGES; page += 1) {
+    const data = await runsignupJson(`https://runsignup.com/Rest/race/${raceId}/results/get-results?format=json&event_id=${eventId}&results_per_page=${RESULTS_PAGE}&page=${page}${best ? `&individual_result_set_id=${best}` : ""}`);
+    const sets = (Array.isArray(data?.individual_results_sets) ? data.individual_results_sets : []).filter((set) => set?.public_results !== "F");
+    // An event can hold several result sets (walkers, wheelchair); take the largest.
+    const set = best ? sets.find((item) => item.individual_result_set_id === best) : sets.sort((a, b) => (b.results?.length || 0) - (a.results?.length || 0))[0];
+    if (!set?.results?.length) break;
+    best = set.individual_result_set_id;
+    rows.push(...set.results);
+    if (set.results.length < RESULTS_PAGE) break;
+  }
+  return anonymousField(rows);
+}
+
+// GET /api/races/field?race=<RunSignup race id>&km=<distance>
+// The most recent past edition's finish times, with gender and age only.
+export async function handleRaceField(request, ctx) {
+  const url = new URL(request.url);
+  const raceId = String(url.searchParams.get("race") || "");
+  const km = Number(url.searchParams.get("km"));
+  if (!/^\d{1,9}$/.test(raceId)) throw appError("Unknown race.", 400);
+  if (!Number.isFinite(km) || km < 1 || km > 200) throw appError("Unknown race distance.", 400);
+
+  const cache = globalThis.caches?.default;
+  const today = todayIso();
+  const cacheKey = new Request(`https://race-field.runlore.internal/?${new URLSearchParams({ race: raceId, km: km.toFixed(2), week: today.slice(0, 8) + (Number(today.slice(8)) > 15 ? "b" : "a") })}`);
+  const cached = cache ? await cache.match(cacheKey) : null;
+  if (cached) return cached;
+
+  const data = await runsignupJson(`https://runsignup.com/Rest/race/${raceId}?format=json&most_recent_events_only=F&race_event_days=F`);
+  let found = null;
+  // Last year's edition may have no posted results; look back a few years.
+  for (const edition of pastEditions(data?.race, km, today).slice(0, 3)) {
+    const field = await editionField(raceId, edition.id);
+    if (field.length >= 10) { found = { ...edition, field }; break; }
+  }
+  const result = json(found
+    ? { source: "RunSignup", event: found.name, date: found.date, finishers: found.field.length, field: found.field }
+    : { source: "RunSignup", field: null });
+  result.headers.set("cache-control", `public, max-age=${RESULTS_CACHE_SECONDS}`);
+  if (cache) {
+    const store = cache.put(cacheKey, result.clone());
+    if (ctx?.waitUntil) ctx.waitUntil(store); else await store;
+  }
+  return result;
+}

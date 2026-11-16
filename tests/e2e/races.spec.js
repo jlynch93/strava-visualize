@@ -5,6 +5,11 @@ const iso = (offset) => {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 };
 
+// Past results are never fetched for real; tests that need a field override this.
+test.beforeEach(async ({ page }) => {
+  await page.route("**/api/races/field?*", (route) => route.fulfill({ json: { source: "RunSignup", field: null } }));
+});
+
 async function loadDemo(page) {
   await page.goto("/");
   await page.getByRole("button", { name: "Preview demo data", exact: true }).click();
@@ -227,4 +232,53 @@ test("the cycle names the current phase and its dates even when its bar segment 
   // Nothing in the timeline spills past the panel on a phone.
   const overflow = await cycle.evaluate((panel) => { const edge = panel.getBoundingClientRect().right; return [...panel.querySelectorAll(".cycle-today b, .cycle-axis-race")].some((node) => node.getBoundingClientRect().right > edge); });
   expect(overflow).toBe(false);
+});
+
+test("a race found through search projects a finishing place by gender and age group", async ({ page }) => {
+  const requests = [];
+  await page.route("**/api/races/field?*", (route) => {
+    requests.push(new URL(route.request().url()));
+    // 200 finishers a second apart from 15:00; even rows men aged 32, odd rows women aged 47.
+    const field = Array.from({ length: 200 }, (_, i) => [900 + i * 12, i % 2 ? "F" : "M", i % 2 ? 47 : 32]);
+    return route.fulfill({ json: { source: "RunSignup", event: "5K", date: `${new Date().getFullYear() - 1}-11-29`, finishers: 200, field } });
+  });
+  await loadDemo(page);
+  await page.evaluate((date) => {
+    coachingContext.races = [
+      sanitizeRace({ id: "a", name: "Hungry Turkey Trot", date, distance: "5K", priority: "A", url: "https://runsignup.com/Race/OH/Columbus/X", sourceId: "38072" }),
+      sanitizeRace({ id: "b", name: "Typed By Hand", date, distance: "10K", priority: "B" })
+    ];
+    saveCoachingContext(); fitnessModelCache.key = ""; render();
+  }, iso(12));
+  await nav(page, "Fitness");
+  const cards = page.locator(".goal-race");
+  const place = cards.nth(0).locator(".goal-race-place");
+  await expect(place.locator("li")).toHaveCount(1);
+  await expect(place).toContainText(`in the ${new Date().getFullYear() - 1} field of 200`);
+  await expect(place.locator("li").first()).toContainText(/Overall\s*\d+(st|nd|rd|th)\s*of 200/);
+  await expect(cards.nth(1)).toContainText("Add this race with Find a race");
+  expect(requests).toHaveLength(1);
+  expect(requests[0].searchParams.get("race")).toBe("38072");
+  expect(requests[0].searchParams.get("km")).toBe("5");
+  // Only the race and distance are sent: nothing about the runner.
+  expect([...requests[0].searchParams.keys()].sort()).toEqual(["km", "race"]);
+
+  const year = new Date(iso(12)).getFullYear();
+  await page.fill("#placeProfile [name=birthYear]", String(year - 32));
+  await page.selectOption("#placeProfile [name=gender]", "M");
+  await expect(place.locator("li")).toHaveCount(3);
+  await expect(place.locator("li").nth(1)).toContainText(/Men\s*\d+(st|nd|rd|th)\s*of 100/);
+  await expect(place.locator("li").nth(2)).toContainText(/M 30–34\s*\d+(st|nd|rd|th)\s*of 100/);
+  await page.reload();
+  expect(await page.evaluate(() => coachingContext.profile.gender)).toBe("M");
+  expect(requests.length).toBeLessThanOrEqual(2);
+});
+
+test("a race with no posted results says so instead of guessing a place", async ({ page }) => {
+  await page.route("**/api/races/field?*", (route) => route.fulfill({ json: { source: "RunSignup", field: null } }));
+  await loadDemo(page);
+  await page.evaluate((date) => { coachingContext.races = [sanitizeRace({ id: "a", name: "New Race", date, distance: "5K", priority: "A", url: "https://runsignup.com/Race/OH/X/Y", sourceId: "5" })]; saveCoachingContext(); fitnessModelCache.key = ""; render(); }, iso(12));
+  await nav(page, "Fitness");
+  await expect(page.locator(".goal-race")).toContainText("No past results are posted");
+  await expect(page.locator(".goal-race-place")).toHaveCount(0);
 });

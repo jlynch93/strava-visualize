@@ -206,3 +206,22 @@ test("projected days are consecutive local dates ending on race day", () => {
   assert.equal(local(projection.days[0].date), day(1));
   assert.equal(local(projection.days.at(-1).date), race.date);
 });
+
+test("a finish time is placed overall, by gender and by five-year age group", () => {
+  const field = [[1000, "M", 31], [1100, "F", 28], [1200, "M", 33], [1300, "M", 45], [1400, "F", 32], [1500, "X", null], [1600, "M", 30]];
+  const place = fit.projectPlace(field, 1250, { gender: "M", age: 32 });
+  assert.deepEqual(place.overall, { place: 4, of: 7, percent: 57 });
+  assert.deepEqual(place.gender, { place: 3, of: 4, percent: 75 });
+  assert.equal(place.ageGroup.label, "30–34");
+  assert.equal(place.ageGroup.place, 3);
+  assert.equal(place.ageGroup.of, 3);
+  // Without a profile only the overall place is known.
+  assert.equal(fit.projectPlace(field, 1250).gender, null);
+  // Slower than everyone: last place plus one, never "8th of 7".
+  assert.deepEqual(fit.projectPlace(field, 9999).overall, { place: 8, of: 8, percent: 100 });
+  // Nobody in the age group last time.
+  assert.equal(fit.projectPlace(field, 1250, { gender: "F", age: 61 }).ageGroup.empty, true);
+  assert.equal(fit.projectPlace([], 1250), null);
+  assert.equal(fit.ageGroup(12).label, "14 & under");
+  assert.equal(fit.ageGroup(84).label, "80+");
+});

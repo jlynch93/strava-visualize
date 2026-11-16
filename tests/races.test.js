@@ -83,3 +83,58 @@ test("A RunSignup outage is reported without breaking the app", async (t) => {
   assert.equal(response.status, 502);
   assert.match((await response.json()).error, /Enter the race by hand/);
 });
+
+test("result times parse and past editions match the distance, newest first", async () => {
+  const { parseResultSeconds, pastEditions } = await racesPromise;
+  assert.equal(parseResultSeconds("18:00.5"), 1080);
+  assert.equal(parseResultSeconds("1:44:58.9"), 6298);
+  assert.equal(parseResultSeconds("DNF"), null);
+  assert.equal(parseResultSeconds(""), null);
+  const race = { events: [
+    { event_id: 1, name: "5K", event_type: "running_race", start_time: "11/30/2024 08:45", distance: "5K" },
+    { event_id: 2, name: "5K", event_type: "running_race", start_time: "11/29/2025 08:45", distance: "3.1 Miles" },
+    { event_id: 3, name: "10K", event_type: "running_race", start_time: "11/29/2025 08:45", distance: "10K" },
+    { event_id: 4, name: "Virtual Run - 5K", event_type: "running_race", start_time: "11/29/2025 08:45", distance: "5K" },
+    { event_id: 5, name: "5K", event_type: "running_race", start_time: "11/28/2026 08:45", distance: "5K" }
+  ] };
+  assert.deepEqual(pastEditions(race, 5, "2026-11-16").map((edition) => edition.id), ["2", "1"]);
+});
+
+test("a past field keeps only time, gender and age", async () => {
+  const { anonymousField } = await racesPromise;
+  const field = anonymousField([
+    { first_name: "Sam", last_name: "Runner", bib: "12", city: "Columbus", gender: "F", age: 34, chip_time: "25:10.2", clock_time: "25:30.0" },
+    { first_name: "Alex", last_name: "Racer", gender: "M", age: 41, chip_time: "", clock_time: "19:05" },
+    { first_name: "No", last_name: "Time", gender: "M", age: 20, chip_time: "DNF" },
+    { first_name: "Pat", last_name: "Other", gender: "NB", age: 0, chip_time: "30:00" }
+  ]);
+  assert.deepEqual(field, [[1145, "M", 41], [1510, "F", 34], [1800, "X", null]]);
+  assert.doesNotMatch(JSON.stringify(field), /Sam|Runner|Columbus|Alex/);
+});
+
+test("the field route validates its input and returns the latest edition with results", async () => {
+  const worker = await workerPromise;
+  const bad = await worker.fetch(new Request("https://runlore.app/api/races/field?race=abc&km=5"), {}, {});
+  assert.equal(bad.status, 400);
+  const calls = [];
+  const realFetch = globalThis.fetch;
+  const results = (count) => ({ individual_results_sets: [{ individual_result_set_id: 9, public_results: "T", results: Array.from({ length: count }, (_, i) => ({ first_name: "N", last_name: "N", gender: i % 2 ? "F" : "M", age: 30, chip_time: `20:${String(i).padStart(2, "0")}` })) }] });
+  globalThis.fetch = async (input) => {
+    const url = String(input); calls.push(url);
+    if (url.includes("/results/get-results")) return Response.json(url.includes("event_id=2") ? { individual_results_sets: [] } : results(12));
+    return Response.json({ race: { events: [
+      { event_id: 1, name: "5K", event_type: "running_race", start_time: "11/30/2024 08:45", distance: "5K" },
+      { event_id: 2, name: "5K", event_type: "running_race", start_time: "11/29/2025 08:45", distance: "5K" }
+    ] } });
+  };
+  try {
+    const response = await worker.fetch(new Request("https://runlore.app/api/races/field?race=38072&km=5"), {}, {});
+    assert.equal(response.status, 200);
+    const body = await response.json();
+    // 2025 has no results posted, so 2024 is used.
+    assert.equal(body.date, "2024-11-30");
+    assert.equal(body.finishers, 12);
+    assert.deepEqual(body.field[0], [1200, "M", 30]);
+    assert.ok(calls.every((url) => url.startsWith("https://runsignup.com/Rest/race/38072")));
+  } finally { globalThis.fetch = realFetch; }
+});

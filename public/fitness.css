@@ -344,3 +344,19 @@
 .goal-race-trend { color: var(--ink-soft); }
 .fitness-table tr.is-goal th, .fitness-table tr.is-goal td { background: color-mix(in oklch, var(--teal) 9%, transparent); }
 .fitness-table tr.is-goal th::after { content: " · your race"; color: var(--teal); font-size: .7rem; font-weight: 700; }
+
+/* ---------- Projected finishing place ---------- */
+.goal-race-place { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--rule); }
+.goal-race-place h4 { margin: 0 0 6px; font-size: .8rem; color: var(--ink-strong); }
+.goal-race-place h4 small { color: var(--ink-soft); font-weight: 500; }
+.goal-race-place ol { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 8px; margin: 0; padding: 0; list-style: none; }
+.goal-race-place li { display: grid; padding: 8px 10px; border-radius: 6px; background: var(--surface-muted); }
+.goal-race-place li span { color: var(--ink-soft); font-size: .72rem; font-weight: 650; }
+.goal-race-place li strong { color: var(--ink-strong); font-size: 1.3rem; line-height: 1.2; font-variant-numeric: tabular-nums; }
+.goal-race-place li small { color: var(--ink-soft); font-size: .72rem; }
+.goal-race-place-goal, .goal-race-place-hint { margin: 8px 0 0; color: var(--ink-soft); font-size: .8rem; }
+.place-profile { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin: 10px 0 0; font-size: .82rem; color: var(--ink-soft); }
+.place-profile-title { font-weight: 650; color: var(--ink-strong); }
+.place-profile label { display: inline-flex; align-items: center; gap: 6px; }
+.place-profile input { width: 6.5em; }
+.place-profile input, .place-profile select { min-height: 36px; padding: 4px 8px; border: 1px solid var(--rule-strong); border-radius: 6px; background: var(--surface); color: var(--ink); font: inherit; }

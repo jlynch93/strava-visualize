@@ -9,7 +9,7 @@ import {
   handleStatus
 } from "./auth.js";
 import { handleActivities, handleActivity } from "./activities.js";
-import { handleRaceSearch } from "./races.js";
+import { handleRaceField, handleRaceSearch } from "./races.js";
 import { handleWeather } from "./weather.js";
 import { handleInsights } from "./insights.js";
 import { handleGarminWebhook } from "./webhooks.js";
@@ -35,6 +35,7 @@ async function handleRequest(request, env, ctx) {
   if (activityRoute && method === "GET") return handleActivity(env, request, activityRoute[1]);
   if (pathname === "/api/weather" && method === "GET") return handleWeather(request);
   if (pathname === "/api/races/search" && method === "GET") return handleRaceSearch(request, ctx);
+  if (pathname === "/api/races/field" && method === "GET") return handleRaceField(request, ctx);
   if (pathname === "/api/insights" && method === "POST") return handleInsights(env, request);
   if (pathname === "/api/state" && method === "GET") return handleGetState(env, request);
   const stateRoute = pathname.match(/^\/api\/state\/([a-z0-9-]+)$/);

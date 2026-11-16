@@ -118,6 +118,16 @@ predictions open with a card for each upcoming A or B race at a standard
 distance: the predicted time and pace, whether it is on track for the goal (or
 the VO2 max the goal needs), and how the prediction moved over six weeks.
 
+A race added through **Find a race** also gets a **projected place**: where
+the predicted time would have finished in the race's most recent edition with
+posted results, overall and, once you give a birth year and gender, among
+your gender and five-year age group. The Worker
+(`GET /api/races/field?race=&km=`) reads RunSignup's public results for the
+latest past in-person event at that distance (looking back up to three
+editions), strips everything but finish time, gender and age, and caches the
+answer. The place is computed in the browser, so age, gender and predicted
+time never leave the app.
+
 The fitness and fatigue chart marks today and every race in view, and with an A
 race in the next six months it **projects to race day**: your usual daily load
 (the last 28 days' average) until the taper starts, 65% of it in the taper and
