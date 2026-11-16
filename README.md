@@ -211,7 +211,8 @@ on a fitted axis, and amounts are drawn as columns from zero.
   easy runs), cadence, load, and easy pace.
 
 Max heart rate is estimated from your runs. Resting heart rate defaults to 55 bpm.
-Set both under **Heart-rate profile & method**; they are saved in this browser.
+Set both in your profile (**Account → About you**, or **Edit heart rate** under
+**Heart-rate profile & method**); they sync with your account when signed in.
 Readiness and today's numbers use your full history, and the charts follow the
 review window. All of these figures are models for planning, not medical measurements.
 

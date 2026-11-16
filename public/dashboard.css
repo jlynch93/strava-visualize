@@ -294,11 +294,11 @@ body.has-history .onboarding { display: none; }
 .provider-button small { font-weight: 400; font-size: .72rem; }
 .provider-strava { border-color: var(--orange); }
 .account-section-title { margin: 6px 0 8px; font-size: .78rem; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-faint); }
-.runner-details { display: flex; flex-wrap: wrap; gap: 10px 16px; margin: 0 0 18px; }
+.runner-details { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 16px; margin: 0 0 18px; }
 .runner-details label { display: grid; gap: 4px; font-size: .82rem; font-weight: 650; color: var(--ink); }
 .runner-details input, .runner-details select { min-height: 40px; padding: 6px 10px; border: 1px solid var(--rule-strong); border-radius: 6px; background: var(--surface); color: var(--ink); font: inherit; font-weight: 400; }
-.runner-details input { width: 8em; }
-.runner-details-note { flex-basis: 100%; margin: 0; font-size: .78rem; color: var(--ink-soft); }
+.runner-details input, .runner-details select { width: 100%; box-sizing: border-box; }
+.runner-details-note { grid-column: 1 / -1; margin: 0; font-size: .78rem; color: var(--ink-soft); }
 .runner-details-note.is-error { color: var(--status-critical); }
 .connection-list { margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--rule); }
 .connection-list li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--rule); }

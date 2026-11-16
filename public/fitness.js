@@ -26,10 +26,15 @@ function adoptLegacyProfile() {
   }
 }
 
-function saveRunnerDetails({ birthYear, gender }) {
-  athleteProfile = sanitizeAthleteProfile({ ...athleteProfile, birthYear, gender });
+function saveRunnerDetails(details) {
+  const before = athleteProfile;
+  athleteProfile = sanitizeAthleteProfile({ ...athleteProfile, ...details });
   persist(ATHLETE_STORAGE_KEY, athleteProfile);
-  if (fitnessModelCache.model && document.querySelector("#racePredictions")) renderPredictions(fitnessModelCache.model);
+  if (before.maxHr !== athleteProfile.maxHr || before.restHr !== athleteProfile.restHr) {
+    // Heart rate feeds every estimate.
+    fitnessModelCache.key = "";
+    render();
+  } else if (fitnessModelCache.model && document.querySelector("#racePredictions")) renderPredictions(fitnessModelCache.model);
 }
 let fitnessModelCache = { key: "", model: null };
 
@@ -459,8 +464,9 @@ function placeProfileNote(goals) {
 
 document.addEventListener("click", (event) => {
   if (!event.target.closest?.('[data-action="open-profile"]')) return;
+  const field = event.target.closest("[data-action]").dataset.focus || "birthYear";
   openAccountDialog();
-  document.querySelector("#runnerDetails [name=birthYear]")?.focus();
+  document.querySelector(`#runnerDetails [name=${field}]`)?.focus();
 });
 
 function goalRaceCard({ race, meters, predicted, before, goalVdot, days }) {
@@ -607,12 +613,6 @@ function renderRunningMetrics(model, days) {
 }
 
 function renderProfileForm(model) {
-  const form = document.querySelector("#athleteForm");
-  if (!form || form.contains(document.activeElement)) return;
-  form.maxHr.value = athleteProfile.maxHr || "";
-  form.restHr.value = athleteProfile.restHr || "";
-  form.maxHr.placeholder = model?.profile.maxHr ? `${model.profile.maxHr} (estimated)` : "e.g. 188";
-  form.restHr.placeholder = `${DEFAULT_REST_HR} (assumed)`;
   document.querySelector("#profileSummary").textContent = model
     ? `Max HR ${model.profile.maxHr || "unknown"} (${model.profile.maxSource}) · resting HR ${model.profile.restHr} (${model.profile.restSource})`
     : "Set your heart-rate profile for more accurate estimates.";
@@ -821,23 +821,3 @@ function readinessSummaryText() {
   return `Readiness today: ${model.readiness.score}/100 (${model.readiness.label}). ${model.readiness.advice}`;
 }
 
-document.querySelector("#athleteForm")?.addEventListener("submit", (event) => {
-  event.preventDefault();
-  const form = event.currentTarget;
-  const read = (input, low, high) => {
-    if (!input.value) return null;
-    const value = Number(input.value);
-    return value >= low && value <= high ? Math.round(value) : NaN;
-  };
-  const maxHr = read(form.maxHr, 120, 225), restHr = read(form.restHr, 30, 100);
-  if (Number.isNaN(maxHr) || Number.isNaN(restHr) || (maxHr && restHr && maxHr - restHr < 40)) {
-    setStatus("Enter a max heart rate between 120 and 225 and a resting heart rate between 30 and 100.", true, "athleteForm");
-    return;
-  }
-  athleteProfile = { ...athleteProfile, maxHr, restHr };
-  persist(ATHLETE_STORAGE_KEY, athleteProfile);
-  fitnessModelCache.key = "";
-  document.activeElement?.blur?.();
-  render();
-  setStatus("Heart-rate profile saved. Estimates updated.", false, "athleteForm");
-});

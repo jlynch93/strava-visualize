@@ -316,11 +316,7 @@
           <details class="secondary-disclosure fitness-profile">
             <summary>Heart-rate profile &amp; method<span id="profileSummary"></span></summary>
             <div class="fitness-profile-body">
-              <form id="athleteForm" class="athlete-form" data-feedback-scope>
-                <label for="maxHr">Max heart rate (bpm)</label><input id="maxHr" name="maxHr" type="number" min="120" max="225" inputmode="numeric">
-                <label for="restHr">Resting heart rate (bpm)</label><input id="restHr" name="restHr" type="number" min="30" max="100" inputmode="numeric">
-                <button type="submit" class="context-save">Save profile</button>
-              </form>
+              <p class="profile-edit">Max and resting heart rate are part of your profile. <button type="button" class="link-action" data-action="open-profile" data-focus="maxHr">Edit heart rate</button></p>
               <div class="method-notes">
                 <h3>How these are calculated</h3>
                 <p><strong>VO2 max</strong> compares the oxygen cost of each run's pace (Daniels' equation, with a hill correction) with the share of your heart-rate reserve it took. The chart shows the upper quartile of the last six weeks, since heat, hills and fatigue only drag single runs down. <strong>VDOT</strong> is the same scale computed from your best performance alone.</p>

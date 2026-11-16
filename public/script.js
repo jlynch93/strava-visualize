@@ -2851,14 +2851,17 @@ function providerButton(provider) {
 
 // Birth year and gender, kept with the account (or this device when signed out).
 function runnerDetailsMarkup(signedIn) {
-  const { birthYear, gender } = athleteProfile;
+  const { birthYear, gender, maxHr, restHr } = athleteProfile;
   const option = (value, label) => `<option value="${value}"${(gender || "") === value ? " selected" : ""}>${label}</option>`;
+  const estimatedMax = fitnessModelCache.model?.profile.maxSource !== "saved" && fitnessModelCache.model?.profile.maxHr;
   return `
     <h3 class="account-section-title">About you</h3>
     <form id="runnerDetails" class="runner-details" autocomplete="off" novalidate>
       <label>Birth year <input name="birthYear" type="text" inputmode="numeric" maxlength="4" placeholder="e.g. 1990" value="${birthYear || ""}"></label>
       <label>Gender <select name="gender">${option("", "Not set")}${option("F", "Woman")}${option("M", "Man")}${option("X", "Nonbinary")}</select></label>
-      <p class="runner-details-note" role="status">${signedIn ? "Saved to your account. Used for race places by gender and age group, and never shared." : "Saved on this device. Sign in to keep it with your account."}</p>
+      <label>Max heart rate <input name="maxHr" type="text" inputmode="numeric" maxlength="3" placeholder="${estimatedMax ? `${estimatedMax} (estimated)` : "e.g. 188"}" value="${maxHr || ""}"></label>
+      <label>Resting heart rate <input name="restHr" type="text" inputmode="numeric" maxlength="3" placeholder="${DEFAULT_REST_HR} (assumed)" value="${restHr || ""}"></label>
+      <p class="runner-details-note" role="status">${signedIn ? "Saved to your account and never shared." : "Saved on this device. Sign in to keep it with your account."} Heart rate sharpens VO2 max and load; birth year and gender give race places by age group.</p>
     </form>`;
 }
 
@@ -3436,14 +3439,17 @@ els.accountDialog.addEventListener("change", (event) => {
   const form = event.target.closest("#runnerDetails");
   if (!form) return;
   const note = form.querySelector(".runner-details-note");
-  const year = form.birthYear.value.trim();
+  const fail = (message) => { note.textContent = message; note.classList.add("is-error"); };
+  const whole = (input, low, high) => {
+    const text = input.value.trim();
+    if (!text) return null;
+    return /^\d+$/.test(text) && Number(text) >= low && Number(text) <= high ? Number(text) : NaN;
+  };
   const latest = new Date().getFullYear() - 5;
-  if (year && !(/^\d{4}$/.test(year) && Number(year) >= 1900 && Number(year) <= latest)) {
-    note.textContent = `Enter a four-digit birth year between 1900 and ${latest}.`;
-    note.classList.add("is-error");
-    return;
-  }
-  saveRunnerDetails({ birthYear: year || null, gender: form.gender.value || null });
+  const birthYear = whole(form.birthYear, 1900, latest), maxHr = whole(form.maxHr, 120, 225), restHr = whole(form.restHr, 30, 100);
+  if (Number.isNaN(birthYear)) return fail(`Enter a four-digit birth year between 1900 and ${latest}.`);
+  if (Number.isNaN(maxHr) || Number.isNaN(restHr) || (maxHr && restHr && maxHr - restHr < 40)) return fail("Enter a max heart rate between 120 and 225 and a resting heart rate between 30 and 100.");
+  saveRunnerDetails({ birthYear, gender: form.gender.value || null, maxHr, restHr });
   note.classList.remove("is-error");
   note.textContent = state.account.signedIn ? "Saved to your account." : "Saved on this device.";
 });

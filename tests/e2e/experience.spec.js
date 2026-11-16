@@ -301,12 +301,21 @@ test("fitness view shows readiness, VO2 max, load and accepts a heart-rate profi
 
   const before = await page.locator("#fitnessKpis .kpi-tile").first().locator("strong").textContent();
   await page.locator(".fitness-profile > summary").click();
-  await page.locator("#restHr").fill("45");
-  await page.locator("#athleteForm button[type=submit]").click();
+  // Heart rate is edited in the profile popup and updates the estimates.
+  await page.getByRole("button", { name: "Edit heart rate" }).click();
+  const details = page.locator("#runnerDetails");
+  await expect(details.locator("[name=maxHr]")).toBeFocused();
+  await details.locator("[name=restHr]").fill("20");
+  await details.locator("[name=restHr]").blur();
+  await expect(details.locator(".runner-details-note")).toContainText("resting heart rate between 30 and 100");
+  await details.locator("[name=restHr]").fill("45");
+  await details.locator("[name=restHr]").blur();
+  await expect(details.locator(".runner-details-note")).toHaveText("Saved on this device.");
+  await page.locator("#accountDialogClose").click();
   await expect(page.locator("#profileSummary")).toContainText("resting HR 45 (saved)");
   await expect(page.locator("#fitnessKpis .kpi-tile").first().locator("strong")).not.toHaveText(before);
   await page.reload();
-  await expect(page.locator("#restHr")).toHaveValue("45");
+  expect(await page.evaluate(() => athleteProfile.restHr)).toBe(45);
 
   const report = await new AxeBuilder({ page }).include("#fitness").withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
   expect(report.violations).toEqual([]);
