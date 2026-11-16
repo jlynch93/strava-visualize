@@ -344,7 +344,18 @@
           </form></details>
           <details id="racesDisclosure" class="context-disclosure"><summary>Races<span>Your season sets the training cycle</span></summary><div class="context-card races-card">
             <ul id="raceList" class="race-list" aria-label="Your races"></ul>
+            <div class="race-search" role="search">
+              <label for="raceSearch">Find a race</label>
+              <div class="race-search-row">
+                <input id="raceSearch" type="search" placeholder="Race name, e.g. Turkey Trot" autocomplete="off" aria-controls="raceResults" aria-describedby="raceSearchNote">
+                <input id="raceSearchState" type="text" maxlength="2" placeholder="State" aria-label="State, two letters (optional)" autocomplete="address-level1">
+              </div>
+              <p id="raceSearchNote" class="race-search-note">Searches upcoming races on RunSignup. Only what you type here is sent.</p>
+              <p id="raceSearchStatus" class="race-search-status" role="status"></p>
+              <ul id="raceResults" class="race-results" aria-label="Races found"></ul>
+            </div>
             <form id="raceForm" class="race-form">
+              <p class="race-form-divider">Or enter it yourself</p>
               <label for="raceName">Race name</label><input id="raceName" type="text" maxlength="48" placeholder="e.g. City Marathon">
               <div class="goal-race-fields"><div><label for="raceDistance">Distance</label><select id="raceDistance"><option value="5K">5K</option><option value="10K">10K</option><option value="Half marathon" selected>Half marathon</option><option value="Marathon">Marathon</option><option value="Other">Other</option></select></div><div><label for="raceDate">Date</label><input id="raceDate" type="date" required></div></div>
               <label for="racePriority">Priority</label><select id="racePriority"><option value="A">A · goal race (shapes the whole cycle)</option><option value="B">B · tune-up (short taper and recovery)</option><option value="C">C · training race (run through it)</option></select>

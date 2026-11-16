@@ -90,6 +90,17 @@ run through. The next A race sets the phase:
 A B race inside its own short taper reads as a tune-up, and recovery takes
 precedence over everything.
 
+**Find a race** searches upcoming races on RunSignup: name and an optional
+two-letter state. The Worker (`GET /api/races/search?q=&state=`, `src/races.js`)
+calls RunSignup's public race API (no key) for the next year and keeps only
+in-person running and walking events of at least 1 km. Virtual races,
+memberships and kids' dashes are dropped. It maps distances such as
+`3.1 Miles` or `21.097K` onto 5K/10K/half/marathon, caches answers for six
+hours, and passes on only name, date, place, link and events. Choosing a
+distance fills the form, and the race keeps its RunSignup link. Locally,
+start the server with `NODE_USE_ENV_PROXY=1` if outbound requests go through
+a proxy.
+
 Readiness weighs fatigue against what the phase calls for. In a build, some
 fatigue is expected and costs little. In a taper or race week, fatigue counts
 for more, because the aim is to arrive fresh. Early in recovery, readiness never

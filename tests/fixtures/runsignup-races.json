@@ -1,0 +1,1844 @@
+{
+ "races": [
+  {
+   "race": {
+    "race_id": 153468,
+    "name": "Johnstown, Alexandria & Granville Turkey Trot",
+    "next_date": "11/21/2026",
+    "next_end_date": "11/21/2026",
+    "is_draft_race": "F",
+    "is_private_race": "F",
+    "url": "https://runsignup.com/Race/OH/Johnstown/JohnstownAlexandriaGranvilleTurkeyTrot",
+    "address": {
+     "city": "Johnstown",
+     "state": "OH",
+     "country_code": "US"
+    },
+    "events": [
+     {
+      "event_id": 1086735,
+      "name": "5K",
+      "start_time": "11/21/2026 09:15",
+      "end_time": null,
+      "distance": "5K",
+      "event_type": "running_race"
+     },
+     {
+      "event_id": 1086736,
+      "name": "10K",
+      "start_time": "11/21/2026 09:15",
+      "end_time": null,
+      "distance": "10K",
+      "event_type": "running_race"
+     },
+     {
+      "event_id": 1086737,
+      "name": "Half Marathon",
+      "start_time": "11/21/2026 09:15",
+      "end_time": null,
+      "distance": "13.1 Miles",
+      "event_type": "running_race"
+     },
+     {
+      "event_id": 1086738,
+      "name": "Kids Fun Run with Swag",
+      "start_time": "11/21/2026 09:00",
+      "end_time": null,
+      "distance": "100m",
+      "event_type": "running_race"
+     },
+     {
+      "event_id": 1086739,
+      "name": "Kids Fun Run NO Swag",
+      "start_time": "11/21/2026 09:00",
+      "end_time": null,
+      "distance": "100m",
+      "event_type": "running_race"
+     },
+     {
+      "event_id": 1086740,
+      "name": "Virtual 5K",
+      "start_time": "11/21/2026 09:15",
+      "end_time": null,
+      "distance": "5K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1086741,
+      "name": "Virtual 10K",
+      "start_time": "11/21/2026 09:15",
+      "end_time": null,
+      "distance": "10K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1086742,
+      "name": "Virtual Half Marathon",
+      "start_time": "11/21/2026 09:15",
+      "end_time": null,
+      "distance": "13.1 Miles",
+      "event_type": "virtual_race"
+     }
+    ]
+   }
+  },
+  {
+   "race": {
+    "race_id": 194444,
+    "name": "NHS Alumni Association Turkey Trot 5K",
+    "next_date": "11/21/2026",
+    "next_end_date": "11/21/2026",
+    "is_draft_race": "F",
+    "is_private_race": "F",
+    "url": "https://runsignup.com/Race/OH/Napoleon/NHSAlumniAssoicationTurkeyTrot5K",
+    "address": {
+     "city": "Napoleon",
+     "state": "OH",
+     "country_code": "US"
+    },
+    "events": [
+     {
+      "event_id": 1177497,
+      "name": "NHS Alumni Association Turkey Trot 5K",
+      "start_time": "11/21/2026 09:30",
+      "end_time": null,
+      "distance": "5K",
+      "event_type": "running_race"
+     }
+    ]
+   }
+  },
+  {
+   "race": {
+    "race_id": 218446,
+    "name": "2026 Hometown Turkey Trot Virtual 5K - Cleveland",
+    "next_date": "11/21/2026",
+    "next_end_date": "11/29/2026",
+    "is_draft_race": "F",
+    "is_private_race": "F",
+    "url": "https://runsignup.com/Race/OH/Cleveland/HometownTurkeyTrotVirtual5KCleveland",
+    "address": {
+     "city": "Cleveland",
+     "state": "OH",
+     "country_code": "US"
+    },
+    "events": [
+     {
+      "event_id": 1238616,
+      "name": "5K",
+      "start_time": "11/21/2026 06:00",
+      "end_time": "11/29/2026 21:00",
+      "distance": "5K",
+      "event_type": "virtual_race"
+     }
+    ]
+   }
+  },
+  {
+   "race": {
+    "race_id": 218460,
+    "name": "2026 Hometown Turkey Trot Virtual 5K - Cincinnati",
+    "next_date": "11/21/2026",
+    "next_end_date": "11/29/2026",
+    "is_draft_race": "F",
+    "is_private_race": "F",
+    "url": "https://runsignup.com/Race/OH/Cincinnati/HometownTurkeyTrotVirtual5KCincinnati",
+    "address": {
+     "city": "Cincinnati",
+     "state": "OH",
+     "country_code": "US"
+    },
+    "events": [
+     {
+      "event_id": 1238630,
+      "name": "5K",
+      "start_time": "11/21/2026 06:00",
+      "end_time": "11/29/2026 21:00",
+      "distance": "5K",
+      "event_type": "virtual_race"
+     }
+    ]
+   }
+  },
+  {
+   "race": {
+    "race_id": 218487,
+    "name": "2026 Hometown Turkey Trot Virtual 5K - Toledo",
+    "next_date": "11/21/2026",
+    "next_end_date": "11/29/2026",
+    "is_draft_race": "F",
+    "is_private_race": "F",
+    "url": "https://runsignup.com/Race/OH/Toledo/HometownTurkeyTrotVirtual5KToledo",
+    "address": {
+     "city": "Toledo",
+     "state": "OH",
+     "country_code": "US"
+    },
+    "events": [
+     {
+      "event_id": 1238681,
+      "name": "5K",
+      "start_time": "11/21/2026 06:00",
+      "end_time": "11/29/2026 21:00",
+      "distance": "5K",
+      "event_type": "virtual_race"
+     }
+    ]
+   }
+  },
+  {
+   "race": {
+    "race_id": 218541,
+    "name": "2026 Hometown Turkey Trot Virtual 5K - Akron",
+    "next_date": "11/21/2026",
+    "next_end_date": "11/29/2026",
+    "is_draft_race": "F",
+    "is_private_race": "F",
+    "url": "https://runsignup.com/Race/OH/Akron/HometownTurkeyTrotVirtual5KAkron",
+    "address": {
+     "city": "Akron",
+     "state": "OH",
+     "country_code": "US"
+    },
+    "events": [
+     {
+      "event_id": 1238758,
+      "name": "5K",
+      "start_time": "11/21/2026 06:00",
+      "end_time": "11/29/2026 21:00",
+      "distance": "5K",
+      "event_type": "virtual_race"
+     }
+    ]
+   }
+  },
+  {
+   "race": {
+    "race_id": 218587,
+    "name": "2026 Hometown Turkey Trot Virtual 5K - Springfield",
+    "next_date": "11/21/2026",
+    "next_end_date": "11/29/2026",
+    "is_draft_race": "F",
+    "is_private_race": "F",
+    "url": "https://runsignup.com/Race/OH/Springfield/HometownTurkeyTrotVirtual5KSpringfieldMA",
+    "address": {
+     "city": "Springfield",
+     "state": "OH",
+     "country_code": "US"
+    },
+    "events": [
+     {
+      "event_id": 1238897,
+      "name": "5K",
+      "start_time": "11/21/2026 06:00",
+      "end_time": "11/29/2026 21:00",
+      "distance": "5K",
+      "event_type": "virtual_race"
+     }
+    ]
+   }
+  },
+  {
+   "race": {
+    "race_id": 218630,
+    "name": "2026 Hometown Turkey Trot Virtual 5K - Dayton",
+    "next_date": "11/21/2026",
+    "next_end_date": "11/29/2026",
+    "is_draft_race": "F",
+    "is_private_race": "F",
+    "url": "https://runsignup.com/Race/OH/Dayton/HometownTurkeyTrotVirtual5KDayton",
+    "address": {
+     "city": "Dayton",
+     "state": "OH",
+     "country_code": "US"
+    },
+    "events": [
+     {
+      "event_id": 1239017,
+      "name": "5K",
+      "start_time": "11/21/2026 06:00",
+      "end_time": "11/29/2026 21:00",
+      "distance": "5K",
+      "event_type": "virtual_race"
+     }
+    ]
+   }
+  },
+  {
+   "race": {
+    "race_id": 218991,
+    "name": "2026 Hometown Turkey Trot Virtual 5K - Marietta",
+    "next_date": "11/21/2026",
+    "next_end_date": "11/29/2026",
+    "is_draft_race": "F",
+    "is_private_race": "F",
+    "url": "https://runsignup.com/Race/OH/Marietta/HometownTurkeyTrotVirtual5KMariettaOH",
+    "address": {
+     "city": "Marietta",
+     "state": "OH",
+     "country_code": "US"
+    },
+    "events": [
+     {
+      "event_id": 1240237,
+      "name": "5K",
+      "start_time": "11/21/2026 06:00",
+      "end_time": "11/29/2026 21:00",
+      "distance": "5K",
+      "event_type": "virtual_race"
+     }
+    ]
+   }
+  },
+  {
+   "race": {
+    "race_id": 5425,
+    "name": "Toledo Roadrunner Turkey Trot Prediction Run",
+    "next_date": "11/22/2026",
+    "next_end_date": "11/22/2026",
+    "is_draft_race": "F",
+    "is_private_race": "F",
+    "url": "https://runsignup.com/Race/OH/Toledo/ToledoRoadrunnerTurkeyTrotPredictionRun",
+    "address": {
+     "city": "Toledo",
+     "state": "OH",
+     "country_code": "US"
+    },
+    "events": [
+     {
+      "event_id": 1223821,
+      "name": "5K Prediction Run",
+      "start_time": "11/22/2026 10:00",
+      "end_time": null,
+      "distance": "3.10686 Miles",
+      "event_type": "running_race"
+     }
+    ]
+   }
+  },
+  {
+   "race": {
+    "race_id": 204716,
+    "name": "Free Range Turkey Trot: Virtual 5K - 10K - 13.1 - 26.2",
+    "next_date": "11/22/2026",
+    "next_end_date": "11/29/2026",
+    "is_draft_race": "F",
+    "is_private_race": "F",
+    "url": "https://runsignup.com/Race/OH/Columbus/FreeRangeTurkeyTrotVirtual5K10K",
+    "address": {
+     "city": "Columbus",
+     "state": "OH",
+     "country_code": "US"
+    },
+    "events": [
+     {
+      "event_id": 1143716,
+      "name": "5K",
+      "start_time": "11/22/2026 08:00",
+      "end_time": "11/29/2026 08:00",
+      "distance": "3.1 Miles",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1143717,
+      "name": "10K",
+      "start_time": "11/22/2026 08:00",
+      "end_time": "11/29/2026 08:00",
+      "distance": "6.2 Miles",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1143718,
+      "name": "Half Marathon",
+      "start_time": "11/22/2026 08:00",
+      "end_time": "11/29/2026 08:00",
+      "distance": "13.1 Miles",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1143719,
+      "name": "Full Marathon",
+      "start_time": "11/22/2026 08:00",
+      "end_time": "11/29/2026 08:00",
+      "distance": "26.2 Miles",
+      "event_type": "virtual_race"
+     }
+    ]
+   }
+  },
+  {
+   "race": {
+    "race_id": 2244,
+    "name": "Penton Memorial 10K  Cross Country Turkey Trot",
+    "next_date": "11/26/2026",
+    "next_end_date": "11/26/2026",
+    "is_draft_race": "F",
+    "is_private_race": "F",
+    "url": "https://runsignup.com/Race/OH/Elyria/PentonMemorialCrossCountryTurkeyTrot",
+    "address": {
+     "city": "Elyria",
+     "state": "OH",
+     "country_code": "US"
+    },
+    "events": [
+     {
+      "event_id": 1216945,
+      "name": "10K XC Run",
+      "start_time": "11/26/2026 08:30",
+      "end_time": null,
+      "distance": "10K",
+      "event_type": "running_race"
+     },
+     {
+      "event_id": 1216946,
+      "name": "2 Mile Fun Run",
+      "start_time": "11/26/2026 08:35",
+      "end_time": null,
+      "distance": "2 Miles",
+      "event_type": "running_race"
+     }
+    ]
+   }
+  },
+  {
+   "race": {
+    "race_id": 5317,
+    "name": "29th Annual Turkey Trot",
+    "next_date": "11/26/2026",
+    "next_end_date": "11/27/2026",
+    "is_draft_race": "F",
+    "is_private_race": "F",
+    "url": "https://runsignup.com/Race/OH/Defiance/16thAnnualTurkeyTrot",
+    "address": {
+     "city": "Defiance",
+     "state": "OH",
+     "country_code": "US"
+    },
+    "events": [
+     {
+      "event_id": 1190097,
+      "name": "29th Annual Turkey Trot - 4 Mile Run",
+      "start_time": "11/26/2026 08:30",
+      "end_time": "11/26/2026 10:00",
+      "distance": "4 Miles",
+      "event_type": "running_only"
+     },
+     {
+      "event_id": 1190098,
+      "name": "29th Annual Turkey Trot -  Fun Walk",
+      "start_time": "11/26/2026 08:30",
+      "end_time": "11/26/2026 10:00",
+      "distance": null,
+      "event_type": "walking_only"
+     },
+     {
+      "event_id": 1190099,
+      "name": "VIRTUAL OPTION - 29th Annual Turkey Trot",
+      "start_time": "11/26/2026 12:01",
+      "end_time": "11/27/2026 11:59",
+      "distance": "4 Miles",
+      "event_type": "virtual_race"
+     }
+    ]
+   }
+  },
+  {
+   "race": {
+    "race_id": 6897,
+    "name": "The Original Columbus Turkey Trot",
+    "next_date": "11/26/2026",
+    "next_end_date": "11/26/2026",
+    "is_draft_race": "F",
+    "is_private_race": "F",
+    "url": "https://runsignup.com/Race/OH/UpperArlington/ColumbusTurkeyTrot",
+    "address": {
+     "city": "Upper Arlington",
+     "state": "OH",
+     "country_code": "US"
+    },
+    "events": [
+     {
+      "event_id": 1162776,
+      "name": "Turkey Trot 4-Miler",
+      "start_time": "11/26/2026 09:00",
+      "end_time": "11/26/2026 11:30",
+      "distance": "4 Miles",
+      "event_type": "running_race"
+     },
+     {
+      "event_id": 1162777,
+      "name": "2.5 Miler (Walk N' Talk)",
+      "start_time": "11/26/2026 09:00",
+      "end_time": "11/26/2026 11:30",
+      "distance": "2.5 Miles",
+      "event_type": "running_race"
+     },
+     {
+      "event_id": 1162778,
+      "name": "Tot Trot",
+      "start_time": "11/26/2026 08:30",
+      "end_time": "11/26/2026 08:45",
+      "distance": "100 Yards",
+      "event_type": "running_race"
+     },
+     {
+      "event_id": 1162779,
+      "name": "The Virtual Turkey Trot",
+      "start_time": "11/26/2026 09:00",
+      "end_time": "11/26/2026 11:30",
+      "distance": "4 Miles",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1162780,
+      "name": "The Virtual Tot Trot",
+      "start_time": "11/26/2026 08:30",
+      "end_time": "11/26/2026 11:30",
+      "distance": "100 Yards",
+      "event_type": "virtual_race"
+     }
+    ]
+   }
+  },
+  {
+   "race": {
+    "race_id": 12371,
+    "name": "Officer Larry R. Cox Turkey Trot",
+    "next_date": "11/26/2026",
+    "next_end_date": "11/26/2026",
+    "is_draft_race": "F",
+    "is_private_race": "F",
+    "url": "https://runsignup.com/Race/OH/CHILLICOTHE/LarryCoxTurkeyTrot",
+    "address": {
+     "city": "CHILLICOTHE",
+     "state": "OH",
+     "country_code": "US"
+    },
+    "events": [
+     {
+      "event_id": 1147322,
+      "name": "5k",
+      "start_time": "11/26/2026 09:00",
+      "end_time": "11/26/2026 11:59",
+      "distance": "5K",
+      "event_type": "running_race"
+     }
+    ]
+   }
+  },
+  {
+   "race": {
+    "race_id": 22404,
+    "name": "Tuscarawas County YMCA Turkey Trot",
+    "next_date": "11/26/2026",
+    "next_end_date": "11/26/2026",
+    "is_draft_race": "F",
+    "is_private_race": "F",
+    "url": "https://runsignup.com/Race/OH/Dover/TuscarawasCountyYMCATurkeyTrot",
+    "address": {
+     "city": "Dover",
+     "state": "OH",
+     "country_code": "US"
+    },
+    "events": [
+     {
+      "event_id": 1091210,
+      "name": "5K Run/Walk",
+      "start_time": "11/26/2026 09:00",
+      "end_time": null,
+      "distance": "5K",
+      "event_type": "running_race"
+     }
+    ]
+   }
+  },
+  {
+   "race": {
+    "race_id": 30753,
+    "name": "Perry Rotary Turkey Trot",
+    "next_date": "11/26/2026",
+    "next_end_date": "11/26/2026",
+    "is_draft_race": "F",
+    "is_private_race": "F",
+    "url": "https://runsignup.com/Race/OH/Canton/PerryRotaryTurkeyTrot",
+    "address": {
+     "city": "Canton",
+     "state": "OH",
+     "country_code": "US"
+    },
+    "events": [
+     {
+      "event_id": 1089342,
+      "name": "5K Run/Walk",
+      "start_time": "11/26/2026 08:40",
+      "end_time": null,
+      "distance": "5K",
+      "event_type": "running_race"
+     },
+     {
+      "event_id": 1089343,
+      "name": "Little Gobbler Run - 1/4 Mile",
+      "start_time": "11/26/2026 08:00",
+      "end_time": null,
+      "distance": "440 Yards",
+      "event_type": "running_race"
+     },
+     {
+      "event_id": 1089344,
+      "name": "Friends of Turkey Trot (T-Shirt Only)",
+      "start_time": "11/26/2026 08:00",
+      "end_time": null,
+      "distance": null,
+      "event_type": "other"
+     }
+    ]
+   }
+  },
+  {
+   "race": {
+    "race_id": 39536,
+    "name": "St. Benedict School Eleventh Annual Turkey Trot 5K Run",
+    "next_date": "11/26/2026",
+    "next_end_date": "11/26/2026",
+    "is_draft_race": "F",
+    "is_private_race": "F",
+    "url": "https://runsignup.com/Race/OH/Cambridge/StBenedictSchoolFirstAnnualTurkeyTrot5KRun",
+    "address": {
+     "city": "Cambridge",
+     "state": "OH",
+     "country_code": "US"
+    },
+    "events": [
+     {
+      "event_id": 1220654,
+      "name": "Timed - 5K Race",
+      "start_time": "11/26/2026 09:00",
+      "end_time": null,
+      "distance": "3.1 Miles",
+      "event_type": "running_race"
+     },
+     {
+      "event_id": 1220655,
+      "name": "Non-Time 5K Fun Run/Walk",
+      "start_time": "11/26/2026 09:00",
+      "end_time": null,
+      "distance": "3.1 Miles",
+      "event_type": "running_race"
+     }
+    ]
+   }
+  },
+  {
+   "race": {
+    "race_id": 39828,
+    "name": "18th Annual Athens Turkey Trot on November 26th, 2026",
+    "next_date": "11/26/2026",
+    "next_end_date": "11/26/2026",
+    "is_draft_race": "F",
+    "is_private_race": "F",
+    "url": "https://runsignup.com/Race/OH/Athens/athensturkeytrot",
+    "address": {
+     "city": "Athens",
+     "state": "OH",
+     "country_code": "US"
+    },
+    "events": [
+     {
+      "event_id": 1183793,
+      "name": "18th Annual Athens Turkey Trot",
+      "start_time": "11/26/2026 08:30",
+      "end_time": null,
+      "distance": "5K",
+      "event_type": "running_race"
+     }
+    ]
+   }
+  },
+  {
+   "race": {
+    "race_id": 41187,
+    "name": "17th Annual Harmony for Ohio Foundation Turkey Trot 5k",
+    "next_date": "11/26/2026",
+    "next_end_date": "11/26/2026",
+    "is_draft_race": "F",
+    "is_private_race": "F",
+    "url": "https://runsignup.com/Race/OH/Minster/8thAnnualHarmonyforOhioFoundationTurkeyTrot5k",
+    "address": {
+     "city": "Minster",
+     "state": "OH",
+     "country_code": "US"
+    },
+    "events": [
+     {
+      "event_id": 1217384,
+      "name": "17th Annual Harmony for Ohio Foundation Turkey Trot 5k",
+      "start_time": "11/26/2026 09:00",
+      "end_time": null,
+      "distance": "5K",
+      "event_type": "running_race"
+     }
+    ]
+   }
+  },
+  {
+   "race": {
+    "race_id": 54206,
+    "name": "Tipp Turkey Trot",
+    "next_date": "11/26/2026",
+    "next_end_date": "11/26/2026",
+    "is_draft_race": "F",
+    "is_private_race": "F",
+    "url": "https://runsignup.com/Race/OH/TippCity/TippTurkeyTrot",
+    "address": {
+     "city": "Tipp City",
+     "state": "OH",
+     "country_code": "US"
+    },
+    "events": [
+     {
+      "event_id": 1086680,
+      "name": "5k Run",
+      "start_time": "11/26/2026 08:00",
+      "end_time": null,
+      "distance": "3.1 Miles",
+      "event_type": "running_race"
+     },
+     {
+      "event_id": 1086681,
+      "name": "10k Run",
+      "start_time": "11/26/2026 08:00",
+      "end_time": null,
+      "distance": "6.2 Miles",
+      "event_type": "running_race"
+     }
+    ]
+   }
+  },
+  {
+   "race": {
+    "race_id": 86740,
+    "name": "Powell Turkey Trot 4 Miler 2026",
+    "next_date": "11/26/2026",
+    "next_end_date": "11/26/2026",
+    "is_draft_race": "F",
+    "is_private_race": "F",
+    "url": "https://runsignup.com/Race/OH/Powell/PowellTurkeyTrot",
+    "address": {
+     "city": "Powell",
+     "state": "OH",
+     "country_code": "US"
+    },
+    "events": [
+     {
+      "event_id": 1180663,
+      "name": "Powell Turkey Trot 4 Miler",
+      "start_time": "11/26/2026 09:00",
+      "end_time": "11/26/2026 11:00",
+      "distance": "4 Miles",
+      "event_type": "running_race"
+     },
+     {
+      "event_id": 1180664,
+      "name": "Wobble 'till You Gobble Fun Run Ages 3-6",
+      "start_time": "11/26/2026 08:30",
+      "end_time": "11/26/2026 08:30",
+      "distance": "0.25 Miles",
+      "event_type": "running_race"
+     },
+     {
+      "event_id": 1180665,
+      "name": "Wobble 'till You Gobble Fun Run Ages 7-10",
+      "start_time": "11/26/2026 08:30",
+      "end_time": "11/26/2026 08:30",
+      "distance": "0.25 Miles",
+      "event_type": "running_race"
+     }
+    ]
+   }
+  },
+  {
+   "race": {
+    "race_id": 90878,
+    "name": "Meyer Brothers & Sons Hamilton Turkey Trot",
+    "next_date": "11/26/2026",
+    "next_end_date": "11/26/2026",
+    "is_draft_race": "F",
+    "is_private_race": "F",
+    "url": "https://runsignup.com/Race/OH/Hamilton/HamiltonThanksgivingDay5k",
+    "address": {
+     "city": "Hamilton",
+     "state": "OH",
+     "country_code": "US"
+    },
+    "events": [
+     {
+      "event_id": 1152419,
+      "name": "5K",
+      "start_time": "11/26/2026 09:00",
+      "end_time": "11/26/2026 11:00",
+      "distance": "5K",
+      "event_type": "running_race"
+     },
+     {
+      "event_id": 1152420,
+      "name": "10K",
+      "start_time": "11/26/2026 08:40",
+      "end_time": "11/26/2026 11:00",
+      "distance": "6.2 Miles",
+      "event_type": "running_race"
+     },
+     {
+      "event_id": 1152421,
+      "name": "Kids Fun Run (10 and under)",
+      "start_time": "11/26/2026 08:20",
+      "end_time": "11/26/2026 08:35",
+      "distance": null,
+      "event_type": "running_race"
+     },
+     {
+      "event_id": 1152422,
+      "name": "Volunteer",
+      "start_time": "11/26/2026 06:00",
+      "end_time": "11/26/2026 13:00",
+      "distance": null,
+      "event_type": "nonprofit_event"
+     }
+    ]
+   }
+  },
+  {
+   "race": {
+    "race_id": 96504,
+    "name": "Delaware Turkey Trot",
+    "next_date": "11/26/2026",
+    "next_end_date": "11/26/2026",
+    "is_draft_race": "F",
+    "is_private_race": "F",
+    "url": "https://runsignup.com/Race/OH/Delaware/DelawareTurkeyTrot",
+    "address": {
+     "city": "Delaware",
+     "state": "OH",
+     "country_code": "US"
+    },
+    "events": [
+     {
+      "event_id": 1183337,
+      "name": "5k Run/Walk",
+      "start_time": "11/26/2026 08:30",
+      "end_time": null,
+      "distance": "3.1 Miles",
+      "event_type": "running_race"
+     },
+     {
+      "event_id": 1183338,
+      "name": "1.5 Mile Run/Walk",
+      "start_time": "11/26/2026 08:40",
+      "end_time": null,
+      "distance": "1.5 Miles",
+      "event_type": "running_race"
+     },
+     {
+      "event_id": 1183339,
+      "name": "Little Gobbler Kid's Fun Run",
+      "start_time": "11/26/2026 08:15",
+      "end_time": null,
+      "distance": "0.5 Miles",
+      "event_type": "running_race"
+     },
+     {
+      "event_id": 1183340,
+      "name": "Virtual",
+      "start_time": "11/26/2026 00:00",
+      "end_time": "11/26/2026 23:59",
+      "distance": "3.1 Miles",
+      "event_type": "virtual_race"
+     }
+    ]
+   }
+  },
+  {
+   "race": {
+    "race_id": 98777,
+    "name": "2026 Chagrin Falls Booster Club 5K Turkey Trot",
+    "next_date": "11/26/2026",
+    "next_end_date": "11/26/2026",
+    "is_draft_race": "F",
+    "is_private_race": "F",
+    "url": "https://runsignup.com/Race/OH/ChagrinFalls/ChagrinBoostersTurkeyTrot5K",
+    "address": {
+     "city": "Chagrin Falls",
+     "state": "OH",
+     "country_code": "US"
+    },
+    "events": [
+     {
+      "event_id": 1198562,
+      "name": "2026 Chagrin Falls Booster Club 5K Turkey Trot",
+      "start_time": "11/26/2026 09:00",
+      "end_time": "11/26/2026 11:00",
+      "distance": "3.1 Miles",
+      "event_type": "running_race"
+     }
+    ]
+   }
+  },
+  {
+   "race": {
+    "race_id": 159933,
+    "name": "Fifty States Half Marathon Club General Membership",
+    "next_date": "05/02/2024",
+    "next_end_date": "04/02/2034",
+    "is_draft_race": "F",
+    "is_private_race": "F",
+    "url": "https://runsignup.com/Race/CO/ColoradoSprings/FiftyStatesHalfMarathonClubGeneralMembership",
+    "address": {
+     "city": "Colorado Springs",
+     "state": "CO",
+     "country_code": "US"
+    },
+    "events": [
+     {
+      "event_id": 820459,
+      "name": "Fifty States Half Marathon Club General Membership",
+      "start_time": "5/2/2024 00:00",
+      "end_time": "4/2/2034 00:00",
+      "distance": "13.1 Miles",
+      "event_type": "running_race"
+     }
+    ]
+   }
+  },
+  {
+   "race": {
+    "race_id": 109217,
+    "name": "50 States Half Marathon Club Life Membership",
+    "next_date": "10/27/2024",
+    "next_end_date": "03/01/2031",
+    "is_draft_race": "F",
+    "is_private_race": "F",
+    "url": "https://runsignup.com/Race/CO/ColoradoSprings/50StatesHalfMarathonClubLifeMembersip",
+    "address": {
+     "city": "Colorado Springs",
+     "state": "CO",
+     "country_code": "US"
+    },
+    "events": [
+     {
+      "event_id": 483645,
+      "name": "50 States Half Marathon Club Life Membership",
+      "start_time": "10/27/2024 08:00",
+      "end_time": "3/1/2031 23:59",
+      "distance": null,
+      "event_type": "other"
+     }
+    ]
+   }
+  },
+  {
+   "race": {
+    "race_id": 204577,
+    "name": "Move for Hope  1K \u2022 5K \u2022 10K \u2022 Half Marathon Virtual Races",
+    "next_date": "12/01/2025",
+    "next_end_date": "01/31/2027",
+    "is_draft_race": "F",
+    "is_private_race": "F",
+    "url": "https://runsignup.com/Race/FL/Miami/Move4Hope",
+    "address": {
+     "city": "Miami",
+     "state": "FL",
+     "country_code": "US"
+    },
+    "events": [
+     {
+      "event_id": 1142652,
+      "name": "Gift of Hope 1K Run",
+      "start_time": "12/1/2025 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "1K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142653,
+      "name": "Gift of Hope 5K Run",
+      "start_time": "12/1/2025 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "5K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142654,
+      "name": "Gift of Hope 10K Run",
+      "start_time": "12/1/2025 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "10K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142655,
+      "name": "Gift of Hope 1/2 Marathon Run",
+      "start_time": "12/1/2025 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "21.097K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142656,
+      "name": "Gift of Hope Step/Ride 3K/day",
+      "start_time": "12/1/2025 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "3K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142657,
+      "name": "Gift of Hope Step/Ride 40K/day",
+      "start_time": "12/1/2025 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "40K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142658,
+      "name": "Gift of Hope Step/Ride 70K/day",
+      "start_time": "12/1/2025 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "70K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142659,
+      "name": "Gift of Hope Step/Ride 90K/day",
+      "start_time": "12/1/2025 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "90K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142675,
+      "name": "Lotus Bloom 1K Run",
+      "start_time": "1/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "1K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142676,
+      "name": "Lotus Bloom 5K Run",
+      "start_time": "1/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "5K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142677,
+      "name": "Lotus Bloom 10K Run",
+      "start_time": "1/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "10K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142678,
+      "name": "Lotus Bloom Half Marathon Run",
+      "start_time": "1/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "21.097K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142679,
+      "name": "Lotus Bloom Step/Ride 3K/day",
+      "start_time": "1/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "3K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142680,
+      "name": "Lotus Bloom Step/Ride 40K/week",
+      "start_time": "1/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "40K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142681,
+      "name": "Lotus Bloom Step/Ride 70K/week",
+      "start_time": "1/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "70K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142682,
+      "name": "Lotus Bloom Step/Ride 90K/week",
+      "start_time": "1/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "90K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142683,
+      "name": "Row to Resilience 1K Run",
+      "start_time": "2/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "1K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142684,
+      "name": "Row to Resilience 5K Run",
+      "start_time": "2/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "5K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142685,
+      "name": "Row to Resilience - 10K Run",
+      "start_time": "2/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "10K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142686,
+      "name": "Row to Resilience Half Marathon Run",
+      "start_time": "2/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "21.097K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142687,
+      "name": "Row to Resilience Step/Ride 3K/day",
+      "start_time": "2/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "3K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142688,
+      "name": "Row to Resilience Step/Ride 40K/day",
+      "start_time": "2/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "40K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142689,
+      "name": "Row to Resilience Step/Ride 90K/day",
+      "start_time": "2/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "90K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142690,
+      "name": "Wings & Roots 1K Run",
+      "start_time": "3/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "1K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142691,
+      "name": "Wings & Roots 5K Run",
+      "start_time": "3/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "5K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142692,
+      "name": "Wings & Roots 10K Run",
+      "start_time": "3/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "10K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142693,
+      "name": "Wings & Roots Half Marathon Run",
+      "start_time": "3/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "21.097K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142695,
+      "name": "Wings & Roots Step/Ride 3K/day",
+      "start_time": "3/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "3K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142696,
+      "name": "Wings & Roots Step/Ride 40K/day",
+      "start_time": "3/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "40K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142697,
+      "name": "Wings & Roots Step/Ride 70K/day",
+      "start_time": "3/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "70K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142698,
+      "name": "Wings & Roots Step/Ride 90K/day",
+      "start_time": "3/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "90K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142699,
+      "name": "Butterfly Effect 1K Run",
+      "start_time": "4/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "1K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142700,
+      "name": "Butterfly Effect 5K Run",
+      "start_time": "4/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "5K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142701,
+      "name": "Butterfly Effect 10K Run",
+      "start_time": "4/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "10K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142702,
+      "name": "Butterfly Effect Half Marathon Run",
+      "start_time": "4/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "21.097K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142703,
+      "name": "Butterfly Effect -Step/Ride 3K/day",
+      "start_time": "4/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "3K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142704,
+      "name": "Butterfly Effect -Step/Ride 40K/day",
+      "start_time": "4/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "40K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142705,
+      "name": "Butterfly Effect -Step/Ride 70K/day",
+      "start_time": "4/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "70K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142706,
+      "name": "Butterfly Effect -Step/Ride 90K/day",
+      "start_time": "4/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "90K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142707,
+      "name": "Phoenix Rising 1K Run",
+      "start_time": "5/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "1K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142708,
+      "name": "Phoenix Rising 5K Run",
+      "start_time": "5/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "5K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142709,
+      "name": "Phoenix Rising 10K Run",
+      "start_time": "5/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "10K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142710,
+      "name": "Phoenix Rising Half Marathon Run",
+      "start_time": "5/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "21.097K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142711,
+      "name": "Phoenix Rising Step/Ride 3K/day",
+      "start_time": "5/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "3K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142712,
+      "name": "Phoenix Rising Step/Ride 40K/day",
+      "start_time": "5/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "40K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142713,
+      "name": "Phoenix Rising Step/Ride 70K/day",
+      "start_time": "5/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "70K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142714,
+      "name": "Phoenix Rising Step/Ride 90K/day",
+      "start_time": "5/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "90K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142715,
+      "name": "Badge of Courage 1K Run",
+      "start_time": "6/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "1K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142716,
+      "name": "Badge of Courage 5K Run",
+      "start_time": "6/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "5K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142717,
+      "name": "Badge of Courage 10K Run",
+      "start_time": "6/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "10K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142718,
+      "name": "Badge of Courage Half Marathon Run",
+      "start_time": "6/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "21.097K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142719,
+      "name": "Badge of Courage Step/Ride 3K/day",
+      "start_time": "6/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "3K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142720,
+      "name": "Badge of Courage Step/Ride 40K/day",
+      "start_time": "6/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "40K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142721,
+      "name": "Badge of Courage Step/Ride 70K/day",
+      "start_time": "6/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "70K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142722,
+      "name": "Badge of Courage Step/Ride 90K/day",
+      "start_time": "6/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "90K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142723,
+      "name": "Infinite Hope 1K Run",
+      "start_time": "7/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "1K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142724,
+      "name": "Infinite Hope 5K Run",
+      "start_time": "7/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "5K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142725,
+      "name": "Infinite Hope 10K Run",
+      "start_time": "7/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "10K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142726,
+      "name": "Infinite Hope Half Marathon",
+      "start_time": "7/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "21.097K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142727,
+      "name": "Infinite Hope Step/Ride 3K/week",
+      "start_time": "7/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "3K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142728,
+      "name": "Infinite Hope Step/Ride 40K/week",
+      "start_time": "7/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "40K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142729,
+      "name": "Infinite Hope Step/Ride 70K/week",
+      "start_time": "7/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "70K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142730,
+      "name": "Infinite Hope Step/Ride 90K/week",
+      "start_time": "7/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "90K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142731,
+      "name": "Wings & Sunshine 1K Run",
+      "start_time": "8/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "1K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142732,
+      "name": "Wings & Sunshine 5K Run",
+      "start_time": "8/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "5K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142733,
+      "name": "Wings & Sunshine 10K Run",
+      "start_time": "8/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "10K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142734,
+      "name": "Wings & Sunshine Half Marathon Run",
+      "start_time": "8/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "21.097K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142735,
+      "name": "Wings & Sunshine Step/Ride 3K/week",
+      "start_time": "8/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "3K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142736,
+      "name": "Wings & Sunshine Step/Ride 40K/week",
+      "start_time": "8/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "40K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142737,
+      "name": "Wings & Sunshine Step/Ride 70K/week",
+      "start_time": "8/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "70K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142738,
+      "name": "Wings & Sunshine Step/Ride 90K/week",
+      "start_time": "8/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "90K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142739,
+      "name": "Bee Well 1K Run",
+      "start_time": "9/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "1K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142740,
+      "name": "Bee Well 5K Run",
+      "start_time": "9/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "5K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142741,
+      "name": "Bee Well 10K Run",
+      "start_time": "9/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "10K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142742,
+      "name": "Bee Well Half Marathon Run",
+      "start_time": "9/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "21.097K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142743,
+      "name": "Bee Well Step/Ride 3K/day",
+      "start_time": "9/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "3K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142744,
+      "name": "Bee Well Step/Ride 40K/day",
+      "start_time": "9/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "40K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142745,
+      "name": "Bee Well Step/Ride 70K/day",
+      "start_time": "9/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "70K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142746,
+      "name": "Bee Well Step/Ride 90K/day",
+      "start_time": "9/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "90K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142747,
+      "name": "Glide & Grow 1K Run",
+      "start_time": "10/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "1K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142748,
+      "name": "Glide & Grow 5K  Run",
+      "start_time": "9/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "5K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142749,
+      "name": "Glide & Grow 10K  Run",
+      "start_time": "9/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "10K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142750,
+      "name": "Glide & Grow Half Marathon Run",
+      "start_time": "9/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "21.097K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142752,
+      "name": "Glide & Grow Step/Ride 3K/day",
+      "start_time": "9/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "3K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142753,
+      "name": "Glide & Grow Step/Ride 40K/day",
+      "start_time": "9/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "40K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142754,
+      "name": "Glide & Grow Step/Ride 70K/day",
+      "start_time": "9/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "70K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142756,
+      "name": "Glide & Grow Step/Ride 90K/day",
+      "start_time": "10/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "90K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142757,
+      "name": "Koi Journey 1K Run",
+      "start_time": "11/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "1K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142758,
+      "name": "Koi Journey 5K  Run",
+      "start_time": "11/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "5K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142759,
+      "name": "Koi Journey 10K Run",
+      "start_time": "11/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "10K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142760,
+      "name": "Koi Journey Half Marathon Run",
+      "start_time": "11/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "21.097K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142761,
+      "name": "Koi Journey - Step/Ride 3K/day",
+      "start_time": "11/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "3K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142762,
+      "name": "Koi Journey - Step/Ride 40K/day",
+      "start_time": "11/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "40K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142763,
+      "name": "Koi Journey - Step/Ride 70K/day",
+      "start_time": "11/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "70K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142764,
+      "name": "Koi Journey - Step/Ride 90K/day",
+      "start_time": "11/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "90K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142765,
+      "name": "Rainbows & Unicorns 1K Run",
+      "start_time": "12/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "1K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142766,
+      "name": "Rainbows & Unicorns 5K Run",
+      "start_time": "12/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "5K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142767,
+      "name": "Rainbows & Unicorns 10K Run",
+      "start_time": "12/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "10K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142768,
+      "name": "Rainbows & Unicorns Half Marathon Run",
+      "start_time": "12/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "21.097K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142769,
+      "name": "Rainbows & Unicorns Step/Ride 3K/week",
+      "start_time": "12/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "3K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142770,
+      "name": "Rainbows & Unicorns Step/Ride 40K/week",
+      "start_time": "12/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "40K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142771,
+      "name": "Rainbows & Unicorns Step/Ride 70K/week",
+      "start_time": "12/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "70K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142772,
+      "name": "Rainbows & Unicorns Step/Ride 90K/week",
+      "start_time": "12/1/2026 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "90K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142773,
+      "name": "Rain or Shine 1K Run",
+      "start_time": "1/1/2027 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "1K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142774,
+      "name": "Rain or Shine 5K Run",
+      "start_time": "1/1/2027 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "5K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142775,
+      "name": "Rain or Shine 10K Run",
+      "start_time": "1/1/2027 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "10K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142776,
+      "name": "Rain or Shine Half Marathon Run",
+      "start_time": "1/1/2027 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "21.097K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142777,
+      "name": "Rain or Shine Step/Ride 3K/day",
+      "start_time": "1/1/2027 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "3K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142778,
+      "name": "Rain or Shine Step/Ride 40K/day",
+      "start_time": "1/1/2027 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "40K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142779,
+      "name": "Rain or Shine Step/Ride 70K/day",
+      "start_time": "1/1/2027 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "70K",
+      "event_type": "virtual_race"
+     },
+     {
+      "event_id": 1142780,
+      "name": "Rain or Shine Step/Ride 90K/day",
+      "start_time": "1/1/2027 00:00",
+      "end_time": "1/31/2027 23:59",
+      "distance": "90K",
+      "event_type": "virtual_race"
+     }
+    ]
+   }
+  }
+ ]
+}

@@ -120,7 +120,9 @@ function sanitizeRace(race) {
     name: String(race.name || "").trim().slice(0, 48),
     date: race.date,
     distance: RACE_DISTANCES.includes(race.distance) ? race.distance : "Other",
-    priority: ["A", "B", "C"].includes(race.priority) ? race.priority : "A"
+    priority: ["A", "B", "C"].includes(race.priority) ? race.priority : "A",
+    // A race found through search keeps its RunSignup page.
+    ...(/^https:\/\/runsignup\.com\//.test(String(race.url || "")) ? { url: String(race.url).slice(0, 300) } : {})
   };
 }
 
@@ -1371,7 +1373,7 @@ function renderRaceList() {
     const past = race.date < today;
     const date = new Date(`${race.date}T00:00:00`).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" });
     const current = phase?.race && phase.race.date === race.date && phase.race.name === race.name ? `<em class="race-phase phase-${phase.key}">${escapeHtml(phase.label)}</em>` : "";
-    return `<li class="race-item${past ? " past" : ""}"><span class="race-priority priority-${race.priority}" title="${race.priority === "A" ? "Goal race" : race.priority === "B" ? "Tune-up race" : "Training race"}">${race.priority}</span><div><strong>${escapeHtml(race.name || race.distance)}</strong><small>${escapeHtml(date)} · ${escapeHtml(race.distance)}${past ? " · done" : ""}</small></div>${current}<button type="button" class="race-remove" data-race-id="${escapeHtml(race.id)}" aria-label="Remove ${escapeHtml(race.name || race.distance)} on ${escapeHtml(date)}">Remove</button></li>`;
+    return `<li class="race-item${past ? " past" : ""}"><span class="race-priority priority-${race.priority}" title="${race.priority === "A" ? "Goal race" : race.priority === "B" ? "Tune-up race" : "Training race"}">${race.priority}</span><div><strong>${escapeHtml(race.name || race.distance)}</strong><small>${escapeHtml(date)} · ${escapeHtml(race.distance)}${past ? " · done" : ""}${race.url ? ` · <a href="${escapeHtml(race.url)}" target="_blank" rel="noopener noreferrer">RunSignup<span class="visually-hidden"> page for ${escapeHtml(race.name || race.distance)}</span> ↗</a>` : ""}</small></div>${current}<button type="button" class="race-remove" data-race-id="${escapeHtml(race.id)}" aria-label="Remove ${escapeHtml(race.name || race.distance)} on ${escapeHtml(date)}">Remove</button></li>`;
   }).join("") : '<li class="race-empty">No races yet. Add your goal race (A) and readiness follows your training cycle: base, build, peak, taper and recovery.</li>';
 }
 
@@ -3224,15 +3226,90 @@ els.raceForm.addEventListener("submit", (event) => {
     name: els.raceForm.raceName.value.trim(),
     date: els.raceForm.raceDate.value,
     distance: els.raceForm.raceDistance.value,
-    priority: els.raceForm.racePriority.value
+    priority: els.raceForm.racePriority.value,
+    url: els.raceForm.dataset.url || ""
   });
   if (!race) { setStatus("Choose a race date.", true, "raceForm"); return; }
+  delete els.raceForm.dataset.url;
+  // The search did its job: clear it for the next race.
+  document.querySelector("#raceSearch").value = "";
+  renderRaceResults([]);
+  raceSearchStatus("");
   coachingContext.races = [...(coachingContext.races || []), race];
   const saved = saveCoachingContext();
   fitnessModelCache.key = "";
   els.raceForm.reset();
   render();
   setStatus(saved ? `${raceLabel(race)} added as your ${race.priority} race.` : "Race added in this tab. Browser storage failed; back up your goals before closing.", !saved, "raceForm");
+});
+
+/*
+ * Race search (RunSignup through /api/races/search). Results list each race's
+ * distances; choosing one fills the form, and the runner picks the priority.
+ */
+const raceSearch = { timer: null, controller: null, results: [] };
+
+function raceSearchStatus(message) {
+  document.querySelector("#raceSearchStatus").textContent = message;
+}
+
+function renderRaceResults(races) {
+  raceSearch.results = races;
+  const list = document.querySelector("#raceResults");
+  const day = (iso) => new Date(`${iso}T00:00:00`).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" });
+  list.innerHTML = races.map((race, raceIndex) => `<li class="race-result">
+    <div class="race-result-head"><strong>${escapeHtml(race.name)}</strong><small>${escapeHtml(day(race.date))}${race.city || race.state ? ` · ${escapeHtml([race.city, race.state].filter(Boolean).join(", "))}` : ""}</small></div>
+    <div class="race-result-events">${race.events.map((event, eventIndex) => `<button type="button" class="race-event" data-race="${raceIndex}" data-event="${eventIndex}" aria-label="Use ${escapeHtml(race.name)}, ${escapeHtml(event.name)} on ${escapeHtml(day(event.date))}">${escapeHtml(event.distance === "Other" ? event.name : event.distance)}${event.walk ? " · walk" : ""}${event.date !== race.date ? ` · ${escapeHtml(new Date(`${event.date}T00:00:00`).toLocaleDateString(undefined, { month: "short", day: "numeric" }))}` : ""}</button>`).join("")}</div>
+  </li>`).join("");
+}
+
+async function runRaceSearch() {
+  const query = document.querySelector("#raceSearch").value.trim();
+  const stateCode = document.querySelector("#raceSearchState").value.trim();
+  raceSearch.controller?.abort();
+  if (query.length < 3) { renderRaceResults([]); raceSearchStatus(query ? "Keep typing: at least three letters." : ""); return; }
+  if (stateCode && !/^[a-z]{2}$/i.test(stateCode)) { raceSearchStatus("Use a two-letter state, like OH, or leave it empty."); return; }
+  const controller = new AbortController();
+  raceSearch.controller = controller;
+  raceSearchStatus("Searching RunSignup…");
+  try {
+    const response = await fetch(`/api/races/search?${new URLSearchParams({ q: query, ...(stateCode ? { state: stateCode } : {}) })}`, { signal: controller.signal });
+    const data = await readApiJson(response);
+    if (!response.ok) throw new Error(data.error || "Race search is unavailable right now.");
+    renderRaceResults(data.races || []);
+    raceSearchStatus(data.races?.length ? `${data.races.length} upcoming race${data.races.length === 1 ? "" : "s"} found. Choose a distance to fill the form.` : "No upcoming races match. Try fewer words, add a state, or enter the race below.");
+  } catch (error) {
+    if (error.name === "AbortError") return;
+    renderRaceResults([]);
+    raceSearchStatus(error.message);
+  }
+}
+
+["#raceSearch", "#raceSearchState"].forEach((selector) => document.querySelector(selector).addEventListener("input", () => {
+  clearTimeout(raceSearch.timer);
+  raceSearch.timer = setTimeout(runRaceSearch, 350);
+}));
+document.querySelector("#raceSearch").addEventListener("keydown", (event) => {
+  if (event.key === "Enter") { event.preventDefault(); clearTimeout(raceSearch.timer); runRaceSearch(); }
+});
+
+// Editing the name or date by hand makes it a different race: drop the link.
+["raceName", "raceDate"].forEach((field) => els.raceForm[field].addEventListener("input", () => { delete els.raceForm.dataset.url; }));
+
+document.querySelector("#raceResults").addEventListener("click", (event) => {
+  const button = event.target.closest(".race-event");
+  if (!button) return;
+  const race = raceSearch.results[Number(button.dataset.race)];
+  const chosen = race?.events[Number(button.dataset.event)];
+  if (!chosen) return;
+  // Several distances on one day: name the one chosen when it is not a standard distance.
+  const name = race.events.length > 1 && chosen.distance === "Other" ? `${race.name} (${chosen.name})` : race.name;
+  els.raceForm.raceName.value = name.slice(0, 48);
+  els.raceForm.raceDate.value = chosen.date;
+  els.raceForm.raceDistance.value = chosen.distance;
+  if (race.url) els.raceForm.dataset.url = race.url; else delete els.raceForm.dataset.url;
+  raceSearchStatus(`Filled in ${race.name} (${chosen.distance === "Other" ? chosen.name : chosen.distance}). Choose its priority, then Add race.`);
+  els.raceForm.racePriority.focus();
 });
 
 els.raceList.addEventListener("click", (event) => {

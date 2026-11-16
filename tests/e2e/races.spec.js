@@ -107,3 +107,67 @@ test("races and goals survive a reload", async ({ page }) => {
   const context = await page.evaluate(() => ({ races: coachingContext.races.map((race) => race.name), miles: coachingContext.goal.miles }));
   expect(context).toEqual({ races: ["City Marathon"], miles: "30" });
 });
+
+test("searching RunSignup fills the race form, and the race keeps its link", async ({ page }) => {
+  const searches = [];
+  await page.route("**/api/races/search?*", (route) => {
+    searches.push(new URL(route.request().url()));
+    return route.fulfill({ json: { source: "RunSignup", races: [{
+      id: "1", name: "Riverfront Turkey Trot", date: iso(9), city: "Columbus", state: "OH", url: "https://runsignup.com/Race/OH/Columbus/RiverfrontTurkeyTrot",
+      events: [
+        { id: "a", name: "5K", date: iso(9), km: 5, distance: "5K", walk: false },
+        { id: "b", name: "4 Mile Run", date: iso(9), km: 6.44, distance: "Other", walk: false },
+        { id: "c", name: "Fun Walk", date: iso(9), km: null, distance: "Other", walk: true }
+      ] }] } });
+  });
+  await loadDemo(page);
+  await nav(page, "Plan");
+  await page.locator("#racesDisclosure > summary").click();
+  await page.fill("#raceSearch", "tu");
+  await expect(page.locator("#raceSearchStatus")).toContainText("at least three letters");
+  expect(searches).toHaveLength(0);
+  await page.fill("#raceSearch", "turkey trot");
+  await page.fill("#raceSearchState", "oh");
+  const result = page.locator(".race-result");
+  await expect(result).toHaveCount(1);
+  expect(searches.at(-1).searchParams.get("q")).toBe("turkey trot");
+  expect(searches.at(-1).searchParams.get("state")).toBe("oh");
+  await expect(result.locator(".race-event")).toHaveText(["5K", "4 Mile Run", "Fun Walk · walk"]);
+
+  // A non-standard distance is named in the race; a standard one is not.
+  await result.getByRole("button", { name: /4 Mile Run/ }).click();
+  await expect(page.locator("#raceName")).toHaveValue("Riverfront Turkey Trot (4 Mile Run)");
+  await expect(page.locator("#raceDistance")).toHaveValue("Other");
+  await result.getByRole("button", { name: /, 5K on/ }).click();
+  await expect(page.locator("#raceName")).toHaveValue("Riverfront Turkey Trot");
+  await expect(page.locator("#raceDate")).toHaveValue(iso(9));
+  await expect(page.locator("#raceDistance")).toHaveValue("5K");
+  await expect(page.locator("#racePriority")).toBeFocused();
+  await page.selectOption("#racePriority", "B");
+  await page.locator("#raceForm button[type=submit]").click();
+
+  const saved = page.locator("#raceList .race-item");
+  await expect(saved).toHaveCount(1);
+  await expect(saved.getByRole("link", { name: /RunSignup/ })).toHaveAttribute("href", "https://runsignup.com/Race/OH/Columbus/RiverfrontTurkeyTrot");
+  await expect(page.locator(".race-result")).toHaveCount(0);
+  await expect(page.locator("#raceSearch")).toHaveValue("");
+});
+
+test("editing a found race by hand drops its RunSignup link, and search failures stay readable", async ({ page }) => {
+  let fail = false;
+  await page.route("**/api/races/search?*", (route) => fail
+    ? route.fulfill({ status: 502, json: { error: "Race search is unavailable right now. Enter the race by hand." } })
+    : route.fulfill({ json: { source: "RunSignup", races: [{ id: "1", name: "Spring Half", date: iso(60), city: "Dayton", state: "OH", url: "https://runsignup.com/Race/OH/Dayton/SpringHalf", events: [{ id: "a", name: "Half Marathon", date: iso(60), km: 21.1, distance: "Half marathon", walk: false }] }] } }));
+  await loadDemo(page);
+  await nav(page, "Plan");
+  await page.locator("#racesDisclosure > summary").click();
+  await page.fill("#raceSearch", "spring half");
+  await page.locator(".race-event").click();
+  await page.fill("#raceName", "My own race");
+  await page.locator("#raceForm button[type=submit]").click();
+  await expect(page.locator("#raceList .race-item")).toHaveCount(1);
+  await expect(page.locator("#raceList a")).toHaveCount(0);
+  fail = true;
+  await page.fill("#raceSearch", "another race");
+  await expect(page.locator("#raceSearchStatus")).toContainText("Enter the race by hand");
+});
