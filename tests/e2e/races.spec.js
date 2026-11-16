@@ -264,13 +264,24 @@ test("a race found through search projects a finishing place by gender and age g
   expect([...requests[0].searchParams.keys()].sort()).toEqual(["km", "race"]);
 
   const year = new Date(iso(12)).getFullYear();
-  await page.fill("#placeProfile [name=birthYear]", String(year - 32));
-  await page.selectOption("#placeProfile [name=gender]", "M");
+  // Gender and age come from the profile in the account dialog.
+  await expect(page.locator(".place-profile")).toContainText("Add your birth year and gender to your profile");
+  await page.getByRole("button", { name: "Add to profile" }).click();
+  const details = page.locator("#runnerDetails");
+  await expect(details.locator("[name=birthYear]")).toBeFocused();
+  await details.locator("[name=birthYear]").fill("93");
+  await details.locator("[name=gender]").selectOption("M");
+  await expect(details.locator(".runner-details-note")).toContainText("four-digit birth year");
+  await details.locator("[name=birthYear]").fill(String(year - 32));
+  await details.locator("[name=birthYear]").blur();
+  await expect(details.locator(".runner-details-note")).toHaveText("Saved on this device.");
+  await page.locator("#accountDialogClose").click();
+  await expect(page.locator(".place-profile")).toContainText(`Man, born ${year - 32}`);
   await expect(place.locator("li")).toHaveCount(3);
   await expect(place.locator("li").nth(1)).toContainText(/Men\s*\d+(st|nd|rd|th)\s*of 100/);
   await expect(place.locator("li").nth(2)).toContainText(/M 30–34\s*\d+(st|nd|rd|th)\s*of 100/);
   await page.reload();
-  expect(await page.evaluate(() => coachingContext.profile.gender)).toBe("M");
+  expect(await page.evaluate(() => athleteProfile.gender)).toBe("M");
   expect(requests.length).toBeLessThanOrEqual(2);
 });
 
@@ -281,4 +292,16 @@ test("a race with no posted results says so instead of guessing a place", async 
   await nav(page, "Fitness");
   await expect(page.locator(".goal-race")).toContainText("No past results are posted");
   await expect(page.locator(".goal-race-place")).toHaveCount(0);
+});
+
+test("birth year and gender saved with the race calendar move to the runner's profile", async ({ page }) => {
+  await page.addInitScript(() => {
+    if (localStorage.getItem("run-trends-coaching-context-v1")) return;
+    localStorage.setItem("run-trends-coaching-context-v1", JSON.stringify({ goal: {}, checkin: {}, plan: {}, races: [], profile: { birthYear: "1990", gender: "F" } }));
+    localStorage.setItem("run-trends-athlete-v1", JSON.stringify({ maxHr: 190, restHr: 50 }));
+  });
+  await page.goto("/");
+  const saved = await page.evaluate(() => ({ athlete: JSON.parse(localStorage.getItem("run-trends-athlete-v1")), legacy: JSON.parse(localStorage.getItem("run-trends-coaching-context-v1")).profile }));
+  expect(saved.athlete).toEqual({ maxHr: 190, restHr: 50, birthYear: 1990, gender: "F" });
+  expect(saved.legacy).toBeUndefined();
 });

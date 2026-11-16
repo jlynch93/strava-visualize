@@ -294,6 +294,12 @@ body.has-history .onboarding { display: none; }
 .provider-button small { font-weight: 400; font-size: .72rem; }
 .provider-strava { border-color: var(--orange); }
 .account-section-title { margin: 6px 0 8px; font-size: .78rem; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-faint); }
+.runner-details { display: flex; flex-wrap: wrap; gap: 10px 16px; margin: 0 0 18px; }
+.runner-details label { display: grid; gap: 4px; font-size: .82rem; font-weight: 650; color: var(--ink); }
+.runner-details input, .runner-details select { min-height: 40px; padding: 6px 10px; border: 1px solid var(--rule-strong); border-radius: 6px; background: var(--surface); color: var(--ink); font: inherit; font-weight: 400; }
+.runner-details input { width: 8em; }
+.runner-details-note { flex-basis: 100%; margin: 0; font-size: .78rem; color: var(--ink-soft); }
+.runner-details-note.is-error { color: var(--status-critical); }
 .connection-list { margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--rule); }
 .connection-list li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--rule); }
 .connection-list li div { display: grid; gap: 2px; min-width: 0; }
@@ -404,3 +410,4 @@ body.is-loading .onboarding { display: none; }
 .app-loading-mark { width: 48px; height: 48px; animation: runlore-pulse 1.4s ease-in-out infinite; }
 @keyframes runlore-pulse { 0%, 100% { opacity: .55; transform: scale(.96); } 50% { opacity: 1; transform: scale(1); } }
 @media (prefers-reduced-motion: reduce) { .app-loading-mark { animation: none; } }
+.account-fine-print + .account-section-title { margin-top: 20px; padding-top: 14px; border-top: 1px solid var(--rule); }

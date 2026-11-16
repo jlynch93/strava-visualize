@@ -106,6 +106,7 @@ const CONTEXT_STORAGE_KEY = "run-trends-coaching-context-v1";
 // Declared before loadCoachingContext() runs below: sanitizing saved races reads it.
 const RACE_DISTANCES = ["5K", "10K", "Half marathon", "Marathon", "Other"];
 let coachingContext = loadCoachingContext();
+adoptLegacyProfile();
 
 function loadCoachingContext() {
   try {
@@ -2848,6 +2849,19 @@ function providerButton(provider) {
   return `<a class="provider-button provider-${escapeHtml(provider.id)}" href="/auth/${encodeURIComponent(provider.id)}/login">${escapeHtml(label)}</a>`;
 }
 
+// Birth year and gender, kept with the account (or this device when signed out).
+function runnerDetailsMarkup(signedIn) {
+  const { birthYear, gender } = athleteProfile;
+  const option = (value, label) => `<option value="${value}"${(gender || "") === value ? " selected" : ""}>${label}</option>`;
+  return `
+    <h3 class="account-section-title">About you</h3>
+    <form id="runnerDetails" class="runner-details" autocomplete="off" novalidate>
+      <label>Birth year <input name="birthYear" type="text" inputmode="numeric" maxlength="4" placeholder="e.g. 1990" value="${birthYear || ""}"></label>
+      <label>Gender <select name="gender">${option("", "Not set")}${option("F", "Woman")}${option("M", "Man")}${option("X", "Nonbinary")}</select></label>
+      <p class="runner-details-note" role="status">${signedIn ? "Saved to your account. Used for race places by gender and age group, and never shared." : "Saved on this device. Sign in to keep it with your account."}</p>
+    </form>`;
+}
+
 function renderAccountDialog() {
   const { signedIn, user, connections, providers } = state.account;
   els.accountDialogTitle.textContent = signedIn ? (user?.displayName || "Your account") : "Sign in";
@@ -2857,7 +2871,8 @@ function renderAccountDialog() {
       <p class="account-copy">Use the account you record runs with. Runlore creates your profile the first time you sign in.</p>
       <div class="provider-list">${buttons || `<p class="account-error">${escapeHtml(state.account.error || "Sign-in is not available on this server.")}</p>`}</div>
       ${buttons && state.account.error ? `<p class="account-error">${escapeHtml(state.account.error)}</p>` : ""}
-      <p class="account-fine-print">Runlore only reads your activities. It never posts to your accounts. <a href="/privacy">Privacy policy</a></p>`;
+      <p class="account-fine-print">Runlore only reads your activities. It never posts to your accounts. <a href="/privacy">Privacy policy</a></p>
+      ${runnerDetailsMarkup(false)}`;
     return;
   }
   const rows = providers.map((provider) => {
@@ -2874,6 +2889,7 @@ function renderAccountDialog() {
     return `<li><div><strong>${escapeHtml(provider.name)}</strong><span>Not connected</span></div>${connect}</li>`;
   }).join("");
   els.accountDialogBody.innerHTML = `
+    ${runnerDetailsMarkup(true)}
     <h3 class="account-section-title">Connected accounts</h3>
     <ul class="connection-list">${rows}</ul>
     <div class="account-actions">
@@ -3415,6 +3431,22 @@ document.querySelector("#exportButton").addEventListener("click", () => {
 });
 els.accountButton.addEventListener("click", openAccountDialog);
 els.accountDialogClose.addEventListener("click", () => els.accountDialog.close());
+els.accountDialog.addEventListener("submit", (event) => { if (event.target.id === "runnerDetails") event.preventDefault(); });
+els.accountDialog.addEventListener("change", (event) => {
+  const form = event.target.closest("#runnerDetails");
+  if (!form) return;
+  const note = form.querySelector(".runner-details-note");
+  const year = form.birthYear.value.trim();
+  const latest = new Date().getFullYear() - 5;
+  if (year && !(/^\d{4}$/.test(year) && Number(year) >= 1900 && Number(year) <= latest)) {
+    note.textContent = `Enter a four-digit birth year between 1900 and ${latest}.`;
+    note.classList.add("is-error");
+    return;
+  }
+  saveRunnerDetails({ birthYear: year || null, gender: form.gender.value || null });
+  note.classList.remove("is-error");
+  note.textContent = state.account.signedIn ? "Saved to your account." : "Saved on this device.";
+});
 els.accountDialog.addEventListener("click", (event) => {
   if (event.target === els.accountDialog) {
     els.accountDialog.close();

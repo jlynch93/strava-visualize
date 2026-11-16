@@ -125,8 +125,11 @@ your gender and five-year age group. The Worker
 (`GET /api/races/field?race=&km=`) reads RunSignup's public results for the
 latest past in-person event at that distance (looking back up to three
 editions), strips everything but finish time, gender and age, and caches the
-answer. The place is computed in the browser, so age, gender and predicted
-time never leave the app.
+answer. The place is computed in the browser, so predicted time never leaves the
+app. Birth year and gender live in the runner's profile (**Account → About
+you**), stored with max and resting heart rate under `run-trends-athlete-v1`:
+synced to the account when signed in, kept on the device otherwise, and never
+sent to RunSignup.
 
 The fitness and fatigue chart marks today and every race in view, and with an A
 race in the next six months it **projects to race day**: your usual daily load

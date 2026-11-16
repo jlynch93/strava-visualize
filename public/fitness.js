@@ -4,9 +4,33 @@ const ATHLETE_STORAGE_KEY = "run-trends-athlete-v1";
 const DEFAULT_REST_HR = 55;
 function sanitizeAthleteProfile(saved) {
   const clean = (value, low, high) => { const number = Number(value); return number >= low && number <= high ? Math.round(number) : null; };
-  return { maxHr: clean(saved?.maxHr, 120, 225), restHr: clean(saved?.restHr, 30, 100) };
+  return {
+    maxHr: clean(saved?.maxHr, 120, 225), restHr: clean(saved?.restHr, 30, 100),
+    // Used for places by gender and age group. Optional.
+    birthYear: clean(saved?.birthYear, 1900, new Date().getFullYear() - 5),
+    gender: ["M", "F", "X"].includes(saved?.gender) ? saved.gender : null
+  };
 }
 let athleteProfile = sanitizeAthleteProfile(readSaved(ATHLETE_STORAGE_KEY, {}));
+
+// Birth year and gender were first kept with the race calendar; they belong to the runner.
+function adoptLegacyProfile() {
+  const legacy = coachingContext.profile;
+  if (!legacy) return;
+  const merged = sanitizeAthleteProfile({ ...athleteProfile, birthYear: athleteProfile.birthYear || legacy.birthYear, gender: athleteProfile.gender || legacy.gender });
+  delete coachingContext.profile;
+  saveCoachingContext();
+  if (merged.birthYear !== athleteProfile.birthYear || merged.gender !== athleteProfile.gender) {
+    athleteProfile = merged;
+    persist(ATHLETE_STORAGE_KEY, athleteProfile);
+  }
+}
+
+function saveRunnerDetails({ birthYear, gender }) {
+  athleteProfile = sanitizeAthleteProfile({ ...athleteProfile, birthYear, gender });
+  persist(ATHLETE_STORAGE_KEY, athleteProfile);
+  if (fitnessModelCache.model && document.querySelector("#racePredictions")) renderPredictions(fitnessModelCache.model);
+}
 let fitnessModelCache = { key: "", model: null };
 
 const RACES = [
@@ -400,7 +424,7 @@ function goalRacePlace(race, meters, predicted) {
   if (entry.status === "loading") return '<p class="goal-race-place-hint">Looking up past results…</p>';
   if (entry.status === "error") return '<p class="goal-race-place-hint">Past results could not be loaded right now.</p>';
   if (entry.status === "none") return '<p class="goal-race-place-hint">No past results are posted for this race on RunSignup, so there is no place projection.</p>';
-  const profile = coachingContext.profile || {};
+  const profile = athleteProfile;
   const age = profile.birthYear ? Number(race.date.slice(0, 4)) - Number(profile.birthYear) : null;
   const who = { gender: profile.gender || null, age };
   const place = FitnessCore.projectPlace(entry.data.field, predicted, who);
@@ -418,31 +442,25 @@ function goalRacePlace(race, meters, predicted) {
     <h4>Projected place <small>in the ${entry.data.date.slice(0, 4)} field of ${entry.data.finishers.toLocaleString()}</small></h4>
     <ol>${rows.join("")}</ol>
     ${goalLine}
-    ${profile.gender && age ? "" : '<p class="goal-race-place-hint">Add your birth year and gender below for your place by gender and age group.</p>'}
   </div>`;
 }
 
-function placeProfileForm(goals) {
+// Gender and age group come from the runner's profile (Account), not a form here.
+function placeProfileNote(goals) {
   if (!goals.some((goal) => goal.race.sourceId)) return "";
-  const profile = coachingContext.profile || {};
-  const option = (value, label) => `<option value="${value}"${(profile.gender || "") === value ? " selected" : ""}>${label}</option>`;
-  return `<form id="placeProfile" class="place-profile" autocomplete="off">
-    <span class="place-profile-title">For places by gender and age group</span>
-    <label>Birth year <input name="birthYear" type="text" inputmode="numeric" maxlength="4" placeholder="e.g. 1990" value="${escapeHtml(profile.birthYear || "")}"></label>
-    <label>Gender <select name="gender">${option("", "Not set")}${option("F", "Woman")}${option("M", "Man")}${option("X", "Nonbinary")}</select></label>
-  </form>`;
+  const { birthYear, gender } = athleteProfile;
+  const word = { M: "Man", F: "Woman", X: "Nonbinary" }[gender];
+  const have = [word, birthYear ? `born ${birthYear}` : ""].filter(Boolean).join(", ");
+  const text = birthYear && gender ? `Places by gender and age group use your profile: ${have}.`
+    : have ? `Your profile has ${have}. Add your ${birthYear ? "gender" : "birth year"} for places by gender and age group.`
+    : "Add your birth year and gender to your profile for places by gender and age group.";
+  return `<p class="place-profile">${text} <button type="button" class="link-action" data-action="open-profile">${birthYear && gender ? "Edit profile" : "Add to profile"}</button></p>`;
 }
 
-document.addEventListener("submit", (event) => { if (event.target.id === "placeProfile") event.preventDefault(); });
-document.addEventListener("change", (event) => {
-  const form = event.target.closest?.("#placeProfile");
-  if (!form) return;
-  const profile = {};
-  if (/^(19|20)\d{2}$/.test(form.birthYear.value.trim())) profile.birthYear = form.birthYear.value.trim();
-  if (["M", "F", "X"].includes(form.gender.value)) profile.gender = form.gender.value;
-  if (Object.keys(profile).length) coachingContext.profile = profile; else delete coachingContext.profile;
-  saveCoachingContext();
-  if (fitnessModelCache.model) renderPredictions(fitnessModelCache.model);
+document.addEventListener("click", (event) => {
+  if (!event.target.closest?.('[data-action="open-profile"]')) return;
+  openAccountDialog();
+  document.querySelector("#runnerDetails [name=birthYear]")?.focus();
 });
 
 function goalRaceCard({ race, meters, predicted, before, goalVdot, days }) {
@@ -475,7 +493,7 @@ function renderPredictions(model) {
   }
   const goals = goalRacePredictions(model);
   const goalDistances = new Set(goals.map((goal) => goal.meters));
-  host.innerHTML = `${goals.length ? `<div class="goal-races">${goals.map(goalRaceCard).join("")}</div>${placeProfileForm(goals)}` : ""}<table class="fitness-table"><thead><tr><th scope="col">Distance</th><th scope="col">Predicted time</th><th scope="col">Pace</th></tr></thead><tbody>${RACES.map((race) => {
+  host.innerHTML = `${goals.length ? `<div class="goal-races">${goals.map(goalRaceCard).join("")}</div>${placeProfileNote(goals)}` : ""}<table class="fitness-table"><thead><tr><th scope="col">Distance</th><th scope="col">Predicted time</th><th scope="col">Pace</th></tr></thead><tbody>${RACES.map((race) => {
     const seconds = FitnessCore.predictRaceSeconds(model.fitnessVdot, race.meters);
     return `<tr${goalDistances.has(race.meters) ? ' class="is-goal"' : ""}><th scope="row">${race.label}</th><td>${formatRaceTime(seconds)}</td><td>${formatPace(seconds / miles(race.meters))}</td></tr>`;
   }).join("")}</tbody></table>`;
@@ -816,7 +834,7 @@ document.querySelector("#athleteForm")?.addEventListener("submit", (event) => {
     setStatus("Enter a max heart rate between 120 and 225 and a resting heart rate between 30 and 100.", true, "athleteForm");
     return;
   }
-  athleteProfile = { maxHr, restHr };
+  athleteProfile = { ...athleteProfile, maxHr, restHr };
   persist(ATHLETE_STORAGE_KEY, athleteProfile);
   fitnessModelCache.key = "";
   document.activeElement?.blur?.();

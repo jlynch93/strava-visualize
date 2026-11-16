@@ -90,6 +90,7 @@ function applySyncedValue(key, value) {
     acceptedPlans = validPlans(value) ? value : {};
   } else if (key === "run-trends-coaching-context-v1") {
     coachingContext = sanitizeCoachingContext(value);
+    adoptLegacyProfile();
     syncCoachingInputs();
   } else if (key === "run-trends-athlete-v1") {
     athleteProfile = sanitizeAthleteProfile(value);

@@ -355,8 +355,4 @@
 .goal-race-place li strong { color: var(--ink-strong); font-size: 1.3rem; line-height: 1.2; font-variant-numeric: tabular-nums; }
 .goal-race-place li small { color: var(--ink-soft); font-size: .72rem; }
 .goal-race-place-goal, .goal-race-place-hint { margin: 8px 0 0; color: var(--ink-soft); font-size: .8rem; }
-.place-profile { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin: 10px 0 0; font-size: .82rem; color: var(--ink-soft); }
-.place-profile-title { font-weight: 650; color: var(--ink-strong); }
-.place-profile label { display: inline-flex; align-items: center; gap: 6px; }
-.place-profile input { width: 6.5em; }
-.place-profile input, .place-profile select { min-height: 36px; padding: 4px 8px; border: 1px solid var(--rule-strong); border-radius: 6px; background: var(--surface); color: var(--ink); font: inherit; }
+.place-profile { margin: 10px 0 0; font-size: .82rem; color: var(--ink-soft); }
