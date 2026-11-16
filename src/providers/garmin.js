@@ -174,6 +174,14 @@ export default {
   // instead each request asks it to push one window of at most 90 days to the
   // webhook. The job records progress so a failed window is retried later.
   backfill: { windows: BACKFILL_WINDOWS, windowSeconds: BACKFILL_WINDOW },
+  // The permission a user must grant on Garmin's consent screen for activities.
+  requiredPermission: "ACTIVITY_EXPORT",
+
+  // What the user granted this app, e.g. ["ACTIVITY_EXPORT", "HEALTH_EXPORT"].
+  async permissions(accessToken) {
+    const { data } = await apiRequest(accessToken, "/user/permissions");
+    return Array.isArray(data) ? data.map(String) : [];
+  },
 
   async requestBackfillWindow(accessToken, anchorEnd, index) {
     const windowEnd = anchorEnd - index * BACKFILL_WINDOW;

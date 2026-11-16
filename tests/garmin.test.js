@@ -62,7 +62,7 @@ function summary(overrides = {}) {
 }
 
 // Fakes Garmin's token, user-id, backfill and registration endpoints.
-function mockGarmin(t, { userId = "garmin-user-1", backfillStatus = 202, callbackData = [] } = {}) {
+function mockGarmin(t, { userId = "garmin-user-1", backfillStatus = 202, callbackData = [], permissions = ["ACTIVITY_EXPORT"] } = {}) {
   const calls = [];
   t.mock.method(globalThis, "fetch", async (url, options = {}) => {
     const target = new URL(url);
@@ -75,6 +75,7 @@ function mockGarmin(t, { userId = "garmin-user-1", backfillStatus = 202, callbac
       return Response.json({ access_token: "garmin-access", refresh_token: "garmin-refresh", expires_in: 86400, scope: "ACTIVITY_EXPORT" });
     }
     if (target.pathname.endsWith("/user/id")) return Response.json({ userId });
+    if (target.pathname.endsWith("/user/permissions")) return Response.json(typeof permissions === "function" ? permissions() : permissions);
     if (target.pathname.includes("/backfill/activities")) {
       const status = typeof backfillStatus === "function" ? backfillStatus() : backfillStatus;
       return new Response(status === 202 ? "" : "{}", { status });
@@ -481,4 +482,46 @@ test("An old connection that never received anything reports idle, not importing
   await sql(testEnv, "UPDATE provider_connections SET created_at = created_at - 3 * 86400");
   await sql(testEnv, "UPDATE sync_jobs SET updated_at = updated_at - 3 * 86400");
   assert.equal((await activities(worker, testEnv, session)).sync.state, "idle");
+});
+
+test("A refused history request fails at once and says the activity permission is missing", async (t) => {
+  const worker = await workerPromise;
+  const testEnv = env();
+  let status = 403;
+  let granted = ["HEALTH_EXPORT"];
+  const calls = mockGarmin(t, { backfillStatus: () => status, permissions: () => granted });
+  t.mock.method(console, "warn", () => {});
+  const { session } = await signIn(worker, testEnv);
+  let current = await job(testEnv);
+  assert.equal(current.status, "failed", "Access denied is not retried.");
+  assert.equal(current.attempts, 1);
+  assert.match(current.last_error, /Granted permissions: HEALTH_EXPORT/);
+  assert.match(current.last_error, /ACTIVITY_EXPORT is missing/);
+  const list = await activities(worker, testEnv, session);
+  assert.equal(list.sync.state, "failed");
+  assert.match(list.sync.error, /allow Activities/);
+  // The cron does not keep hammering a refused job.
+  const before = calls.filter((call) => call.url.pathname.includes("/backfill/activities")).length;
+  await worker.scheduled({ cron: "*/10 * * * *" }, testEnv);
+  assert.equal(calls.filter((call) => call.url.pathname.includes("/backfill/activities")).length, before);
+
+  // The user allows Activities in Garmin Connect; Garmin reports it and the import restarts.
+  status = 202; granted = ["ACTIVITY_EXPORT", "HEALTH_EXPORT"];
+  const notified = await worker.fetch(webhook({ userPermissionsChange: [{ userId: "garmin-user-1", permissions: granted }] }), testEnv);
+  assert.equal(notified.status, 200);
+  current = await job(testEnv);
+  assert.equal(current.status, "requested");
+  assert.equal(current.windows_done, 4);
+});
+
+test("A refusal with the permission granted points at the app's API configuration", async (t) => {
+  const worker = await workerPromise;
+  const testEnv = env();
+  mockGarmin(t, { backfillStatus: 403, permissions: ["ACTIVITY_EXPORT"] });
+  t.mock.method(console, "warn", () => {});
+  await signIn(worker, testEnv);
+  const current = await job(testEnv);
+  assert.equal(current.status, "failed");
+  assert.match(current.last_error, /ACTIVITY_EXPORT is granted/);
+  assert.match(current.last_error, /API Configuration Tool/);
 });

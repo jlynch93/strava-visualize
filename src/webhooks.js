@@ -9,6 +9,7 @@ import {
   saveActivities
 } from "./db.js";
 import { providerAccessToken } from "./auth.js";
+import { resumeHistoryImport } from "./sync.js";
 import garmin, { toStravaShape } from "./providers/garmin.js";
 
 const ACTIVITY_KEYS = ["activities", "manuallyUpdatedActivities", "activityDetails"];
@@ -60,10 +61,15 @@ async function deregister(env, garminUserId) {
   if (!(await listConnections(env, userId)).length) await deleteUser(env, userId);
 }
 
-async function permissionsChanged(env, garminUserId, permissions) {
-  if (Array.isArray(permissions) && permissions.includes("ACTIVITY_EXPORT")) return;
+async function permissionsChanged(env, request, garminUserId, permissions) {
   const userId = await findUserIdByProviderUser(env, garmin.id, garminUserId);
-  if (userId) await deleteActivities(env, userId, garmin.id);
+  if (!userId) return;
+  if (Array.isArray(permissions) && permissions.includes("ACTIVITY_EXPORT")) {
+    // Granted (perhaps after a refused import): request the history again.
+    await resumeHistoryImport(env, request, garmin, userId);
+    return;
+  }
+  await deleteActivities(env, userId, garmin.id);
 }
 
 // Garmin posts notifications to the endpoint registered in its developer
@@ -87,7 +93,7 @@ export async function handleGarminWebhook(env, request, pathSecret) {
     await deregister(env, garminUserId);
   }
   for (const [garminUserId, items] of groupByUser(body?.userPermissionsChange)) {
-    await permissionsChanged(env, garminUserId, items.at(-1)?.permissions);
+    await permissionsChanged(env, request, garminUserId, items.at(-1)?.permissions);
   }
   return json({ received: true, stored });
 }

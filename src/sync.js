@@ -33,11 +33,41 @@ export async function runSyncJob(env, userId, providerId, request = backgroundRe
     }
     await updateSyncJob(env, userId, providerId, { windowsDone, attempts, status: "requested" });
   } catch (error) {
-    const status = attempts >= MAX_SYNC_ATTEMPTS ? "failed" : "requesting";
-    await updateSyncJob(env, userId, providerId, { windowsDone, attempts, status, lastError: String(error.message || error).slice(0, 300) });
+    // Access refused will not fix itself on retry: stop now and say why.
+    const refused = error.status === 401 || error.status === 403;
+    const status = refused || attempts >= MAX_SYNC_ATTEMPTS ? "failed" : "requesting";
+    const lastError = refused ? await explainRefusal(env, request, provider, userId, error) : String(error.message || error);
+    await updateSyncJob(env, userId, providerId, { windowsDone, attempts, status, lastError: lastError.slice(0, 500) });
     console.warn(JSON.stringify({ event: "sync_job_failed", provider: providerId, windowsDone, attempts, status, message: error.message }));
   }
   return getSyncJob(env, userId, providerId);
+}
+
+// Turns "access denied" into the likely cause by asking which permissions the
+// user granted: a missing permission is fixed in Garmin Connect; a granted one
+// means the API itself is not enabled for this app in the developer portal.
+async function explainRefusal(env, request, provider, userId, error) {
+  const refusal = `${provider.name} refused the history request (${error.message}).`;
+  if (!provider.permissions || !provider.requiredPermission) return refusal;
+  try {
+    const accessToken = await providerAccessToken(env, request, userId, provider.id);
+    const granted = await provider.permissions(accessToken);
+    const list = granted.length ? granted.join(", ") : "none";
+    return granted.includes(provider.requiredPermission)
+      ? `${refusal} Granted permissions: ${list}. ${provider.requiredPermission} is granted, so the Activity API is probably not enabled for this app: check the API Configuration Tool in the ${provider.name} developer portal, then reconnect.`
+      : `${refusal} Granted permissions: ${list}. ${provider.requiredPermission} is missing: allow Activities for Runlore in ${provider.name} Connect (or disconnect and reconnect, allowing it). The import restarts automatically when it is granted.`;
+  } catch (lookupError) {
+    return `${refusal} Could not read granted permissions (${lookupError.message}).`;
+  }
+}
+
+// Called when a provider reports that the user granted the needed permission:
+// restart a refused or missing import. A running or finished one is left alone.
+export async function resumeHistoryImport(env, request, provider, userId, ctx) {
+  if (!provider.requestBackfillWindow) return;
+  let job;
+  try { job = await getSyncJob(env, userId, provider.id); } catch (error) { if (isMissingTable(error)) return; throw error; }
+  if (!job || job.status === "failed") await startHistoryImport(env, request, provider, userId, ctx);
 }
 
 // Called after a provider connects. With an execution context the requests
