@@ -62,7 +62,7 @@ function summary(overrides = {}) {
 }
 
 // Fakes Garmin's token, user-id, backfill and registration endpoints.
-function mockGarmin(t, { userId = "garmin-user-1", backfillStatus = 202, callbackData = [], permissions = ["ACTIVITY_EXPORT"] } = {}) {
+function mockGarmin(t, { userId = "garmin-user-1", backfillStatus = 202, callbackData = [], permissions = ["ACTIVITY_EXPORT"], registered = () => true } = {}) {
   const calls = [];
   t.mock.method(globalThis, "fetch", async (url, options = {}) => {
     const target = new URL(url);
@@ -75,7 +75,11 @@ function mockGarmin(t, { userId = "garmin-user-1", backfillStatus = 202, callbac
       return Response.json({ access_token: "garmin-access", refresh_token: "garmin-refresh", expires_in: 86400, scope: "ACTIVITY_EXPORT" });
     }
     if (target.pathname.endsWith("/user/id")) return Response.json({ userId });
-    if (target.pathname.endsWith("/user/permissions")) return Response.json(typeof permissions === "function" ? permissions() : permissions);
+    if (target.pathname.endsWith("/user/permissions")) {
+      // After a real deregistration Garmin no longer recognises the token.
+      if (!registered()) return Response.json({ errorMessage: "no user partner found for consumer garmin-client" }, { status: 403 });
+      return Response.json(typeof permissions === "function" ? permissions() : permissions);
+    }
     if (target.pathname.includes("/backfill/activities")) {
       const status = typeof backfillStatus === "function" ? backfillStatus() : backfillStatus;
       return new Response(status === 202 ? "" : "{}", { status });
@@ -268,9 +272,11 @@ test("Removing activity permission deletes stored Garmin activities", async (t) 
 test("A Garmin deregistration removes the connection, and the profile when Garmin was its only sign-in", async (t) => {
   const worker = await workerPromise;
   const testEnv = env();
-  mockGarmin(t);
+  let registered = true;
+  mockGarmin(t, { registered: () => registered });
   const garminOnly = await signIn(worker, testEnv);
   await worker.fetch(webhook({ activities: [summary()] }), testEnv);
+  registered = false; // Garmin has really removed the registration.
   await worker.fetch(webhook({ deregistrations: [{ userId: "garmin-user-1" }] }), testEnv);
   for (const table of ["users", "sessions", "provider_connections", "activities"]) {
     assert.equal(await testEnv.DB.prepare(`SELECT COUNT(*) AS count FROM ${table}`).first("count"), 0, `${table} must be empty`);
@@ -281,9 +287,11 @@ test("A Garmin deregistration removes the connection, and the profile when Garmi
 test("A deregistration keeps a profile that can still sign in with Strava", async (t) => {
   const worker = await workerPromise;
   const testEnv = env();
-  mockGarmin(t);
+  let registered = true;
+  mockGarmin(t, { registered: () => registered });
   const strava = await signIn(worker, testEnv, "strava");
   await signIn(worker, testEnv, "garmin", strava.session);
+  registered = false; // Garmin has really removed the registration.
   await worker.fetch(webhook({ deregistrations: [{ userId: "garmin-user-1" }] }), testEnv);
   const me = await (await worker.fetch(request("/api/me", { cookie: strava.session }), testEnv)).json();
   assert.deepEqual(me.connections.map((connection) => connection.provider), ["strava"]);
@@ -524,4 +532,36 @@ test("A refusal with the permission granted points at the app's API configuratio
   assert.equal(current.status, "failed");
   assert.match(current.last_error, /ACTIVITY_EXPORT is granted/);
   assert.match(current.last_error, /API Configuration Tool/);
+});
+
+test("A token whose Garmin registration was removed is reported as needing a reconnect", async (t) => {
+  const worker = await workerPromise;
+  const testEnv = env();
+  t.mock.method(console, "warn", () => {});
+  mockGarmin(t);
+  const realFetch = globalThis.fetch;
+  t.mock.method(globalThis, "fetch", async (url, options) => {
+    const path = new URL(url).pathname;
+    if (path.includes("/backfill/activities")) return Response.json({ errorMessage: "User not registered with consumer" }, { status: 403 });
+    if (path.endsWith("/user/permissions")) return Response.json({ errorMessage: "no user partner found for consumer garmin-client" }, { status: 403 });
+    return realFetch(url, options);
+  });
+  await signIn(worker, testEnv);
+  const current = await job(testEnv);
+  assert.equal(current.status, "failed");
+  assert.match(current.last_error, /no longer has this account registered/);
+  assert.match(current.last_error, /Connect Garmin again/);
+});
+
+test("A late deregistration notice does not remove a connection made again since", async (t) => {
+  const worker = await workerPromise;
+  const testEnv = env();
+  mockGarmin(t); // Garmin still recognises the current token.
+  const strava = await signIn(worker, testEnv, "strava");
+  await signIn(worker, testEnv, "garmin", strava.session);
+  await worker.fetch(webhook({ activities: [summary()] }), testEnv);
+  await worker.fetch(webhook({ deregistrations: [{ userId: "garmin-user-1" }] }), testEnv);
+  const me = await (await worker.fetch(request("/api/me", { cookie: strava.session }), testEnv)).json();
+  assert.deepEqual(me.connections.map((connection) => connection.provider).sort(), ["garmin", "strava"]);
+  assert.equal(await testEnv.DB.prepare("SELECT COUNT(*) AS count FROM activities").first("count"), 1);
 });

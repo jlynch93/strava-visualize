@@ -48,6 +48,12 @@ export async function runSyncJob(env, userId, providerId, request = backgroundRe
 // means the API itself is not enabled for this app in the developer portal.
 async function explainRefusal(env, request, provider, userId, error) {
   const refusal = `${provider.name} refused the history request (${error.message}).`;
+  // Garmin's wording when the token's registration no longer exists (the
+  // user disconnected, or removed the app in Garmin Connect). Permissions
+  // cannot be read either, so say what fixes it.
+  if (/not registered|no user partner/i.test(error.message)) {
+    return `${refusal} ${provider.name} no longer has this account registered with Runlore, usually because it was disconnected or removed under Connected Apps in ${provider.name} Connect. Connect ${provider.name} again from Account (completing ${provider.name}'s consent screen); the import starts automatically.`;
+  }
   if (!provider.permissions || !provider.requiredPermission) return refusal;
   try {
     const accessToken = await providerAccessToken(env, request, userId, provider.id);

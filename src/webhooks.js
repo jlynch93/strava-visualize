@@ -53,9 +53,25 @@ async function receiveActivities(env, request, garminUserId, items) {
   return activities.length;
 }
 
-async function deregister(env, garminUserId) {
+// A deregistration can arrive late: disconnecting in Runlore deregisters at
+// Garmin, and Garmin's notice may land after the user has already connected
+// again. Only act if Garmin confirms the current token is no longer registered.
+async function stillRegistered(env, request, userId) {
+  try {
+    await garmin.permissions(await providerAccessToken(env, request, userId, garmin.id));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function deregister(env, request, garminUserId) {
   const userId = await findUserIdByProviderUser(env, garmin.id, garminUserId);
   if (!userId) return;
+  if (await stillRegistered(env, request, userId)) {
+    console.log(JSON.stringify({ event: "stale_deregistration_ignored", provider: garmin.id }));
+    return;
+  }
   await deleteConnection(env, userId, garmin.id);
   // Garmin was this profile's only sign-in method; nothing can reach it now.
   if (!(await listConnections(env, userId)).length) await deleteUser(env, userId);
@@ -90,7 +106,7 @@ export async function handleGarminWebhook(env, request, pathSecret) {
     }
   }
   for (const [garminUserId] of groupByUser(body?.deregistrations)) {
-    await deregister(env, garminUserId);
+    await deregister(env, request, garminUserId);
   }
   for (const [garminUserId, items] of groupByUser(body?.userPermissionsChange)) {
     await permissionsChanged(env, request, garminUserId, items.at(-1)?.permissions);
