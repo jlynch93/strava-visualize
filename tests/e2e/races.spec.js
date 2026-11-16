@@ -214,3 +214,17 @@ test("without an A race there is no projection", async ({ page }) => {
   await expect(page.locator("#projectionLegend")).toBeHidden();
   await expect(page.locator(".goal-race")).toHaveCount(0);
 });
+
+test("the cycle names the current phase and its dates even when its bar segment is tiny", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await loadDemo(page);
+  await page.evaluate((date) => { coachingContext.races = [{ id: "h", name: "Fall Classic", date, distance: "Half marathon", priority: "A" }]; saveCoachingContext(); fitnessModelCache.key = ""; render(); location.hash = "#fitness"; }, iso(6));
+  const cycle = page.locator("#cyclePanel");
+  await expect(cycle.locator(".cycle-now strong")).toHaveText("Race week");
+  await expect(cycle.locator(".cycle-now-detail")).toContainText("6 days left in this phase");
+  await expect(cycle.locator(".cycle-phase.is-current")).toContainText("Race week");
+  await expect(cycle.locator(".cycle-phase")).toHaveCount(6);
+  // Nothing in the timeline spills past the panel on a phone.
+  const overflow = await cycle.evaluate((panel) => { const edge = panel.getBoundingClientRect().right; return [...panel.querySelectorAll(".cycle-today b, .cycle-axis-race")].some((node) => node.getBoundingClientRect().right > edge); });
+  expect(overflow).toBe(false);
+});

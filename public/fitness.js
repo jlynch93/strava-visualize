@@ -647,30 +647,41 @@ function renderCycle(model) {
     .map((phase) => ({ ...phase, from: new Date(Math.max(phase.from, start)) }));
   const current = model?.phase?.key;
   const fmt = (date) => date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  const isActive = (phase) => phase.key === current || (current === "race-day" && phase.key === "race-week");
   const segments = phases.map((phase) => {
     const width = pct(phase.to) - pct(phase.from);
-    const active = phase.key === current || (current === "race-day" && phase.key === "race-week");
-    return `<li class="cycle-segment cycle-${phase.key}${active ? " is-current" : ""}" style="width:${width}%" title="${phase.label}: ${fmt(phase.from)} – ${fmt(phase.to)}"><span>${width > 9 ? phase.label : ""}</span></li>`;
+    return `<li class="cycle-segment cycle-${phase.key}${isActive(phase) ? " is-current" : ""}" style="width:${width}%" title="${phase.label}: ${fmt(phase.from)} – ${fmt(phase.to)}"><span${width > 12 ? "" : ' class="visually-hidden"'}>${phase.label}</span></li>`;
   }).join("");
+  // The bar gives the shape of the cycle; this list carries the names and dates,
+  // so a phase too narrow to label on a phone is still readable.
+  const phaseList = phases.map((phase) => {
+    const state = isActive(phase) ? "is-current" : phase.to <= today ? "is-past" : "";
+    return `<li class="cycle-phase ${state}"><i class="cycle-swatch cycle-${phase.key}"></i><span class="cycle-phase-name">${phase.label}${state === "is-current" ? ' <em>Now</em>' : ""}</span><span class="cycle-phase-dates">${phase.key === "recovery" ? `from ${fmt(phase.from)}` : `${fmt(phase.from)} – ${fmt(phase.to)}`}</span></li>`;
+  }).join("");
+  const activePhase = phases.find(isActive);
+  const phaseDaysLeft = activePhase ? Math.max(0, Math.round((activePhase.to - today) / dayMs)) : null;
   const others = races.filter((race) => race.priority !== "A" && new Date(`${race.date}T00:00:00`) >= start && new Date(`${race.date}T00:00:00`) <= end);
   const ticks = others.map((race) => `<span class="cycle-race priority-${race.priority}" style="left:${pct(new Date(`${race.date}T00:00:00`))}%" title="${escapeHtml(race.name || race.distance)} (${race.priority}) · ${fmt(new Date(`${race.date}T00:00:00`))}"><b>${race.priority}</b></span>`).join("");
-  const upcoming = phases.filter((phase) => phase.from > today && phase.key !== "race-week").slice(0, 3)
-    .map((phase) => `${phase.label} from ${fmt(phase.from)}`);
   const daysTo = Math.round((raceDay - today) / dayMs);
-  // Today and the race pins lean apart when they would overlap.
-  const near = Math.abs(pct(today) - pct(raceDay)) < 8;
+  const edge = (value) => value > 82 ? " at-end" : value < 18 ? " at-start" : "";
+  const nowDetail = !model?.phase ? "" : current === "race-day" ? "Race day is here."
+    : current === "recovery" ? `${model.phase.daysLeft} day${model.phase.daysLeft === 1 ? "" : "s"} of recovery left.`
+    : current === "tune-up" ? `${escapeHtml(model.phase.detail)}.`
+    : activePhase ? `${fmt(activePhase.from)} – ${fmt(activePhase.to)}${phaseDaysLeft ? ` · ${phaseDaysLeft} day${phaseDaysLeft === 1 ? "" : "s"} left in this phase` : ""}.` : "";
   document.querySelector("#cycleSummary").textContent = daysTo >= 0
     ? `${raceLabel(goal)} on ${raceDay.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}: ${daysTo === 0 ? "today" : `${daysTo} days to go`}. Readiness weighs fatigue against what this phase calls for.`
     : `Recovering from ${raceLabel(goal)}. Readiness keeps you easy until recovery ends.`;
   document.querySelector("#cycleTimeline").innerHTML = `
+    ${model?.phase ? `<p class="cycle-now"><span class="cycle-now-label">Now</span><strong>${escapeHtml(model.phase.label)}</strong><span class="cycle-now-detail">${nowDetail}</span></p>` : ""}
     <div class="cycle-track">
       <ol class="cycle-bar" aria-label="Training phases toward ${escapeHtml(raceLabel(goal))}">${segments}</ol>
-      <span class="cycle-today${near ? " lean-right" : ""}" style="left:${pct(today)}%"><b>Today</b></span>
-      <span class="cycle-goal${near ? " lean-left" : ""}" style="left:${pct(raceDay)}%" title="${escapeHtml(raceLabel(goal))}"><b>A</b></span>
+      <span class="cycle-today${edge(pct(today))}" style="left:${pct(today)}%"><b>Today</b></span>
+      <span class="cycle-goal" style="left:${pct(raceDay)}%" title="${escapeHtml(raceLabel(goal))}"></span>
       ${ticks}
     </div>
-    <div class="cycle-axis"><span>${fmt(start)}</span><span class="cycle-axis-race" style="left:${pct(raceDay)}%">${fmt(raceDay)} · race</span></div>
-    <p class="cycle-next">${model?.phase ? `<strong>Now: ${escapeHtml(model.phase.label)}.</strong> ` : ""}${upcoming.length ? escapeHtml(upcoming.join(" · ")) + "." : ""}${others.length ? ` Tune-ups: ${others.map((race) => `${escapeHtml(race.name || race.distance)} (${race.priority}, ${fmt(new Date(`${race.date}T00:00:00`))})`).join(", ")}.` : ""}</p>`;
+    <div class="cycle-axis"><span>${fmt(start)}</span><span class="cycle-axis-race${edge(pct(raceDay))}" style="left:${pct(raceDay)}%"><b>A</b> ${fmt(raceDay)} · race</span></div>
+    <ol class="cycle-phases" aria-label="Phase dates">${phaseList}</ol>
+    ${others.length ? `<p class="cycle-next">Tune-ups: ${others.map((race) => `${escapeHtml(race.name || race.distance)} (${race.priority}, ${fmt(new Date(`${race.date}T00:00:00`))})`).join(", ")}.</p>` : ""}`;
 }
 
 function renderFitness() {
