@@ -820,4 +820,3 @@ function readinessSummaryText() {
   if (!model?.readiness) return "";
   return `Readiness today: ${model.readiness.score}/100 (${model.readiness.label}). ${model.readiness.advice}`;
 }
-
