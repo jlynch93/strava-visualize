@@ -74,13 +74,13 @@ test("malformed saved coaching context cannot prevent startup", async ({ page })
   page.on("pageerror", (error) => errors.push(error.message));
   await page.addInitScript(() => localStorage.setItem("run-trends-coaching-context-v1", JSON.stringify({ goal: null, checkin: ["bad"], plan: 3, races: ["bad", { date: "not-a-date" }, null] })));
   await page.goto("/");
-  expect(await page.evaluate(() => coachingContext)).toEqual({ goal: {}, checkin: {}, plan: {}, races: [] });
+  expect(await page.evaluate(() => coachingContext)).toEqual({ goal: {}, checkin: {}, plan: {}, races: [], yearGoals: {}, shoes: [], notes: {} });
   expect(errors).toEqual([]);
   const repaired = await page.evaluate(() => {
     localStorage.setItem(CONTEXT_STORAGE_KEY, JSON.stringify({ goal: { miles: 30, mode: {} }, checkin: { feel: null } }));
     return loadCoachingContext();
   });
-  expect(repaired).toEqual({ goal: { miles: "30" }, checkin: {}, plan: {}, races: [] });
+  expect(repaired).toEqual({ goal: { miles: "30" }, checkin: {}, plan: {}, races: [], yearGoals: {}, shoes: [], notes: {} });
 });
 
 test("a three-run draft protects the chosen long-run day before allocating other sessions", async ({ page }) => {

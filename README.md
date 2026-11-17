@@ -332,6 +332,24 @@ in `fitness-core.js` and covered by `tests/fitness-core.test.js`.
   week on the device (distance, runs, time, pace, climb, daily bars, longest
   run, readiness) to download or, where supported, share. Nothing is uploaded.
 
+- **Yearly goal** (Overview): this calendar year's running distance, where
+  it is heading at the pace so far, and, with a goal set, a marker for where
+  goal pace would have you today and the weekly distance the rest of the year
+  needs. Goals are stored per year, in miles, with the synced coaching context.
+- **Intensity balance** (Fitness): running time over the last four weeks split
+  into easy (easy, recovery, long) and hard (quality, race) by the effort-based
+  run types, against the 80/20 guideline, with advice when it drifts.
+- **Shoes** (Runs, below the ledger): add a pair with the date of its first
+  run and a replacement distance; each run counts toward the newest pair in use
+  that day. Bars turn amber from 85% and red past the limit; retire a pair to
+  stop counting it. Synced with the coaching context.
+- **How it felt** (each run's detail): effort from 1 to 10 and a short note,
+  saved as you choose and synced with your account; the ledger shows the effort
+  beside the run's name.
+- **Year in review**: "Share your year" (or the palette) draws a 1080×1350
+  image of the year: distance, runs, hours, days run, climb, monthly bars, the
+  busiest month, the longest run and records set.
+
 ## GitHub workflows
 
 `Validate dashboard` runs on pushes to `main` and `codex/**` using a trusted

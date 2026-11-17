@@ -111,7 +111,7 @@ adoptLegacyProfile();
 function loadCoachingContext() {
   try {
     return sanitizeCoachingContext(JSON.parse(localStorage.getItem(CONTEXT_STORAGE_KEY)));
-  } catch { return { goal: {}, checkin: {}, plan: {}, races: [] }; }
+  } catch { return { goal: {}, checkin: {}, plan: {}, races: [], yearGoals: {}, shoes: [], notes: {} }; }
 }
 
 // "3:30:00" or "24:30" -> seconds; null when empty or not a time.
@@ -147,7 +147,7 @@ function sanitizeRace(race) {
 }
 
 function sanitizeCoachingContext(saved) {
-  const defaults = { goal: {}, checkin: {}, plan: {}, races: [] };
+  const defaults = { goal: {}, checkin: {}, plan: {}, races: [], yearGoals: {}, shoes: [], notes: {} };
   if (!saved || typeof saved !== "object" || Array.isArray(saved)) return defaults;
   const record = (value) => value && typeof value === "object" && !Array.isArray(value)
     ? Object.fromEntries(Object.entries(value)
@@ -164,7 +164,21 @@ function sanitizeCoachingContext(saved) {
   const savedProfile = record(saved.profile), profile = {};
   if (/^(19|20)\d{2}$/.test(savedProfile.birthYear)) profile.birthYear = savedProfile.birthYear;
   if (["M", "F", "X"].includes(savedProfile.gender)) profile.gender = savedProfile.gender;
-  return { goal, checkin: record(saved.checkin), plan: record(saved.plan), races, ...(Object.keys(profile).length ? { profile } : {}) };
+  // Yearly distance goals in miles, by year.
+  const yearGoals = Object.fromEntries(Object.entries(saved.yearGoals && typeof saved.yearGoals === "object" ? saved.yearGoals : {})
+    .filter(([year, miles]) => /^\d{4}$/.test(year) && Number(miles) > 0 && Number(miles) < 20000).map(([year, miles]) => [year, Math.round(Number(miles) * 10) / 10]));
+  const day = (value) => /^\d{4}-\d{2}-\d{2}$/.test(String(value || "")) ? String(value) : null;
+  const shoes = (Array.isArray(saved.shoes) ? saved.shoes : []).map((shoe) => shoe && typeof shoe === "object" && day(shoe.start) ? {
+    id: String(shoe.id || crypto.randomUUID()).slice(0, 60), name: String(shoe.name || "Shoes").trim().slice(0, 40) || "Shoes", start: day(shoe.start),
+    ...(day(shoe.retired) ? { retired: day(shoe.retired) } : {}), limit: Number(shoe.limit) > 0 && Number(shoe.limit) < 5e6 ? Math.round(Number(shoe.limit)) : 643738
+  } : null).filter(Boolean).slice(0, 20);
+  // How each run felt: effort 1-10 and a short note, by activity id.
+  const notes = Object.fromEntries(Object.entries(saved.notes && typeof saved.notes === "object" ? saved.notes : {}).map(([id, note]) => {
+    const rpe = Number(note?.rpe);
+    const text = String(note?.note || "").trim().slice(0, 280);
+    return [String(id).slice(0, 80), { ...(Number.isInteger(rpe) && rpe >= 1 && rpe <= 10 ? { rpe } : {}), ...(text ? { note: text } : {}) }];
+  }).filter(([, note]) => Object.keys(note).length).slice(-2000));
+  return { goal, checkin: record(saved.checkin), plan: record(saved.plan), races, ...(Object.keys(profile).length ? { profile } : {}), yearGoals, shoes, notes };
 }
 
 function raceList() {

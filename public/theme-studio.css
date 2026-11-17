@@ -60,7 +60,7 @@
 :root[data-palette="studio"] :is(h1, h2) { letter-spacing: -0.03em; }
 :root[data-palette="studio"] :is(
   .chart-panel, .data-panel, .readiness-hero, .fitness-panel, .fitness-kpis, .this-week, .block-review,
-  .secondary-disclosure, .key-run-card, .goal-race, .empty-window, .fitness-empty, .advanced-exploration, .toolbar, .records
+  .secondary-disclosure, .key-run-card, .goal-race, .empty-window, .fitness-empty, .advanced-exploration, .toolbar, .records, .year-goal, .shoe, .run-feel
 ) {
   border: 0; border-radius: var(--studio-radius); background: var(--surface); box-shadow: var(--studio-card-shadow);
 }

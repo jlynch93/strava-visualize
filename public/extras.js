@@ -133,6 +133,8 @@ function paletteCommands(query) {
     go("Overview", "#overview", "home dashboard trends"), go("Fitness", "#fitness", "readiness vo2 form fatigue"),
     go("Plan", "#planning", "week schedule races goal"), go("Runs", "#runs", "ledger list activities"),
     { group: "Do", label: "Share this week as an image", keywords: "recap export png weekly", run: () => openRecap() },
+    { group: "Do", label: "Share your year as an image", keywords: "year review recap wrapped annual", run: () => openYearRecap() },
+    { group: "Go to", label: "Shoes", keywords: "gear mileage trainers", run: () => { location.hash = "#runs"; requestAnimationFrame(() => document.querySelector("#shoes")?.scrollIntoView({ block: "start" })); } },
     { group: "Do", label: "Edit your profile", keywords: "account age gender heart rate birth", run: () => openAccountDialog() },
     { group: "Do", label: "Import a file", keywords: "upload csv json strava export", run: () => els.fileInput.click() },
     { group: "Do", label: preferences.units === "metric" ? "Switch to miles" : "Switch to kilometres", keywords: "units metric imperial km mi", run: () => { const select = document.querySelector("#unitPreference"); select.value = preferences.units === "metric" ? "imperial" : "metric"; select.dispatchEvent(new Event("change", { bubbles: true })); } },
@@ -288,14 +290,12 @@ function drawRecap(data) {
 }
 
 let recapUrl = null;
-function openRecap() {
-  const data = weekRecapData();
-  const canvas = drawRecap(data);
+function showRecapCanvas(canvas, name, alt, title) {
   const dialog = document.querySelector("#recapDialog");
   const image = document.querySelector("#recapImage");
+  document.querySelector("#recapTitle").textContent = title;
   image.src = canvas.toDataURL("image/png");
-  image.alt = `Weekly recap: ${displayDistance(miles(data.meters), 1)} over ${data.count} ${data.walking ? "walks" : "runs"}, ${formatDuration(data.seconds)} moving.`;
-  const name = `runlore-week-${localDateValue(data.start)}.png`;
+  image.alt = alt;
   const download = document.querySelector("#recapDownload");
   download.download = name;
   download.href = image.src;
@@ -309,14 +309,250 @@ function openRecap() {
     const file = new File([blob], name, { type: "image/png" });
     if (navigator.canShare?.({ files: [file] })) {
       share.hidden = false;
-      share.onclick = () => navigator.share({ files: [file], title: "My week on Runlore" }).catch(() => { /* Cancelled. */ });
+      share.onclick = () => navigator.share({ files: [file], title }).catch(() => { /* Cancelled. */ });
     }
   }, "image/png");
   if (!dialog.open) dialog.showModal();
 }
+function openRecap() {
+  const data = weekRecapData();
+  showRecapCanvas(drawRecap(data), `runlore-week-${localDateValue(data.start)}.png`, `Weekly recap: ${displayDistance(miles(data.meters), 1)} over ${data.count} ${data.walking ? "walks" : "runs"}, ${formatDuration(data.seconds)} moving.`, "Your week");
+}
 document.querySelector("#recapClose").addEventListener("click", () => document.querySelector("#recapDialog").close());
 document.querySelector("#recapDialog").addEventListener("click", (event) => { if (event.target.id === "recapDialog") event.target.close(); });
 document.addEventListener("click", (event) => { if (event.target.closest?.("[data-action='share-week']")) openRecap(); });
+
+/* ---------- 6. Yearly distance goal ---------- */
+
+const yearRuns = (year) => state.rawActivities.map(normalizeActivity).filter(isRun).filter((run) => parseActivityDate(run).getFullYear() === year);
+function renderYearGoal() {
+  const host = document.querySelector("#yearGoal");
+  if (!host) return;
+  const today = new Date();
+  const year = today.getFullYear();
+  const runs = state.rawActivities.length && state.activityMode !== "walk" ? yearRuns(year) : [];
+  host.hidden = !runs.length;
+  if (!runs.length) return;
+  if (host.contains(document.activeElement) && document.activeElement.matches("input")) return; // Do not redraw under the cursor.
+  const goalMiles = coachingContext.yearGoals?.[year] || 0;
+  const plan = FitnessCore.yearProjection({ soFar: runs.reduce((sum, run) => sum + run.distance, 0), today, goal: goalMiles * 1609.344 });
+  const distance = (meters, digits = 0) => displayDistance(miles(meters), digits);
+  const fill = plan.goal ? Math.min(100, plan.soFar / plan.goal * 100) : Math.min(100, plan.elapsedDays / plan.totalDays * 100);
+  const marker = plan.goal ? Math.min(100, plan.expectedByNow / plan.goal * 100) : null;
+  const verdict = !plan.goal ? `At this pace, ${distance(plan.projected)} by December 31.`
+    : plan.done ? `Goal reached, ${distance(plan.soFar - plan.goal)} past it with ${plan.remainingDays} days to spare.`
+    : plan.onTrack ? `On pace for ${distance(plan.projected)}: ${distance(plan.ahead)} ahead of schedule.`
+    : `On pace for ${distance(plan.projected)}, ${distance(plan.goal - plan.projected)} short. ${distance(plan.neededPerWeek, 1)} a week from here gets you there.`;
+  const unit = preferences.units === "metric" ? "km" : "mi";
+  const goalValue = goalMiles ? Math.round(goalMiles * (preferences.units === "metric" ? 1.609344 : 1)) : "";
+  host.innerHTML = `
+    <div class="year-head">
+      <div><h2 id="yearGoalTitle">${year} so far <span>${distance(plan.soFar)} · ${runs.length} runs</span></h2><p>${escapeHtml(verdict)}</p></div>
+      <button type="button" class="ghost-action share-year" data-action="share-year">Share your year</button>
+    </div>
+    <div class="year-meter" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(fill)}" aria-label="${plan.goal ? `${Math.round(fill)}% of your ${distance(plan.goal)} goal` : `${Math.round(fill)}% of the year gone`}">
+      <span style="width:${fill}%"></span>${marker !== null ? `<i style="left:${marker}%" title="Where the goal pace would have you today"></i>` : ""}
+    </div>
+    <div class="year-foot">
+      <dl class="year-facts">
+        <div><dt>Projected</dt><dd>${distance(plan.projected)}</dd></div>
+        ${plan.goal && !plan.done ? `<div><dt>Needed a week</dt><dd>${distance(plan.neededPerWeek, 1)}</dd></div><div><dt>Left</dt><dd>${distance(plan.left)}</dd></div>` : ""}
+        <div><dt>Days left</dt><dd>${plan.remainingDays}</dd></div>
+      </dl>
+      <form id="yearGoalForm" class="year-goal-form"><label for="yearGoalInput">Goal for ${year} (${unit})</label><input id="yearGoalInput" type="number" min="1" max="30000" step="1" inputmode="numeric" value="${goalValue}" placeholder="e.g. ${preferences.units === "metric" ? "2000" : "1200"}"><button type="submit">${goalMiles ? "Update" : "Set goal"}</button>${goalMiles ? '<button type="button" class="link-action" data-action="clear-year-goal">Clear</button>' : ""}</form>
+    </div>`;
+}
+document.addEventListener("submit", (event) => {
+  if (event.target.id !== "yearGoalForm") return;
+  event.preventDefault();
+  const value = Number(event.target.yearGoalInput.value);
+  const year = String(new Date().getFullYear());
+  coachingContext.yearGoals = { ...(coachingContext.yearGoals || {}) };
+  if (value > 0) coachingContext.yearGoals[year] = Math.round(value / (preferences.units === "metric" ? 1.609344 : 1) * 10) / 10; else delete coachingContext.yearGoals[year];
+  saveCoachingContext();
+  document.activeElement?.blur?.();
+  renderYearGoal();
+});
+document.addEventListener("click", (event) => {
+  if (event.target.closest?.("[data-action='clear-year-goal']")) { delete coachingContext.yearGoals?.[new Date().getFullYear()]; saveCoachingContext(); renderYearGoal(); }
+  if (event.target.closest?.("[data-action='share-year']")) openYearRecap();
+});
+
+/* ---------- 7. Intensity balance ---------- */
+
+const INTENSITY_VERDICT = {
+  "too-hard": "More than 30% hard. That is more intensity than most plans hold for long: swap a hard day for an easy one.",
+  "hard-side": "A little on the hard side of 80/20. Fine in a build; keep the easy days truly easy.",
+  balanced: "Close to 80/20: mostly easy, with room for quality.",
+  "all-easy": "Almost all easy. Building toward a race? One quality session a week adds speed."
+};
+function renderIntensity() {
+  const panel = document.querySelector("#intensityPanel");
+  const model = fitnessModel();
+  if (!panel || !model) return;
+  const balance = FitnessCore.intensityBalance(model.runs, model.types, parseActivityDate);
+  panel.hidden = !balance;
+  if (!balance) return;
+  const hard = Math.round(balance.hardShare * 100), easy = 100 - hard;
+  document.querySelector("#intensityBalance").innerHTML = `
+    <div class="intensity-bar" role="img" aria-label="${easy}% easy, ${hard}% hard over the last four weeks; the guideline is 80% easy.">
+      <span class="intensity-easy" style="width:${easy}%">${easy >= 12 ? `${easy}% easy` : ""}</span><span class="intensity-hard" style="width:${hard}%">${hard >= 12 ? `${hard}% hard` : ""}</span>
+      <i class="intensity-target" style="left:80%"><b>80/20</b></i>
+    </div>
+    <p class="intensity-verdict status-${balance.key}">${escapeHtml(INTENSITY_VERDICT[balance.key])}</p>
+    <dl class="intensity-facts"><div><dt>Easy, steady and long</dt><dd>${formatDuration(balance.easySeconds)}</dd></div><div><dt>Quality and races</dt><dd>${formatDuration(balance.hardSeconds)}</dd></div><div><dt>Runs</dt><dd>${balance.runs}</dd></div></dl>`;
+}
+
+/* ---------- 8. Shoes ---------- */
+
+function renderShoes() {
+  const host = document.querySelector("#shoes");
+  if (!host) return;
+  const shoes = coachingContext.shoes || [];
+  const runs = state.rawActivities.map(normalizeActivity).filter(isRun);
+  const rows = FitnessCore.shoeMileage(runs, shoes, parseActivityDate).sort((a, b) => (a.retired ? 1 : 0) - (b.retired ? 1 : 0) || b.start.localeCompare(a.start));
+  document.querySelectorAll(".shoe-unit").forEach((node) => { node.textContent = unitLabel(); });
+  const form = document.querySelector("#shoeForm");
+  if (form && !form.shoeStart.value) form.shoeStart.value = localDateValue(new Date());
+  if (form) form.shoeLimit.placeholder = preferences.units === "metric" ? "650" : "400";
+  const active = rows.filter((shoe) => !shoe.retired);
+  document.querySelector("#shoesSummary").textContent = active.length
+    ? active.map((shoe) => `${shoe.name}: ${displayDistance(miles(shoe.meters), 0)}`).join(" · ")
+    : "Add a pair to see how far you have run in it, and when to replace it.";
+  const date = (value) => new Date(`${value}T12:00:00`).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+  const statusText = { fine: "", nearly: "Replace soon", worn: "Past its limit", retired: "Retired" };
+  document.querySelector("#shoeList").innerHTML = rows.map((shoe) => `
+    <li class="shoe status-${shoe.status}">
+      <div class="shoe-main"><strong>${escapeHtml(shoe.name)}</strong><small>Since ${escapeHtml(date(shoe.start))}${shoe.retired ? ` · retired ${escapeHtml(date(shoe.retired))}` : ""} · ${shoe.runs} ${shoe.runs === 1 ? "run" : "runs"}</small></div>
+      <div class="shoe-meter" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(Math.min(1, shoe.share) * 100)}" aria-label="${escapeHtml(`${shoe.name}: ${Math.round(shoe.share * 100)}% of ${displayDistance(miles(shoe.limit), 0)}`)}"><span style="width:${Math.min(100, shoe.share * 100)}%"></span></div>
+      <div class="shoe-distance"><strong>${displayDistance(miles(shoe.meters), 0)}</strong><small>of ${displayDistance(miles(shoe.limit), 0)}${statusText[shoe.status] ? ` · <b>${statusText[shoe.status]}</b>` : ""}</small></div>
+      <div class="shoe-actions">${shoe.retired ? "" : `<button type="button" class="link-action" data-shoe-action="retire" data-shoe-id="${escapeHtml(shoe.id)}">Retire<span class="visually-hidden"> ${escapeHtml(shoe.name)}</span></button>`}<button type="button" class="link-action danger" data-shoe-action="remove" data-shoe-id="${escapeHtml(shoe.id)}">Remove<span class="visually-hidden"> ${escapeHtml(shoe.name)}</span></button></div>
+    </li>`).join("") || '<li class="shoe-empty">No shoes yet.</li>';
+}
+document.querySelector("#shoeForm")?.addEventListener("submit", (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const limit = Number(form.shoeLimit.value) || (preferences.units === "metric" ? 650 : 400);
+  coachingContext.shoes = [...(coachingContext.shoes || []), { id: crypto.randomUUID(), name: form.shoeName.value.trim() || "Shoes", start: form.shoeStart.value, limit: Math.round(limit * unitMeters()) }];
+  coachingContext = sanitizeCoachingContext(coachingContext);
+  saveCoachingContext();
+  form.reset();
+  renderShoes();
+  setStatus("Shoes added.", false, "shoeForm");
+});
+document.querySelector("#shoeList")?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-shoe-action]");
+  if (!button) return;
+  const id = button.dataset.shoeId;
+  const shoe = coachingContext.shoes.find((item) => item.id === id);
+  if (!shoe) return;
+  if (button.dataset.shoeAction === "retire") shoe.retired = localDateValue(new Date());
+  else if (window.confirm(`Remove ${shoe.name}? Its runs stop counting toward any shoe.`)) coachingContext.shoes = coachingContext.shoes.filter((item) => item.id !== id);
+  else return;
+  saveCoachingContext();
+  renderShoes();
+});
+
+/* ---------- 9. How a run felt ---------- */
+
+const RPE_WORDS = ["", "Very easy", "Easy", "Easy", "Comfortable", "Steady", "Moderately hard", "Hard", "Very hard", "Near max", "All out"];
+const runNote = (id) => coachingContext.notes?.[String(id)] || null;
+function feelSection(run) {
+  const note = runNote(run.id) || {};
+  const scale = Array.from({ length: 10 }, (_, index) => {
+    const value = index + 1;
+    return `<label title="${RPE_WORDS[value]}"><input type="radio" name="runRpe" value="${value}"${note.rpe === value ? " checked" : ""}><span>${value}</span></label>`;
+  }).join("");
+  return `<section class="run-feel" aria-labelledby="runFeelTitle" data-run-id="${escapeHtml(String(run.id))}">
+    <div class="run-feel-head"><h3 id="runFeelTitle">How it felt</h3><span id="runFeelWord">${note.rpe ? `${note.rpe} · ${RPE_WORDS[note.rpe]}` : "Effort from 1 (very easy) to 10 (all out)"}</span></div>
+    <fieldset class="rpe-scale"><legend class="visually-hidden">Effort, 1 to 10</legend>${scale}</fieldset>
+    <label class="visually-hidden" for="runFeelNote">Note</label>
+    <textarea id="runFeelNote" rows="2" maxlength="280" placeholder="A note for later: legs, weather, shoes, fuelling…">${escapeHtml(note.note || "")}</textarea>
+    <p class="run-feel-status" role="status"></p>
+  </section>`;
+}
+function saveFeel(section) {
+  const id = section.dataset.runId;
+  const rpe = Number(section.querySelector("input[name='runRpe']:checked")?.value) || undefined;
+  const text = section.querySelector("#runFeelNote").value.trim().slice(0, 280);
+  coachingContext.notes = { ...(coachingContext.notes || {}) };
+  if (rpe || text) coachingContext.notes[id] = { ...(rpe ? { rpe } : {}), ...(text ? { note: text } : {}) }; else delete coachingContext.notes[id];
+  saveCoachingContext();
+  section.querySelector("#runFeelWord").textContent = rpe ? `${rpe} · ${RPE_WORDS[rpe]}` : "Effort from 1 (very easy) to 10 (all out)";
+  section.querySelector(".run-feel-status").textContent = "Saved";
+  renderTable();
+}
+document.addEventListener("change", (event) => {
+  const section = event.target.closest?.(".run-feel");
+  if (section && event.target.matches("input[name='runRpe'], #runFeelNote")) saveFeel(section);
+});
+
+/* ---------- 10. Year in review ---------- */
+
+function yearRecapData(year = new Date().getFullYear()) {
+  const runs = yearRuns(year);
+  const months = Array.from({ length: 12 }, (_, month) => runs.filter((run) => parseActivityDate(run).getMonth() === month).reduce((sum, run) => sum + run.distance, 0));
+  const records = currentRecords().filter((record) => record.date.getFullYear() === year);
+  const days = new Set(runs.map((run) => localDateValue(parseActivityDate(run)))).size;
+  return {
+    year, runs: runs.length, days, months, records,
+    meters: runs.reduce((sum, run) => sum + run.distance, 0),
+    seconds: runs.reduce((sum, run) => sum + run.moving_time, 0),
+    climb: runs.reduce((sum, run) => sum + (run.total_elevation_gain || 0), 0),
+    longest: runs.reduce((best, run) => run.distance > (best?.distance || 0) ? run : best, null)
+  };
+}
+
+function drawYearRecap(data) {
+  const canvas = document.createElement("canvas");
+  const W = 1080, H = 1350; canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext("2d");
+  const font = (weight, size) => `${weight} ${size}px "SF Pro Display", "Inter", "Segoe UI", system-ui, sans-serif`;
+  const background = ctx.createLinearGradient(0, 0, 0, H);
+  background.addColorStop(0, "#101a2e"); background.addColorStop(1, "#0d181c");
+  ctx.fillStyle = background; ctx.fillRect(0, 0, W, H);
+  const glow = ctx.createRadialGradient(W * 0.2, H * 0.12, 0, W * 0.2, H * 0.12, 760);
+  glow.addColorStop(0, "rgba(61, 143, 134, 0.35)"); glow.addColorStop(1, "rgba(61, 143, 134, 0)");
+  ctx.fillStyle = glow; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = "#c8f04a"; ctx.beginPath(); ctx.arc(96, 104, 14, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = "#e8f1ec"; ctx.font = font(800, 40); ctx.fillText("runlore", 126, 118);
+  ctx.fillStyle = "#c8f04a"; ctx.font = font(800, 150); ctx.fillText(String(data.year), 72, 330);
+  ctx.fillStyle = "#9db4ad"; ctx.font = font(700, 36); ctx.fillText("YOUR YEAR IN RUNNING", 80, 395);
+  const [value, unit] = displayDistance(miles(data.meters), 0).split(" ");
+  ctx.fillStyle = "#ffffff"; ctx.font = font(800, 170); ctx.fillText(Number(value).toLocaleString(), 72, 580);
+  const width = ctx.measureText(Number(value).toLocaleString()).width;
+  ctx.fillStyle = "#c8f04a"; ctx.font = font(800, 64); ctx.fillText(unit, 72 + width + 20, 580);
+  const stats = [
+    [data.runs.toLocaleString(), "runs"], [`${Math.round(data.seconds / 3600).toLocaleString()} h`, "on your feet"],
+    [data.days.toLocaleString(), "days you ran"], [preferences.units === "metric" ? `${Math.round(data.climb).toLocaleString()} m` : `${Math.round(feet(data.climb)).toLocaleString()} ft`, "climbed"]
+  ];
+  stats.forEach(([big, small], index) => {
+    const x = 80 + (index % 2) * 470, y = 700 + Math.floor(index / 2) * 140;
+    ctx.fillStyle = "#ffffff"; ctx.font = font(800, 60); ctx.fillText(big, x, y);
+    ctx.fillStyle = "#9db4ad"; ctx.font = font(600, 30); ctx.fillText(small, x, y + 44);
+  });
+  // Months.
+  const base = 1170, top = 990, barWidth = 60, gap = (W - 160 - barWidth * 12) / 11;
+  const most = Math.max(...data.months, 1);
+  const busiest = data.months.indexOf(most);
+  data.months.forEach((meters, month) => {
+    const x = 80 + month * (barWidth + gap);
+    const height = meters ? Math.max(8, (base - top) * meters / most) : 4;
+    ctx.fillStyle = meters ? (month === busiest ? "#c8f04a" : "#3d8f86") : "rgba(255,255,255,0.12)";
+    ctx.beginPath(); ctx.roundRect(x, base - height, barWidth, height, 10); ctx.fill();
+    ctx.fillStyle = "#9db4ad"; ctx.font = font(700, 26); ctx.textAlign = "center";
+    ctx.fillText(new Date(data.year, month, 1).toLocaleDateString(undefined, { month: "narrow" }), x + barWidth / 2, base + 40); ctx.textAlign = "left";
+  });
+  ctx.fillStyle = "#e8f1ec"; ctx.font = font(600, 30);
+  const footer = [data.longest ? `Longest ${displayDistance(miles(data.longest.distance), 1)}` : "", `Busiest ${new Date(data.year, busiest, 1).toLocaleDateString(undefined, { month: "long" })}`, data.records.length ? `${data.records.length} ${data.records.length === 1 ? "record" : "records"} set` : ""].filter(Boolean).join("   ·   ");
+  ctx.fillText(footer, 80, 1290);
+  return canvas;
+}
+
+function openYearRecap() {
+  const data = yearRecapData();
+  showRecapCanvas(drawYearRecap(data), `runlore-${data.year}.png`, `${data.year} in running: ${displayDistance(miles(data.meters), 0)} over ${data.runs} runs.`, `Your ${data.year}`);
+}
 
 /* ---------- Hooks into the existing renderers ---------- */
 
@@ -336,11 +572,31 @@ const baseRenderFitness = renderFitness;
 renderFitness = function () {
   baseRenderFitness();
   renderEfficiency();
+  renderIntensity();
+};
+const baseShowWorkoutModal = showWorkoutModal;
+showWorkoutModal = function (runId, trigger) {
+  baseShowWorkoutModal(runId, trigger);
+  const run = state.filteredRuns.find((candidate) => String(candidate.id) === String(runId));
+  const body = els.workoutModalContent.querySelector(".workout-body");
+  if (run && body && !body.querySelector(".run-feel")) body.insertAdjacentHTML("afterbegin", feelSection(run));
+};
+const baseRenderTable = renderTable;
+renderTable = function (...args) {
+  baseRenderTable(...args);
+  els.activityRows.querySelectorAll("tr[data-activity-id]").forEach((row) => {
+    const note = runNote(row.dataset.activityId);
+    const cell = row.children[2];
+    if (!note || !cell || cell.querySelector(".feel-chip")) return;
+    cell.insertAdjacentHTML("beforeend", ` <span class="feel-chip" title="${escapeHtml([note.rpe ? `Effort ${note.rpe} of 10, ${RPE_WORDS[note.rpe].toLowerCase()}` : "", note.note || ""].filter(Boolean).join(": "))}">${note.rpe ? `RPE ${note.rpe}` : "Note"}${note.note && note.rpe ? " ·✎" : ""}</span>`);
+  });
 };
 const baseRender = render;
 render = function (...args) {
   const result = baseRender.apply(this, args);
   renderRecords();
+  renderYearGoal();
+  renderShoes();
   return result;
 };
 render();

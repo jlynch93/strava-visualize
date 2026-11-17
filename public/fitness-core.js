@@ -496,6 +496,70 @@
     return splits;
   }
 
+  /* ---------- Yearly goal ---------- */
+
+  // Where a calendar year's distance is heading at the pace so far, and what
+  // the rest of the year needs to reach a goal (all distances in metres).
+  function yearProjection({ soFar, today = new Date(), goal = 0 }) {
+    const year = today.getFullYear();
+    const start = new Date(year, 0, 1), end = new Date(year + 1, 0, 1);
+    const totalDays = Math.round((end - start) / 86400000);
+    const elapsedDays = Math.min(totalDays, Math.max(1, Math.round((new Date(year, today.getMonth(), today.getDate()) - start) / 86400000) + 1));
+    const remainingDays = totalDays - elapsedDays;
+    const projected = soFar / elapsedDays * totalDays;
+    const result = { year, totalDays, elapsedDays, remainingDays, soFar, projected };
+    if (!(goal > 0)) return result;
+    const expectedByNow = goal * elapsedDays / totalDays;
+    const left = Math.max(0, goal - soFar);
+    return { ...result, goal, expectedByNow, ahead: soFar - expectedByNow, left, neededPerWeek: remainingDays ? left / remainingDays * 7 : 0, onTrack: projected >= goal, done: soFar >= goal };
+  }
+
+  /* ---------- Intensity balance ---------- */
+
+  // Share of running time that was hard (quality sessions and races) over the
+  // last `days`. Most plans keep it near 20%.
+  function intensityBalance(runs, types, dateOf, { today = new Date(), days = 28 } = {}) {
+    const since = new Date(today.getFullYear(), today.getMonth(), today.getDate() - days + 1);
+    let easy = 0, hard = 0, count = 0;
+    for (const run of runs) {
+      const date = dateOf(run);
+      if (Number.isNaN(date.valueOf()) || date < since || date > today) continue;
+      const group = types.get(String(run.id))?.group || "easy";
+      const seconds = Number(run.moving_time) || 0;
+      if (group === "quality") hard += seconds; else easy += seconds;
+      count += 1;
+    }
+    const total = easy + hard;
+    if (count < 4 || !total) return null;
+    const hardShare = hard / total;
+    const key = hardShare > 0.3 ? "too-hard" : hardShare > 0.22 ? "hard-side" : hardShare >= 0.08 ? "balanced" : "all-easy";
+    return { easySeconds: easy, hardSeconds: hard, hardShare, runs: count, key };
+  }
+
+  /* ---------- Shoes ---------- */
+
+  // Distance on each shoe: a run goes to the shoe with the latest start date on
+  // or before it that was not yet retired. Shoes are { id, name, start, retired?, limit }.
+  function shoeMileage(runs, shoes, dateOf) {
+    const ordered = [...shoes].filter((shoe) => /^\d{4}-\d{2}-\d{2}$/.test(shoe.start)).sort((a, b) => b.start.localeCompare(a.start));
+    const totals = new Map(shoes.map((shoe) => [shoe.id, { meters: 0, runs: 0, last: null }]));
+    for (const run of runs) {
+      const date = dateOf(run);
+      if (Number.isNaN(date.valueOf())) continue;
+      const key = dayKey(date);
+      const shoe = ordered.find((item) => item.start <= key && (!item.retired || item.retired > key));
+      if (!shoe) continue;
+      const total = totals.get(shoe.id);
+      total.meters += Number(run.distance) || 0; total.runs += 1;
+      if (!total.last || date > total.last) total.last = date;
+    }
+    return shoes.map((shoe) => {
+      const total = totals.get(shoe.id);
+      const share = shoe.limit ? total.meters / shoe.limit : 0;
+      return { ...shoe, ...total, share, status: shoe.retired ? "retired" : share >= 1 ? "worn" : share >= 0.85 ? "nearly" : "fine" };
+    });
+  }
+
   /* ---------- Finishing place ---------- */
 
   // Five-year age groups, as most races award them.
@@ -632,7 +696,7 @@
     estimateMaxHr, heartRateReserve, runVo2Estimate, runVdot, percentile, vo2Series,
     runLoad, dailyLoads, loadSeries, workloadRatios, formZone, readiness, dayKey, finite,
     RUN_TYPES, classifyRunType, isWalk, WALK_TYPES, classifyWalkType,
-    trainingPhase, recoveryDays, taperDays, projectRaceDay, TAPER_LOAD, RACE_WEEK_LOAD, ageGroup, projectPlace, personalRecords, metersPerBeat, efficiencyTrend, pacingPlan, weekKey
+    trainingPhase, recoveryDays, taperDays, projectRaceDay, TAPER_LOAD, RACE_WEEK_LOAD, ageGroup, projectPlace, personalRecords, metersPerBeat, efficiencyTrend, pacingPlan, weekKey, yearProjection, intensityBalance, shoeMileage
   };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.FitnessCore = api;

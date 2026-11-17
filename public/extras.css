@@ -87,3 +87,86 @@ body:not(.has-history) .palette-button { display: none; }
   .week-head .share-week span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
   .command-palette { margin-top: 8vh; }
 }
+
+/* ---------- Yearly goal ---------- */
+.year-goal { margin: 0 0 18px; padding: 16px 20px; background: var(--surface); border: 1px solid var(--rule); }
+.year-goal[hidden] { display: none; }
+.year-head { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: flex-start; justify-content: space-between; }
+.year-head h2 { margin: 0; font-size: 1.05rem; }
+.year-head h2 span { margin-left: 6px; color: var(--ink-soft); font-size: .85rem; font-weight: 600; }
+.year-head p { margin: 2px 0 0; color: var(--ink-soft); font-size: .88rem; }
+.year-meter { position: relative; height: 12px; margin: 14px 0 12px; border-radius: 999px; background: var(--surface-muted); }
+.year-meter span { display: block; height: 100%; border-radius: inherit; background: var(--teal); }
+.year-meter i { position: absolute; top: -4px; bottom: -4px; width: 2px; margin-left: -1px; border-radius: 1px; background: var(--ink-strong); }
+.year-foot { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: flex-end; justify-content: space-between; }
+.year-facts { display: flex; flex-wrap: wrap; gap: 6px 24px; margin: 0; }
+.year-facts dt { color: var(--ink-soft); font-size: .72rem; font-weight: 760; letter-spacing: .03em; text-transform: uppercase; }
+.year-facts dd { margin: 2px 0 0; color: var(--ink-strong); font-size: 1.15rem; font-weight: 740; font-variant-numeric: tabular-nums; }
+.year-goal-form { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; }
+.year-goal-form label { color: var(--ink-soft); font-size: .8rem; font-weight: 650; }
+.year-goal-form input { width: 7em; min-height: 36px; padding: 4px 8px; border: 1px solid var(--rule-strong); border-radius: 6px; background: var(--surface); color: var(--ink); font: inherit; }
+
+/* ---------- Intensity balance ---------- */
+.intensity-bar { position: relative; display: flex; height: 34px; margin: 18px 0 10px; overflow: visible; border-radius: 8px; }
+.intensity-bar > span { display: flex; align-items: center; padding: 0 10px; color: #fff; font-size: .8rem; font-weight: 750; white-space: nowrap; overflow: hidden; }
+.intensity-easy { border-radius: 8px 0 0 8px; background: oklch(45% 0.1 190); }
+.intensity-hard { border-radius: 0 8px 8px 0; background: oklch(50% 0.17 42); justify-content: flex-end; }
+.intensity-target { position: absolute; top: -16px; bottom: -4px; width: 2px; margin-left: -1px; background: var(--ink-strong); }
+.intensity-target b { position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); color: var(--ink-soft); font-size: .68rem; font-weight: 750; white-space: nowrap; }
+.intensity-verdict { margin: 0 0 10px; color: var(--ink); font-size: .9rem; }
+.intensity-facts { display: flex; flex-wrap: wrap; gap: 6px 28px; margin: 0; }
+.intensity-facts dt { color: var(--ink-soft); font-size: .74rem; font-weight: 650; }
+.intensity-facts dd { margin: 2px 0 0; color: var(--ink-strong); font-weight: 740; }
+
+/* ---------- Shoes ---------- */
+.shoes { margin: 0 0 18px; padding: 20px 22px; }
+.shoes[hidden] { display: none; }
+.shoe-list { display: grid; gap: 8px; margin: 12px 0; padding: 0; list-style: none; }
+.shoe { display: grid; grid-template-columns: minmax(150px, 1.2fr) minmax(120px, 2fr) auto auto; gap: 8px 18px; align-items: center; padding: 10px 14px; border: 1px solid var(--rule); border-radius: 10px; background: var(--surface); }
+.shoe-main strong { display: block; color: var(--ink-strong); }
+.shoe-main small, .shoe-distance small { color: var(--ink-soft); font-size: .76rem; }
+.shoe-meter { height: 10px; border-radius: 999px; background: var(--surface-muted); overflow: hidden; }
+.shoe-meter span { display: block; height: 100%; border-radius: inherit; background: var(--teal); }
+.shoe.status-nearly .shoe-meter span { background: oklch(66% 0.15 70); }
+.shoe.status-worn .shoe-meter span { background: var(--red); }
+.shoe.status-retired { opacity: .7; }
+.shoe.status-retired .shoe-meter span { background: var(--ink-faint); }
+.shoe-distance { text-align: right; }
+.shoe-distance strong { display: block; color: var(--ink-strong); font-variant-numeric: tabular-nums; }
+.shoe-distance b { color: var(--ink-strong); }
+.shoe-actions { display: flex; gap: 12px; }
+.shoe-empty { color: var(--ink-soft); font-size: .88rem; }
+.shoe-add > summary { cursor: pointer; color: var(--ink-strong); font-weight: 700; font-size: .9rem; }
+.shoe-form { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1.2fr) minmax(0, 1fr) auto; gap: 8px 12px; align-items: end; margin-top: 10px; }
+.shoe-form div { display: grid; gap: 4px; min-width: 0; }
+.shoe-form label { color: var(--ink-soft); font-size: .76rem; font-weight: 700; }
+.shoe-form input { min-height: 40px; padding: 6px 10px; border: 1px solid var(--rule-strong); border-radius: 6px; background: var(--surface); color: var(--ink); font: inherit; min-width: 0; }
+.shoe-help { margin: 8px 0 0; color: var(--ink-faint); font-size: .78rem; }
+
+/* ---------- How it felt ---------- */
+.run-feel { margin: 0 0 16px; padding: 14px 16px; border: 1px solid var(--rule); border-radius: 10px; background: var(--surface-muted); }
+.run-feel-head { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; margin-bottom: 8px; }
+.run-feel-head h3 { margin: 0; font-size: .95rem; }
+.run-feel-head span { color: var(--ink-soft); font-size: .82rem; }
+.rpe-scale { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 4px; margin: 0 0 8px; padding: 0; border: 0; }
+.rpe-scale label { position: relative; }
+.rpe-scale input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
+.rpe-scale span { display: grid; place-items: center; height: 36px; border: 1px solid var(--rule-strong); border-radius: 6px; background: var(--surface); color: var(--ink-strong); font-weight: 750; font-variant-numeric: tabular-nums; }
+.rpe-scale label:nth-child(n + 4) input:checked + span { background: oklch(55% 0.12 160); }
+.rpe-scale label:nth-child(n + 7) input:checked + span { background: oklch(56% 0.16 55); }
+.rpe-scale label:nth-child(n + 9) input:checked + span { background: oklch(52% 0.18 28); }
+.rpe-scale input:checked + span { border-color: transparent; background: oklch(50% 0.1 190); color: #fff; }
+.rpe-scale input:focus-visible + span { outline: 3px solid var(--blue); outline-offset: 2px; }
+.run-feel textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--rule-strong); border-radius: 6px; background: var(--surface); color: var(--ink); font: inherit; font-size: .88rem; resize: vertical; }
+.run-feel-status { min-height: 1.2em; margin: 4px 0 0; color: var(--ink-soft); font-size: .76rem; }
+.feel-chip { display: inline-block; margin-left: 6px; padding: 0 6px; border: 1px solid var(--rule-strong); border-radius: 999px; color: var(--ink-soft); font-size: .7rem; font-weight: 700; vertical-align: 1px; white-space: nowrap; }
+
+@media (max-width: 700px) {
+  .year-goal { padding: 14px; }
+  .shoe { grid-template-columns: minmax(0, 1fr) auto; }
+  .shoe-meter { grid-column: 1 / -1; grid-row: 2; }
+  .shoe-actions { grid-column: 1 / -1; }
+  .shoe-form { grid-template-columns: 1fr 1fr; }
+  .shoe-form div:first-child, .shoe-form button { grid-column: 1 / -1; }
+  .rpe-scale span { height: 32px; font-size: .85rem; }
+}

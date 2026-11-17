@@ -115,3 +115,92 @@ test("the week becomes a shareable image made on the device", async ({ page }) =
   await page.locator("#recapClose").click();
   await expect(dialog).toBeHidden();
 });
+
+test("a yearly goal shows the pace you are on and what the rest of the year needs", async ({ page }) => {
+  await loadDemo(page);
+  const card = page.locator("#yearGoal");
+  await expect(card).toBeVisible();
+  await expect(card).toContainText(`${new Date().getFullYear()} so far`);
+  await expect(card).toContainText(/At this pace, [\d,]+ mi by December 31/);
+  // A goal far above the pace: it says how far short and what a week needs.
+  await page.fill("#yearGoalInput", "5000");
+  await page.locator("#yearGoalForm button[type=submit]").click();
+  await expect(card).toContainText(/short\. [\d.]+ mi a week from here gets you there/);
+  await expect(card.locator(".year-meter i")).toHaveCount(1);
+  expect(await page.evaluate(() => coachingContext.yearGoals[String(new Date().getFullYear())])).toBe(5000);
+  // Kilometres in, miles stored.
+  await page.evaluate(() => { const select = document.querySelector("#unitPreference"); select.value = "metric"; select.dispatchEvent(new Event("change", { bubbles: true })); });
+  await expect(page.locator("#yearGoalInput")).toHaveValue("8047");
+  await card.getByRole("button", { name: "Clear" }).click();
+  await expect(card.locator(".year-meter i")).toHaveCount(0);
+  // The year as an image.
+  await card.getByRole("button", { name: "Share your year" }).click();
+  await expect(page.locator("#recapTitle")).toHaveText(`Your ${new Date().getFullYear()}`);
+  await expect(page.locator("#recapDownload")).toHaveAttribute("download", `runlore-${new Date().getFullYear()}.png`);
+});
+
+test("intensity balance compares easy and hard running time with 80/20", async ({ page }) => {
+  await loadDemo(page);
+  await nav(page, "Fitness");
+  const panel = page.locator("#intensityPanel");
+  await expect(panel).toBeVisible();
+  const label = await panel.locator(".intensity-bar").getAttribute("aria-label");
+  const [, easy, hard] = label.match(/(\d+)% easy, (\d+)% hard/);
+  expect(Number(easy) + Number(hard)).toBe(100);
+  await expect(panel.locator(".intensity-verdict")).not.toBeEmpty();
+});
+
+test("shoes count the runs made in them and warn as they wear out", async ({ page }) => {
+  await loadDemo(page);
+  await nav(page, "Runs");
+  const shoes = page.locator("#shoes");
+  await expect(shoes).toBeVisible();
+  await expect(shoes.locator(".shoe-empty")).toBeVisible();
+  await shoes.locator("#shoeAdd > summary").click();
+  await page.fill("#shoeName", "Daily trainers");
+  await page.fill("#shoeStart", iso(-60));
+  await page.fill("#shoeLimit", "100");
+  await page.locator("#shoeForm button[type=submit]").click();
+  const shoe = shoes.locator(".shoe");
+  await expect(shoe).toHaveCount(1);
+  await expect(shoe).toContainText("Daily trainers");
+  await expect(shoe).toHaveClass(/status-(nearly|worn)/);
+  await expect(shoes.locator("#shoesSummary")).toContainText(/Daily trainers: \d+ mi/);
+  // A newer pair takes over from its first day.
+  await page.fill("#shoeName", "Race flats");
+  await page.fill("#shoeStart", iso(1));
+  await page.fill("#shoeLimit", "300");
+  await page.locator("#shoeForm button[type=submit]").click();
+  await expect(shoes.locator(".shoe")).toHaveCount(2);
+  await expect(shoes.locator(".shoe", { hasText: "Race flats" })).toContainText("0 runs");
+  await shoes.locator(".shoe", { hasText: "Daily trainers" }).getByRole("button", { name: /Retire/ }).click();
+  await expect(shoes.locator(".shoe", { hasText: "Daily trainers" })).toHaveClass(/status-retired/);
+  page.once("dialog", (dialog) => dialog.accept());
+  await shoes.locator(".shoe", { hasText: "Race flats" }).getByRole("button", { name: /Remove/ }).click();
+  await expect(shoes.locator(".shoe")).toHaveCount(1);
+  expect(await page.evaluate(() => coachingContext.shoes.map((item) => item.name))).toEqual(["Daily trainers"]);
+});
+
+test("how a run felt is saved with it and shows in the ledger", async ({ page }) => {
+  await loadDemo(page);
+  await nav(page, "Runs");
+  await page.locator(".row-detail-button").first().click();
+  const feel = page.locator(".run-feel");
+  await expect(feel).toBeVisible();
+  await feel.locator(".rpe-scale label", { hasText: /^7$/ }).click();
+  await expect(feel.locator("#runFeelWord")).toHaveText("7 · Hard");
+  await feel.locator("#runFeelNote").fill("Windy last mile");
+  await feel.locator("#runFeelNote").blur();
+  await expect(feel.locator(".run-feel-status")).toHaveText("Saved");
+  await page.keyboard.press("Escape");
+  const chip = page.locator("#activityRows tr").first().locator(".feel-chip");
+  await expect(chip).toContainText("RPE 7");
+  await expect(chip).toHaveAttribute("title", /Effort 7 of 10, hard: Windy last mile/);
+  // It survives a reload, and opening the run again shows it.
+  await page.reload();
+  await page.getByRole("button", { name: "Preview demo data", exact: true }).click();
+  await nav(page, "Runs");
+  await page.locator(".row-detail-button").first().click();
+  await expect(page.locator(".rpe-scale input[value='7']")).toBeChecked();
+  await expect(page.locator("#runFeelNote")).toHaveValue("Windy last mile");
+});

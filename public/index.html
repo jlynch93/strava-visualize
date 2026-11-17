@@ -175,6 +175,7 @@
           <div class="records-head"><h2 id="recordsTitle">Your records</h2><p id="recordsSummary"></p></div>
           <ul id="recordsList" class="records-list"></ul>
         </section>
+        <section id="yearGoal" class="year-goal" aria-labelledby="yearGoalTitle" data-native-units hidden></section>
 
         <section class="block-review" aria-labelledby="blockReviewTitle">
           <div class="block-review-lead">
@@ -303,6 +304,13 @@
             </div>
             <p id="efficiencySummary" class="efficiency-summary"></p>
             <div id="efficiencyChart" class="fitness-chart"></div>
+          </section>
+
+          <section id="intensityPanel" class="fitness-panel" aria-labelledby="intensityTitle" hidden>
+            <div class="fitness-panel-head">
+              <div><h2 id="intensityTitle">Intensity balance</h2><p>Running time over the last four weeks, easy against hard. Most plans keep about 80% easy.</p></div>
+            </div>
+            <div id="intensityBalance"></div>
           </section>
 
           <section class="fitness-panel" aria-labelledby="loadTitle">
@@ -476,6 +484,20 @@
           </table>
         </div>
         <div class="ledger-pagination"><span id="pageSummary" role="status"></span><div><button id="previousPage" class="ghost-action" type="button">Previous</button><button id="nextPage" class="ghost-action" type="button">Next</button></div></div>
+      </section>
+
+      <section id="shoes" class="shoes data-panel" aria-labelledby="shoesTitle" data-view-section="runs" data-native-units hidden>
+        <div class="panel-heading"><div><h2 id="shoesTitle">Shoes</h2><span id="shoesSummary">Track the distance on each pair.</span></div></div>
+        <ul id="shoeList" class="shoe-list"></ul>
+        <details id="shoeAdd" class="shoe-add"><summary>Add a pair</summary>
+          <form id="shoeForm" class="shoe-form" data-feedback-scope>
+            <div><label for="shoeName">Name</label><input id="shoeName" type="text" maxlength="40" required placeholder="e.g. Daily trainers" autocomplete="off"></div>
+            <div><label for="shoeStart">First run in them</label><input id="shoeStart" type="date" required></div>
+            <div><label for="shoeLimit">Replace at (<span class="shoe-unit">mi</span>)</label><input id="shoeLimit" type="number" min="50" max="3000" step="10" inputmode="numeric" placeholder="400"></div>
+            <button type="submit" class="context-save">Add shoes</button>
+          </form>
+          <p class="shoe-help">Each run counts toward the newest pair you were using that day. Retire a pair to stop counting it.</p>
+        </details>
       </section>
 
       <footer class="app-footer">

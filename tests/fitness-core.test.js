@@ -292,3 +292,58 @@ test("a pacing plan reaches the goal time exactly, even or negative split", () =
   assert.equal(km.at(-1).partial, false);
   assert.deepEqual(fit.pacingPlan(0, 100), []);
 });
+
+test("a yearly goal projects from the pace so far and says what the rest of the year needs", () => {
+  // Day 320 of 365 (Nov 16), 1,600 km so far against a 2,000 km goal.
+  const plan = fit.yearProjection({ soFar: 1600e3, today: TODAY, goal: 2000e3 });
+  assert.equal(plan.elapsedDays, 320);
+  assert.equal(plan.remainingDays, 45);
+  assert.equal(Math.round(plan.projected / 1000), 1825);
+  assert.equal(plan.onTrack, false);
+  assert.equal(Math.round(plan.left / 1000), 400);
+  assert.equal(Math.round(plan.neededPerWeek / 1000), 62);
+  assert.equal(Math.round(plan.expectedByNow / 1000), 1753);
+  assert.ok(plan.ahead < 0);
+  // No goal: only the projection.
+  assert.equal(fit.yearProjection({ soFar: 100e3, today: new Date(2026, 0, 10) }).neededPerWeek, undefined);
+  assert.equal(fit.yearProjection({ soFar: 2100e3, today: TODAY, goal: 2000e3 }).done, true);
+});
+
+test("intensity balance is the share of running time that was hard over four weeks", () => {
+  const runs = [], types = new Map();
+  for (let i = 0; i < 12; i += 1) {
+    const id = `i${i}`;
+    runs.push({ id, date: new Date(2026, 10, 15 - i * 2, 7), moving_time: 3600 });
+    types.set(id, { group: i % 4 === 0 ? "quality" : i % 4 === 1 ? "long" : "easy" });
+  }
+  const balance = fit.intensityBalance(runs, types, (run) => run.date, { today: TODAY });
+  // 12 runs inside 28 days? i=0..11 spans 22 days: yes. 3 of 12 hard = 25%.
+  assert.equal(balance.runs, 12);
+  assert.equal(balance.hardShare, 0.25);
+  assert.equal(balance.key, "hard-side");
+  types.forEach((type, id) => types.set(id, { group: "easy" }));
+  assert.equal(fit.intensityBalance(runs, types, (run) => run.date, { today: TODAY }).key, "all-easy");
+  assert.equal(fit.intensityBalance(runs.slice(0, 3), types, (run) => run.date, { today: TODAY }), null);
+});
+
+test("shoe mileage goes to the newest shoe in use on each run's day", () => {
+  const runs = [
+    { id: 1, date: new Date(2026, 0, 5, 7), distance: 10000 },
+    { id: 2, date: new Date(2026, 5, 5, 7), distance: 12000 },
+    { id: 3, date: new Date(2026, 9, 5, 7), distance: 8000 },
+    { id: 4, date: new Date(2025, 11, 1, 7), distance: 5000 }
+  ];
+  const shoes = [
+    { id: "a", name: "Old pair", start: "2026-01-01", retired: "2026-09-01", limit: 20000 },
+    { id: "b", name: "Racer", start: "2026-06-01", limit: 600000 },
+    { id: "c", name: "Daily", start: "2026-09-01", limit: 9000 }
+  ];
+  const [old, racer, daily] = fit.shoeMileage(runs, shoes, (run) => run.date);
+  // Jan run: only the old pair. June run: the racer started later, so it takes it.
+  assert.deepEqual([old.meters, racer.meters, daily.meters], [10000, 12000, 8000]);
+  assert.equal(old.status, "retired");
+  assert.equal(daily.status, "nearly");
+  assert.equal(racer.status, "fine");
+  // A run before any shoe goes nowhere.
+  assert.equal(old.runs + racer.runs + daily.runs, 3);
+});
