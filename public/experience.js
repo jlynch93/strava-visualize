@@ -8,7 +8,12 @@ const THEMES = {
   trail: { label: "Trail", base: "light", palette: "trail", paper: "#f7f1e4", accent: "#e9c04c" },
   dark: { label: "Midnight", base: "dark", paper: "#0d181c", accent: "#d6ef3d" },
   ember: { label: "Ember", base: "dark", palette: "ember", paper: "#1a1310", accent: "#f0a04b" },
-  ocean: { label: "Ocean", base: "dark", palette: "ocean", paper: "#0a1326", accent: "#5fdce0" }
+  ocean: { label: "Ocean", base: "dark", palette: "ocean", paper: "#0a1326", accent: "#5fdce0" },
+  synthwave: { label: "Synthwave", base: "dark", palette: "synthwave", paper: "#1a0b2e", accent: "#ff6ec7" },
+  terminal: { label: "Terminal", base: "dark", palette: "terminal", paper: "#050d08", accent: "#4dfa6b" },
+  broadsheet: { label: "Broadsheet", base: "light", palette: "broadsheet", paper: "#f6e4d2", accent: "#7a1b2b" },
+  blossom: { label: "Blossom", base: "light", palette: "blossom", paper: "#fbeef3", accent: "#f08fb4" },
+  blueprint: { label: "Blueprint", base: "dark", palette: "blueprint", paper: "#14357f", accent: "#f4e04d" }
 };
 function sanitizePreferences(saved) {
   return {

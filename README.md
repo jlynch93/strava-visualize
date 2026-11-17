@@ -184,8 +184,12 @@ and next week. Below 35 the draft becomes a recovery week. Between 35 and 54 the
 quality session becomes an easy run, and the draft says why. Your check-in and a
 manual intent still take priority.
 
-**Data & settings → Theme** offers Match system and five themes: **Daylight**
-and **Trail** (light), **Midnight**, **Ember** and **Ocean** (dark). A theme is
+**Data & settings → Theme** offers Match system and ten themes. Five are
+restrained: **Daylight** and **Trail** (light), **Midnight**, **Ember** and
+**Ocean** (dark). Five are bolder and also change detail colours, and in two
+cases the typeface: **Synthwave** (violet and hot pink), **Terminal** (green
+on black, monospace), **Broadsheet** (salmon newsprint, serif headlines),
+**Blossom** (pink and plum) and **Blueprint** (drafting blue with a grid). A theme is
 a base (`data-theme`: light or dark) plus an optional palette (`data-palette`)
 that changes hue and accent only, keeping the base's lightness steps so text
 contrast holds. Chart series colours stay the validated light or dark set.

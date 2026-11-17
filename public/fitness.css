@@ -238,6 +238,8 @@
 /* One ordered hue: deeper teal as the race gets closer; recovery is neutral. */
 .cycle-bar { display: flex; gap: 2px; height: 28px; margin: 0; padding: 0; list-style: none; }
 .cycle-segment { display: flex; align-items: center; min-width: 0; padding-left: 8px; border-radius: 4px; color: var(--ink-strong); font-size: .72rem; font-weight: 700; white-space: nowrap; overflow: hidden; }
+/* Segment colours are fixed, so their labels are too (not the theme's ink). */
+.cycle-base, .cycle-build, .cycle-peak { color: oklch(16% 0.04 226); }
 .cycle-base { background: oklch(90% 0.04 190); }
 .cycle-build { background: oklch(80% 0.07 190); }
 .cycle-peak { background: oklch(68% 0.09 190); }

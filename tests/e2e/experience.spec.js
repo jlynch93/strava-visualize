@@ -364,7 +364,7 @@ test("theme follows the system and can be pinned, with accessible contrast in da
   }
 });
 
-for (const [theme, base] of [["trail", "light"], ["ember", "dark"], ["ocean", "dark"]]) {
+for (const [theme, base] of [["trail", "light"], ["ember", "dark"], ["ocean", "dark"], ["synthwave", "dark"], ["terminal", "dark"], ["broadsheet", "light"], ["blossom", "light"], ["blueprint", "dark"]]) {
   test(`the ${theme} theme recolours the app, survives a reload and keeps accessible contrast`, async ({ page }) => {
     await page.emulateMedia({ colorScheme: base === "dark" ? "light" : "dark" });
     await page.goto("/"); await importHistory(page);
@@ -387,6 +387,20 @@ for (const [theme, base] of [["trail", "light"], ["ember", "dark"], ["ocean", "d
     }
   });
 }
+
+test("themes that change the typeface still fit a phone screen", async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 760 });
+  await page.goto("/"); await importHistory(page);
+  for (const theme of ["terminal", "broadsheet"]) {
+    await page.evaluate((name) => { preferences.theme = name; applyTheme(); render(); }, theme);
+    for (const hash of ["#overview", "#fitness", "#planning", "#runs"]) {
+      await page.evaluate((target) => { location.hash = target; }, hash);
+      await expect(page.locator(hash)).toBeVisible();
+      const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+      expect(overflow, `${theme} ${hash}`).toBeLessThanOrEqual(0);
+    }
+  }
+});
 
 test("this week compares completed runs with the plan or the recent average", async ({ page }) => {
   await page.goto("/"); await importHistory(page);

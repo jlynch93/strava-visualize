@@ -139,6 +139,120 @@
   --panel-ink: oklch(11% 0.035 260);
 }
 
+/* Synthwave (dark): violet night, hot pink accent, neon cyan details. */
+:root[data-palette="synthwave"] {
+  --paper: oklch(16% 0.06 300);
+  --paper-deep: oklch(12.5% 0.06 298);
+  --surface: oklch(20% 0.07 302);
+  --surface-muted: oklch(25.5% 0.08 304);
+  --ink: oklch(91% 0.04 320);
+  --ink-strong: oklch(97% 0.025 325);
+  --ink-soft: oklch(81% 0.06 310);
+  --ink-faint: oklch(72% 0.07 305);
+  --rule: oklch(35% 0.1 305);
+  --rule-strong: oklch(52% 0.14 310);
+  --accent: oklch(78% 0.19 350);
+  --accent-hover: oklch(72% 0.2 350);
+  --accent-ink: oklch(16% 0.06 320);
+  --teal: oklch(78% 0.13 205);
+  --teal-soft: oklch(30% 0.07 215);
+  --panel-ink: oklch(10% 0.06 298);
+}
+:root[data-palette="synthwave"] body { background-image: linear-gradient(180deg, oklch(22% 0.11 320) 0, transparent 420px); background-repeat: no-repeat; }
+:root[data-palette="synthwave"] :is(h1, h2) { text-shadow: 0 0 18px color-mix(in oklch, var(--accent) 45%, transparent); }
+
+/* Terminal (dark): phosphor green on black, set in monospace. */
+:root[data-palette="terminal"] {
+  --paper: oklch(12% 0.012 150);
+  --paper-deep: oklch(9% 0.012 150);
+  --surface: oklch(15.5% 0.016 150);
+  --surface-muted: oklch(21% 0.025 150);
+  --ink: oklch(86% 0.16 145);
+  --ink-strong: oklch(92% 0.19 145);
+  --ink-soft: oklch(78% 0.13 147);
+  --ink-faint: oklch(69% 0.11 148);
+  --rule: oklch(32% 0.06 148);
+  --rule-strong: oklch(50% 0.11 147);
+  --accent: oklch(87% 0.25 143);
+  --accent-hover: oklch(80% 0.24 143);
+  --accent-ink: oklch(14% 0.04 150);
+  --teal: oklch(80% 0.17 150);
+  --teal-soft: oklch(27% 0.06 150);
+  --panel-ink: oklch(7% 0.012 150);
+  --panel-text: oklch(92% 0.19 145);
+}
+:root[data-palette="terminal"] :is(body, button, input, select, textarea) { font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; letter-spacing: -0.03em; }
+:root[data-palette="terminal"] :is(h1, h2, h3) { letter-spacing: -0.04em; }
+
+/* Broadsheet (light): salmon newsprint, black ink, serif headlines, claret details. */
+:root[data-palette="broadsheet"] {
+  --paper: oklch(93.5% 0.035 62);
+  --paper-deep: oklch(90% 0.042 60);
+  --surface: oklch(96.5% 0.024 66);
+  --surface-muted: oklch(91.5% 0.038 62);
+  --ink: oklch(19% 0.012 50);
+  --ink-strong: oklch(12% 0.01 50);
+  --ink-soft: oklch(35% 0.02 50);
+  --ink-faint: oklch(46% 0.025 50);
+  --rule: oklch(74% 0.04 58);
+  --rule-strong: oklch(52% 0.04 52);
+  --accent: oklch(89% 0.16 98);
+  --accent-hover: oklch(83% 0.16 96);
+  --accent-ink: oklch(15% 0.02 60);
+  --teal: oklch(41% 0.14 18);
+  --teal-soft: oklch(88% 0.045 25);
+  --panel-ink: oklch(17% 0.012 50);
+}
+:root[data-palette="broadsheet"] :is(h1, h2, h3, .brand-wordmark, .goal-race-time, .today-score, .gauge-value) { font-family: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif; letter-spacing: -0.01em; }
+
+/* Blossom (light): petal pink paper, plum ink, rose accent. */
+:root[data-palette="blossom"] {
+  --paper: oklch(96.3% 0.022 350);
+  --paper-deep: oklch(93% 0.035 350);
+  --surface: oklch(99% 0.01 350);
+  --surface-muted: oklch(94.8% 0.03 348);
+  --ink: oklch(21% 0.06 335);
+  --ink-strong: oklch(15% 0.06 335);
+  --ink-soft: oklch(39% 0.07 338);
+  --ink-faint: oklch(53% 0.07 340);
+  --rule: oklch(80% 0.05 350);
+  --rule-strong: oklch(60% 0.09 345);
+  --accent: oklch(83% 0.13 355);
+  --accent-hover: oklch(77% 0.14 355);
+  --accent-ink: oklch(18% 0.06 335);
+  --teal: oklch(50% 0.17 345);
+  --teal-soft: oklch(91% 0.05 350);
+  --panel-ink: oklch(24% 0.08 335);
+}
+
+/* Blueprint (dark): drafting blue with a faint grid, white linework, marker-yellow accent. */
+:root[data-palette="blueprint"] {
+  --paper: oklch(27% 0.11 262);
+  --paper-deep: oklch(22% 0.1 262);
+  --surface: oklch(30.5% 0.115 262);
+  --surface-muted: oklch(35% 0.115 261);
+  --ink: oklch(94% 0.02 250);
+  --ink-strong: oklch(99% 0.008 250);
+  --ink-soft: oklch(88% 0.04 252);
+  --ink-faint: oklch(81% 0.05 254);
+  --rule: oklch(46% 0.1 258);
+  --rule-strong: oklch(66% 0.09 255);
+  --accent: oklch(91% 0.17 100);
+  --accent-hover: oklch(85% 0.17 98);
+  --accent-ink: oklch(20% 0.08 262);
+  --teal: oklch(85% 0.09 225);
+  --teal-soft: oklch(40% 0.1 250);
+  --blue: oklch(84% 0.08 258);
+  --orange: oklch(80% 0.14 60);
+  --red: oklch(80% 0.13 22);
+  --green: oklch(83% 0.15 153);
+  --panel-ink: oklch(18% 0.09 262);
+}
+:root[data-palette="blueprint"] body {
+  background-image: linear-gradient(color-mix(in oklch, white 7%, transparent) 1px, transparent 1px), linear-gradient(90deg, color-mix(in oklch, white 7%, transparent) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
 /* Theme picker: a swatch of each theme's paper, ink and accent. */
 .theme-picker { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; border: 0; min-width: 0; }
 .theme-picker legend { padding: 0; margin-bottom: 6px; font-weight: 650; }
