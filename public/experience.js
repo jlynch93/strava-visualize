@@ -13,7 +13,8 @@ const THEMES = {
   terminal: { label: "Terminal", base: "dark", palette: "terminal", paper: "#050d08", accent: "#4dfa6b" },
   broadsheet: { label: "Broadsheet", base: "light", palette: "broadsheet", paper: "#f6e4d2", accent: "#7a1b2b" },
   blossom: { label: "Blossom", base: "light", palette: "blossom", paper: "#fbeef3", accent: "#f08fb4" },
-  blueprint: { label: "Blueprint", base: "dark", palette: "blueprint", paper: "#14357f", accent: "#f4e04d" }
+  blueprint: { label: "Blueprint", base: "dark", palette: "blueprint", paper: "#14357f", accent: "#f4e04d" },
+  aurora: { label: "Aurora ✦", base: "dark", palette: "aurora", paper: "#0b0a1a", accent: "#a78bfa" }
 };
 function sanitizePreferences(saved) {
   return {
@@ -601,3 +602,32 @@ document.addEventListener("click", async (event) => {
   await prompt.prompt();
   event.target.closest(".install-help")?.remove();
 });
+
+/* ---------- Aurora: shared gradients ---------- */
+// SVG fills cannot use CSS gradients, so the page carries two named ones that
+// theme-aurora.css points chart bars at. Unused by the other themes.
+document.body.insertAdjacentHTML("beforeend", `<svg class="aurora-defs" width="0" height="0" aria-hidden="true" focusable="false" style="position:absolute"><defs>
+  <linearGradient id="aurora-bar" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#67e8f9"/><stop offset=".55" stop-color="#a78bfa"/><stop offset="1" stop-color="#a78bfa" stop-opacity=".35"/></linearGradient>
+  <linearGradient id="aurora-bar-hot" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset=".4" stop-color="#f472b6"/><stop offset="1" stop-color="#a78bfa" stop-opacity=".5"/></linearGradient>
+</defs></svg>`);
+
+/* ---------- Aurora: cursor spotlight ---------- */
+// The panel under a mouse pointer gets --mx/--my, which theme-aurora.css turns
+// into a soft light that follows the cursor. Other themes ignore the values.
+const SPOTLIGHT_PANELS = ".chart-panel, .data-panel, .readiness-hero, .fitness-panel, .fitness-kpis, .this-week, .today-strip, .secondary-disclosure, .key-run-card, .goal-race, .context-card, .block-review, .race-item";
+let spotlightPanel = null, spotlightFrame = 0, spotlightEvent = null;
+document.addEventListener("pointermove", (event) => {
+  if (event.pointerType !== "mouse" || document.documentElement.dataset.palette !== "aurora") return;
+  spotlightEvent = event;
+  if (spotlightFrame) return;
+  spotlightFrame = requestAnimationFrame(() => {
+    spotlightFrame = 0;
+    const panel = spotlightEvent.target.closest?.(SPOTLIGHT_PANELS) || null;
+    if (spotlightPanel && spotlightPanel !== panel) { spotlightPanel.style.removeProperty("--mx"); spotlightPanel.style.removeProperty("--my"); }
+    spotlightPanel = panel;
+    if (!panel) return;
+    const box = panel.getBoundingClientRect();
+    panel.style.setProperty("--mx", `${Math.round(spotlightEvent.clientX - box.left)}px`);
+    panel.style.setProperty("--my", `${Math.round(spotlightEvent.clientY - box.top)}px`);
+  });
+}, { passive: true });

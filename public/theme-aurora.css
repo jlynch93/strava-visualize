@@ -1,0 +1,270 @@
+/*
+ * Aurora: the showpiece theme. A dark base (data-theme="dark") restyled into a
+ * different-looking site: drifting aurora light behind frosted-glass panels,
+ * gradient display type, glowing charts and gauges, pill controls, a cursor
+ * spotlight on cards (experience.js sets --mx/--my), and a floating tab bar on
+ * phones. Everything is scoped to data-palette="aurora"; motion stops under
+ * prefers-reduced-motion. Text colours stay solid wherever contrast is
+ * measured; gradients are used only on large display type and decoration.
+ */
+:root[data-palette="aurora"] {
+  --paper: oklch(13% 0.03 278);
+  --paper-deep: oklch(10.5% 0.03 278);
+  --surface: oklch(18% 0.035 280);
+  --surface-muted: oklch(23% 0.04 282);
+  --ink: oklch(93% 0.012 270);
+  --ink-strong: oklch(98.5% 0.006 270);
+  --ink-soft: oklch(82% 0.025 275);
+  --ink-faint: oklch(74% 0.03 278);
+  --rule: oklch(100% 0 0 / 0.09);
+  --rule-strong: oklch(100% 0 0 / 0.2);
+  --accent: oklch(86% 0.13 195);
+  --accent-hover: oklch(91% 0.11 195);
+  --accent-ink: oklch(15% 0.04 280);
+  --teal: oklch(84% 0.13 195);
+  --teal-soft: oklch(30% 0.07 230);
+  --blue: oklch(76% 0.13 275);
+  --panel-ink: oklch(11% 0.035 280);
+  --shadow-sheet: 0 30px 80px -20px rgba(0, 0, 0, 0.75);
+
+  --aurora-cyan: #67e8f9;
+  --aurora-violet: #a78bfa;
+  --aurora-pink: #f472b6;
+  --aurora-gradient: linear-gradient(100deg, var(--aurora-cyan), var(--aurora-violet) 50%, var(--aurora-pink));
+  --glass: linear-gradient(165deg, rgba(255, 255, 255, 0.075), rgba(255, 255, 255, 0.02) 60%);
+  --glass-solid: oklch(17% 0.035 280 / 0.86);
+  --glass-edge: rgba(255, 255, 255, 0.11);
+  --glass-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07), 0 24px 60px -28px rgba(0, 0, 0, 0.85);
+  --radius-panel: 22px;
+  --display-font: "SF Pro Display", "Inter Tight", "Inter", "Segoe UI Variable Display", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+}
+
+/* ---------- Atmosphere ---------- */
+:root[data-palette="aurora"] body { background: var(--paper); }
+/* The aurora: three soft light fields that drift slowly behind everything. */
+:root[data-palette="aurora"] body::after {
+  position: fixed; inset: -20vmax; z-index: -2; pointer-events: none; content: "";
+  background:
+    radial-gradient(38vmax 30vmax at 18% 12%, rgba(103, 232, 249, 0.26), transparent 70%),
+    radial-gradient(42vmax 34vmax at 82% 8%, rgba(167, 139, 250, 0.32), transparent 70%),
+    radial-gradient(40vmax 36vmax at 70% 78%, rgba(244, 114, 182, 0.22), transparent 70%),
+    radial-gradient(30vmax 26vmax at 12% 85%, rgba(99, 102, 241, 0.16), transparent 70%);
+  filter: blur(30px) saturate(140%);
+  animation: aurora-drift 38s ease-in-out infinite alternate;
+}
+/* The top rule becomes a thin moving light. */
+:root[data-palette="aurora"] body::before {
+  height: 3px; z-index: 60;
+  background: linear-gradient(90deg, var(--aurora-cyan), var(--aurora-violet), var(--aurora-pink), var(--aurora-cyan));
+  background-size: 300% 100%;
+  box-shadow: 0 0 18px rgba(167, 139, 250, 0.7);
+  animation: aurora-flow 9s linear infinite;
+}
+@keyframes aurora-drift {
+  0% { transform: translate3d(0, 0, 0) rotate(0deg) scale(1); }
+  50% { transform: translate3d(3vmax, -2vmax, 0) rotate(8deg) scale(1.06); }
+  100% { transform: translate3d(-3vmax, 2vmax, 0) rotate(-6deg) scale(1.02); }
+}
+@keyframes aurora-flow { to { background-position: 300% 0; } }
+@keyframes aurora-rise { from { opacity: 0; transform: translateY(14px) scale(0.99); } }
+@keyframes aurora-pulse { 50% { opacity: 0.55; } }
+
+:root[data-palette="aurora"] ::selection { background: var(--aurora-violet); color: #0b0718; }
+:root[data-palette="aurora"] { scrollbar-color: rgba(167, 139, 250, 0.5) transparent; }
+
+/* ---------- Type ---------- */
+:root[data-palette="aurora"] :is(h1, h2, h3, .brand-wordmark, .kpi-tile strong, .goal-race-time, .gauge-score) {
+  font-family: var(--display-font);
+}
+:root[data-palette="aurora"] :is(h1, h2) { font-weight: 800; letter-spacing: -0.035em; }
+/* Page titles are large gradient type that slowly shifts. */
+:root[data-palette="aurora"] .overview-head h1 {
+  font-size: clamp(2rem, 4.4vw, 3.1rem); line-height: 1.04;
+  background: linear-gradient(100deg, #fff 10%, var(--aurora-cyan) 40%, var(--aurora-violet) 65%, var(--aurora-pink) 90%);
+  background-size: 220% 100%;
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  animation: aurora-flow 14s linear infinite;
+  filter: drop-shadow(0 0 28px rgba(167, 139, 250, 0.35));
+}
+:root[data-palette="aurora"] .brand-wordmark { font-weight: 800; letter-spacing: -0.04em; }
+:root[data-palette="aurora"] .brand-mark { filter: drop-shadow(0 0 10px rgba(103, 232, 249, 0.55)); }
+:root[data-palette="aurora"] :is(.section-kicker, .metric-card h3, .account-section-title, th) { letter-spacing: 0.12em; }
+
+/* ---------- Glass panels ---------- */
+:root[data-palette="aurora"] :is(
+  .chart-panel, .data-panel, .readiness-hero, .fitness-panel, .fitness-kpis, .this-week, .today-strip,
+  .secondary-disclosure, .key-run-card, .goal-race, .empty-window, .fitness-empty, .advanced-exploration,
+  .context-card, .block-review, .race-item, .race-result, .ledger-empty
+) {
+  position: relative;
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--radius-panel);
+  background:
+    radial-gradient(520px circle at var(--mx, -999px) var(--my, -999px), rgba(167, 139, 250, 0.13), transparent 42%),
+    var(--glass);
+  background-color: oklch(16% 0.035 280 / 0.55);
+  box-shadow: var(--glass-shadow);
+  transition: border-color 0.3s, box-shadow 0.3s, transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+:root[data-palette="aurora"] :is(.chart-panel, .fitness-panel, .key-run-card, .goal-race, .readiness-hero, .this-week):hover {
+  border-color: rgba(167, 139, 250, 0.35);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.09), 0 0 0 1px rgba(167, 139, 250, 0.12), 0 28px 70px -30px rgba(124, 58, 237, 0.55);
+}
+:root[data-palette="aurora"] :is(.key-run-card, .goal-race):hover { transform: translateY(-3px); }
+/* Panels that had a heavy top rule get a fine gradient edge instead. */
+:root[data-palette="aurora"] :is(.chart-panel, .readiness-hero, .block-review, .today-strip) {
+  border-top-width: 1px; border-top-color: var(--glass-edge);
+}
+:root[data-palette="aurora"] :is(.chart-panel, .readiness-hero, .block-review, .today-strip)::before {
+  position: absolute; top: -1px; left: 22px; right: 22px; height: 1px; content: "";
+  background: var(--aurora-gradient); box-shadow: 0 0 14px rgba(167, 139, 250, 0.8); pointer-events: none;
+}
+:root[data-palette="aurora"] .fitness-kpis { overflow: hidden; }
+:root[data-palette="aurora"] :is(.kpi-tile, .metric-card) { border-left-color: var(--glass-edge); }
+:root[data-palette="aurora"] .block-evidence { border-bottom-color: var(--glass-edge); }
+
+/* Big numbers glow. */
+:root[data-palette="aurora"] .kpi-tile strong { font-weight: 800; text-shadow: 0 0 24px rgba(167, 139, 250, 0.45); }
+:root[data-palette="aurora"] .gauge-score { font-weight: 800; filter: drop-shadow(0 0 16px rgba(167, 139, 250, 0.6)); }
+:root[data-palette="aurora"] .gauge-track { stroke: rgba(255, 255, 255, 0.07); }
+:root[data-palette="aurora"] .gauge-fill { filter: drop-shadow(0 0 8px currentColor) drop-shadow(0 0 18px rgba(103, 232, 249, 0.35)); color: var(--aurora-cyan); }
+:root[data-palette="aurora"] .today-score { box-shadow: 0 0 22px rgba(103, 232, 249, 0.35), inset 0 0 14px rgba(103, 232, 249, 0.15); }
+:root[data-palette="aurora"] .goal-race-time { font-weight: 800; text-shadow: 0 0 20px rgba(103, 232, 249, 0.35); }
+
+/* ---------- Charts ---------- */
+:root[data-palette="aurora"] .series-line { stroke-width: 2.4; filter: drop-shadow(0 0 5px rgba(167, 139, 250, 0.55)); }
+:root[data-palette="aurora"] .series-line.vo2-line, :root[data-palette="aurora"] .series-line.fitness-line { filter: drop-shadow(0 0 6px rgba(45, 212, 191, 0.65)); }
+:root[data-palette="aurora"] .series-line.fatigue-line { filter: drop-shadow(0 0 6px rgba(251, 146, 60, 0.6)); }
+:root[data-palette="aurora"] :is(.chart-marker.priority-A, .chart-marker.marker-today) { filter: drop-shadow(0 0 6px rgba(103, 232, 249, 0.8)); }
+:root[data-palette="aurora"] .chart-tooltip {
+  border: 1px solid rgba(167, 139, 250, 0.35); border-radius: 16px;
+  background: oklch(13% 0.04 280 / 0.86); -webkit-backdrop-filter: blur(16px) saturate(150%); backdrop-filter: blur(16px) saturate(150%);
+  box-shadow: 0 20px 50px -18px rgba(0, 0, 0, 0.9), 0 0 30px -10px rgba(167, 139, 250, 0.6);
+}
+:root[data-palette="aurora"] .cycle-segment { border-radius: 8px; }
+:root[data-palette="aurora"] .cycle-segment.is-current { box-shadow: inset 0 0 0 2px #fff, 0 0 18px rgba(103, 232, 249, 0.7); }
+
+/* A light that circles the readiness panels. */
+@property --aurora-angle { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
+@keyframes aurora-orbit { to { --aurora-angle: 360deg; } }
+:root[data-palette="aurora"] :is(.readiness-hero, .today-strip)::after {
+  position: absolute; inset: -1px; z-index: 0; padding: 1.5px; border-radius: inherit; pointer-events: none; content: "";
+  background: conic-gradient(from var(--aurora-angle), transparent 0 55%, var(--aurora-cyan) 70%, var(--aurora-violet) 80%, var(--aurora-pink) 88%, transparent 96%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  filter: drop-shadow(0 0 6px rgba(167, 139, 250, 0.9));
+  animation: aurora-orbit 7s linear infinite;
+}
+:root[data-palette="aurora"] .readiness-hero > *, :root[data-palette="aurora"] .today-strip > * { position: relative; z-index: 1; }
+
+/* Gradient fills from the shared <defs> that experience.js adds to the page. */
+:root[data-palette="aurora"] .primary-chart .bar { fill: url(#aurora-bar); }
+:root[data-palette="aurora"] .primary-chart .bar.in-progress { fill: url(#aurora-bar); opacity: 0.35; }
+:root[data-palette="aurora"] .primary-chart :is(.period:hover, .period:focus-within) .bar { fill: url(#aurora-bar-hot); }
+:root[data-palette="aurora"] .primary-chart .bar { filter: drop-shadow(0 0 8px rgba(103, 232, 249, 0.35)); }
+:root[data-palette="aurora"] .trend-legend .key.bar-key { background: linear-gradient(180deg, var(--aurora-cyan), var(--aurora-violet)); }
+:root[data-palette="aurora"] .bar-list-track { border-radius: 999px; background: rgba(255, 255, 255, 0.06); }
+:root[data-palette="aurora"] .bar-list-fill { border-radius: 999px; background: var(--aurora-gradient); box-shadow: 0 0 14px -2px rgba(167, 139, 250, 0.7); }
+:root[data-palette="aurora"] .pace-bars .bar-list-fill { background: linear-gradient(90deg, var(--aurora-violet), var(--aurora-pink)); }
+:root[data-palette="aurora"] :is(.factor-track, .readiness-factor-track, .week-progress, .week-progress-track) { border-radius: 999px; }
+
+/* Notes and callouts become lit glass. */
+:root[data-palette="aurora"] .fitness-notes {
+  border: 1px solid var(--glass-edge); border-left: 0; border-radius: 16px;
+  background: linear-gradient(90deg, rgba(103, 232, 249, 0.1), rgba(167, 139, 250, 0.06) 40%, rgba(255, 255, 255, 0.02));
+  box-shadow: inset 3px 0 0 var(--aurora-cyan);
+}
+
+:root[data-palette="aurora"] .plan-start {
+  border: 1px solid rgba(103, 232, 249, 0.28); border-left: 0; border-radius: 18px;
+  background: radial-gradient(120% 140% at 0% 0%, rgba(103, 232, 249, 0.18), transparent 55%), radial-gradient(120% 140% at 100% 100%, rgba(244, 114, 182, 0.14), transparent 55%), rgba(255, 255, 255, 0.03);
+  box-shadow: inset 3px 0 0 var(--aurora-cyan), 0 0 40px -20px rgba(103, 232, 249, 0.7);
+}
+
+/* ---------- Header, navigation, filters ---------- */
+:root[data-palette="aurora"] .app-header { border-bottom-color: var(--glass-edge); }
+:root[data-palette="aurora"] .app-nav {
+  justify-self: start; width: max-content; padding: 5px; border: 1px solid var(--glass-edge); border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+:root[data-palette="aurora"] .app-nav a { border-radius: 999px; padding-inline: 16px; transition: background 0.25s, color 0.25s, box-shadow 0.25s; }
+:root[data-palette="aurora"] .app-nav a:hover { background: rgba(255, 255, 255, 0.07); }
+:root[data-palette="aurora"] .app-nav a[aria-current] {
+  background: linear-gradient(100deg, rgba(103, 232, 249, 0.22), rgba(167, 139, 250, 0.3), rgba(244, 114, 182, 0.22));
+  color: #fff; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16), 0 0 24px -6px rgba(167, 139, 250, 0.8);
+}
+:root[data-palette="aurora"] .toolbar {
+  background: oklch(12% 0.03 278 / 0.7); -webkit-backdrop-filter: blur(18px) saturate(160%); backdrop-filter: blur(18px) saturate(160%);
+  box-shadow: 0 1px 0 var(--glass-edge);
+}
+
+/* ---------- Controls ---------- */
+:root[data-palette="aurora"] :where(button, .file-button, .data-menu > summary, .today-link) { border-radius: 999px; border-color: var(--glass-edge); background: rgba(255, 255, 255, 0.05); transition: background 0.25s, border-color 0.25s, box-shadow 0.25s, transform 0.2s; }
+:root[data-palette="aurora"] :where(button, .file-button, .data-menu > summary):hover { background: rgba(255, 255, 255, 0.1); border-color: rgba(255, 255, 255, 0.28); }
+:root[data-palette="aurora"] :is(button.primary, .context-save, .today-link:hover) {
+  border: 0; color: #0b0718; font-weight: 750;
+  background: linear-gradient(100deg, var(--aurora-cyan), var(--aurora-violet) 55%, var(--aurora-pink)); background-size: 160% 100%;
+  box-shadow: 0 8px 30px -8px rgba(167, 139, 250, 0.75), inset 0 1px 0 rgba(255, 255, 255, 0.45);
+}
+:root[data-palette="aurora"] :is(button.primary, .context-save):hover { background-position: 100% 0; color: #0b0718; transform: translateY(-1px); box-shadow: 0 12px 36px -8px rgba(244, 114, 182, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.5); }
+:root[data-palette="aurora"] :is(input, select, textarea) { border-radius: 12px; border-color: var(--glass-edge); background-color: oklch(15% 0.035 280 / 0.85); }
+:root[data-palette="aurora"] :is(button, input, select, textarea, a, summary):focus-visible { outline: 2px solid var(--aurora-cyan); outline-offset: 3px; box-shadow: 0 0 0 6px rgba(103, 232, 249, 0.18); }
+:root[data-palette="aurora"] .mode-switch { border-radius: 999px; border-color: var(--glass-edge); background: rgba(255, 255, 255, 0.04); }
+:root[data-palette="aurora"] .mode-switch :is(button, label, span) { border-radius: 999px; }
+:root[data-palette="aurora"] .theme-option span { border-radius: 999px; background: rgba(255, 255, 255, 0.04); }
+:root[data-palette="aurora"] .theme-option input:checked + span { border-color: transparent; box-shadow: inset 0 0 0 1.5px var(--aurora-violet), 0 0 18px -4px rgba(167, 139, 250, 0.8); }
+
+/* ---------- Tables ---------- */
+:root[data-palette="aurora"] table { border-collapse: separate; border-spacing: 0; }
+:root[data-palette="aurora"] tbody tr { transition: background 0.2s; }
+:root[data-palette="aurora"] tbody tr:hover { background: linear-gradient(90deg, rgba(103, 232, 249, 0.07), rgba(167, 139, 250, 0.09), transparent); }
+:root[data-palette="aurora"] :is(td, th) { border-color: var(--glass-edge); }
+
+/* ---------- Sheets, dialogs, menus ---------- */
+:root[data-palette="aurora"] :is(dialog, .data-menu-panel) {
+  border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 26px;
+  background: var(--glass-solid); -webkit-backdrop-filter: blur(26px) saturate(160%); backdrop-filter: blur(26px) saturate(160%);
+  box-shadow: var(--shadow-sheet), 0 0 60px -20px rgba(167, 139, 250, 0.5);
+}
+:root[data-palette="aurora"] dialog::backdrop { background: rgba(5, 4, 15, 0.55); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+:root[data-palette="aurora"] .plan-draft { border-radius: var(--radius-panel); border: 1px solid rgba(167, 139, 250, 0.3); box-shadow: 0 0 60px -25px rgba(167, 139, 250, 0.7); }
+:root[data-palette="aurora"] .recommended-day { border-radius: 14px; }
+:root[data-palette="aurora"] .live-indicator::before { animation: aurora-pulse 2.4s ease-in-out infinite; }
+
+/* ---------- Entrance: each view's panels rise in ---------- */
+:root[data-palette="aurora"] :is(#overview, #fitness, #planning, #runs):not([hidden]) > * { animation: aurora-rise 0.6s cubic-bezier(0.16, 1, 0.3, 1) both; }
+:root[data-palette="aurora"] :is(#overview, #fitness, #planning, #runs):not([hidden]) > :nth-child(2) { animation-delay: 0.05s; }
+:root[data-palette="aurora"] :is(#overview, #fitness, #planning, #runs):not([hidden]) > :nth-child(3) { animation-delay: 0.1s; }
+:root[data-palette="aurora"] :is(#overview, #fitness, #planning, #runs):not([hidden]) > :nth-child(4) { animation-delay: 0.15s; }
+:root[data-palette="aurora"] :is(#overview, #fitness, #planning, #runs):not([hidden]) > :nth-child(n + 5) { animation-delay: 0.2s; }
+
+/* ---------- Phones: a floating glass tab bar ---------- */
+@media (max-width: 700px) {
+  :root[data-palette="aurora"] body { padding-bottom: calc(var(--tabbar-height) + var(--safe-bottom) + 30px); }
+  :root[data-palette="aurora"] .app-nav {
+    justify-self: stretch; width: auto; right: 12px; bottom: calc(10px + var(--safe-bottom)); left: 12px; height: var(--tabbar-height); padding: 4px;
+    border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 24px;
+    background: oklch(14% 0.035 280 / 0.72); -webkit-backdrop-filter: blur(22px) saturate(170%); backdrop-filter: blur(22px) saturate(170%);
+    box-shadow: 0 18px 40px -12px rgba(0, 0, 0, 0.8), 0 0 30px -12px rgba(167, 139, 250, 0.6);
+  }
+  :root[data-palette="aurora"] .app-nav a { min-height: calc(var(--tabbar-height) - 10px); border-radius: 18px; padding: 4px 2px; }
+  :root[data-palette="aurora"] .app-nav a[aria-current] { background: linear-gradient(160deg, rgba(103, 232, 249, 0.2), rgba(167, 139, 250, 0.28)) !important; }
+  :root[data-palette="aurora"] .app-nav a[aria-current]::before { display: none; }
+  :root[data-palette="aurora"] .app-nav a[aria-current] .nav-icon { filter: drop-shadow(0 0 6px rgba(103, 232, 249, 0.9)); color: var(--aurora-cyan); }
+  :root[data-palette="aurora"] .data-menu-panel { border-radius: 26px 26px 0 0; }
+  :root[data-palette="aurora"] .overview-head h1 { font-size: 2rem; }
+}
+
+/* ---------- Calm ---------- */
+@media (prefers-reduced-motion: reduce) {
+  :root[data-palette="aurora"] body::after,
+  :root[data-palette="aurora"] body::before,
+  :root[data-palette="aurora"] .overview-head h1,
+  :root[data-palette="aurora"] :is(.readiness-hero, .today-strip)::after,
+  :root[data-palette="aurora"] .live-indicator::before,
+  :root[data-palette="aurora"] :is(#overview, #fitness, #planning, #runs):not([hidden]) > * { animation: none; }
+  :root[data-palette="aurora"] :is(.key-run-card, .goal-race):hover { transform: none; }
+}
+@media (forced-colors: active) {
+  :root[data-palette="aurora"] .overview-head h1 { background: none; color: CanvasText; }
+}

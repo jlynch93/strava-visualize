@@ -364,9 +364,10 @@ test("theme follows the system and can be pinned, with accessible contrast in da
   }
 });
 
-for (const [theme, base] of [["trail", "light"], ["ember", "dark"], ["ocean", "dark"], ["synthwave", "dark"], ["terminal", "dark"], ["broadsheet", "light"], ["blossom", "light"], ["blueprint", "dark"]]) {
+for (const [theme, base] of [["trail", "light"], ["ember", "dark"], ["ocean", "dark"], ["synthwave", "dark"], ["terminal", "dark"], ["broadsheet", "light"], ["blossom", "light"], ["blueprint", "dark"], ["aurora", "dark"]]) {
   test(`the ${theme} theme recolours the app, survives a reload and keeps accessible contrast`, async ({ page }) => {
-    await page.emulateMedia({ colorScheme: base === "dark" ? "light" : "dark" });
+    // Still frames: contrast is measured on settled panels, not mid-animation.
+    await page.emulateMedia({ colorScheme: base === "dark" ? "light" : "dark", reducedMotion: "reduce" });
     await page.goto("/"); await importHistory(page);
     const background = () => page.evaluate(() => getComputedStyle(document.body).backgroundColor);
     const before = await background();
@@ -391,7 +392,7 @@ for (const [theme, base] of [["trail", "light"], ["ember", "dark"], ["ocean", "d
 test("themes that change the typeface still fit a phone screen", async ({ page }) => {
   await page.setViewportSize({ width: 360, height: 760 });
   await page.goto("/"); await importHistory(page);
-  for (const theme of ["terminal", "broadsheet"]) {
+  for (const theme of ["terminal", "broadsheet", "aurora"]) {
     await page.evaluate((name) => { preferences.theme = name; applyTheme(); render(); }, theme);
     for (const hash of ["#overview", "#fitness", "#planning", "#runs"]) {
       await page.evaluate((target) => { location.hash = target; }, hash);
@@ -400,6 +401,26 @@ test("themes that change the typeface still fit a phone screen", async ({ page }
       expect(overflow, `${theme} ${hash}`).toBeLessThanOrEqual(0);
     }
   }
+});
+
+test("aurora animates unless reduced motion is asked for, and its spotlight follows the mouse", async ({ page }) => {
+  await page.goto("/"); await importHistory(page);
+  await page.evaluate(() => { preferences.theme = "aurora"; applyTheme(); render(); });
+  const running = () => page.evaluate(() => document.getAnimations().filter((animation) => animation.playState === "running").length);
+  expect(await running()).toBeGreaterThan(0);
+  // Chart bars use the shared gradient.
+  await expect(page.locator(".primary-chart .bar").first()).toHaveCSS("fill", /url\("?#aurora-bar"?\)/);
+  const panel = page.locator(".chart-panel").first();
+  await panel.scrollIntoViewIfNeeded();
+  await page.waitForTimeout(700); // let the entrance animation settle
+  const box = await panel.boundingBox();
+  await page.mouse.move(box.x + 40, box.y + 30);
+  await expect.poll(() => panel.evaluate((node) => node.style.getPropertyValue("--mx"))).toBe("40px");
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await expect.poll(running).toBe(0);
+  // Leaving Aurora leaves no theme-specific decoration behind.
+  await page.evaluate(() => { preferences.theme = "dark"; applyTheme(); });
+  await expect(page.locator("html")).not.toHaveAttribute("data-palette", /.+/);
 });
 
 test("this week compares completed runs with the plan or the recent average", async ({ page }) => {

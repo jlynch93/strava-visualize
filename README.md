@@ -189,7 +189,15 @@ restrained: **Daylight** and **Trail** (light), **Midnight**, **Ember** and
 **Ocean** (dark). Five are bolder and also change detail colours, and in two
 cases the typeface: **Synthwave** (violet and hot pink), **Terminal** (green
 on black, monospace), **Broadsheet** (salmon newsprint, serif headlines),
-**Blossom** (pink and plum) and **Blueprint** (drafting blue with a grid). A theme is
+**Blossom** (pink and plum) and **Blueprint** (drafting blue with a grid).
+
+**Aurora ✦** is the showpiece and has its own stylesheet (`public/theme-aurora.css`):
+slowly drifting aurora light behind frosted-glass panels, large gradient
+headlines, gradient chart bars (SVG gradients `#aurora-bar` that
+`experience.js` adds to the page), glowing lines and gauge, a light that circles
+the readiness panels, pill controls, panels that rise in on each view, a cursor
+spotlight on cards, and a floating glass tab bar on phones. All motion stops
+under the system's reduce-motion setting, and contrast is tested with it on. A theme is
 a base (`data-theme`: light or dark) plus an optional palette (`data-palette`)
 that changes hue and accent only, keeping the base's lightness steps so text
 contrast holds. Chart series colours stay the validated light or dark set.
