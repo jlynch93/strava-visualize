@@ -88,7 +88,7 @@
 }
 :root[data-palette="aurora"] .brand-wordmark { font-weight: 800; letter-spacing: -0.04em; }
 :root[data-palette="aurora"] .brand-mark { filter: drop-shadow(0 0 10px rgba(103, 232, 249, 0.55)); }
-:root[data-palette="aurora"] :is(.section-kicker, .metric-card h3, .account-section-title, th) { letter-spacing: 0.12em; }
+:root[data-palette="aurora"] :is(.section-kicker, .metric-card h3, .account-section-title) { letter-spacing: 0.12em; }
 
 /* ---------- Glass panels ---------- */
 :root[data-palette="aurora"] :is(
@@ -215,7 +215,6 @@
 :root[data-palette="aurora"] .theme-option input:checked + span { border-color: transparent; box-shadow: inset 0 0 0 1.5px var(--aurora-violet), 0 0 18px -4px rgba(167, 139, 250, 0.8); }
 
 /* ---------- Tables ---------- */
-:root[data-palette="aurora"] table { border-collapse: separate; border-spacing: 0; }
 :root[data-palette="aurora"] tbody tr { transition: background 0.2s; }
 :root[data-palette="aurora"] tbody tr:hover { background: linear-gradient(90deg, rgba(103, 232, 249, 0.07), rgba(167, 139, 250, 0.09), transparent); }
 :root[data-palette="aurora"] :is(td, th) { border-color: var(--glass-edge); }

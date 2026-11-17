@@ -391,7 +391,10 @@ for (const [theme, base] of [["trail", "light"], ["ember", "dark"], ["ocean", "d
 
 test("themes that change the typeface still fit a phone screen", async ({ page }) => {
   await page.setViewportSize({ width: 360, height: 760 });
-  await page.goto("/"); await importHistory(page);
+  await page.goto("/");
+  // A wide fallback face, so the check does not depend on which fonts this machine has.
+  await page.addStyleTag({ content: `*, *::before, *::after { font-family: "DejaVu Sans", "Liberation Sans", sans-serif !important; }` });
+  await importHistory(page);
   for (const theme of ["terminal", "broadsheet", "aurora"]) {
     await page.evaluate((name) => { preferences.theme = name; applyTheme(); render(); }, theme);
     for (const hash of ["#overview", "#fitness", "#planning", "#runs"]) {
@@ -406,8 +409,9 @@ test("themes that change the typeface still fit a phone screen", async ({ page }
 test("aurora animates unless reduced motion is asked for, and its spotlight follows the mouse", async ({ page }) => {
   await page.goto("/"); await importHistory(page);
   await page.evaluate(() => { preferences.theme = "aurora"; applyTheme(); render(); });
-  const running = () => page.evaluate(() => document.getAnimations().filter((animation) => animation.playState === "running").length);
-  expect(await running()).toBeGreaterThan(0);
+  // The aurora layer, the readiness light and the page title are what move.
+  const moving = () => page.evaluate(() => [getComputedStyle(document.body, "::after").animationName, getComputedStyle(document.querySelector(".today-strip"), "::after").animationName]);
+  expect(await moving()).toEqual(["aurora-drift", "aurora-orbit"]);
   // Chart bars use the shared gradient.
   await expect(page.locator(".primary-chart .bar").first()).toHaveCSS("fill", /url\("?#aurora-bar"?\)/);
   const panel = page.locator(".chart-panel").first();
@@ -417,7 +421,7 @@ test("aurora animates unless reduced motion is asked for, and its spotlight foll
   await page.mouse.move(box.x + 40, box.y + 30);
   await expect.poll(() => panel.evaluate((node) => node.style.getPropertyValue("--mx"))).toBe("40px");
   await page.emulateMedia({ reducedMotion: "reduce" });
-  await expect.poll(running).toBe(0);
+  await expect.poll(moving).toEqual(["none", "none"]);
   // Leaving Aurora leaves no theme-specific decoration behind.
   await page.evaluate(() => { preferences.theme = "dark"; applyTheme(); });
   await expect(page.locator("html")).not.toHaveAttribute("data-palette", /.+/);
