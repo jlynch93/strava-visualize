@@ -306,6 +306,32 @@ up older edits/deletions. Reconnect is explicit when authorization expires.
 Opening a Strava run loads and caches available splits/laps. Run details have
 previous/next navigation, comparison-set selection, and an Open in Strava link.
 
+### Records, efficiency, pacing, search and recaps
+
+These live in `public/extras.js` and `public/extras.css`; the calculations are
+in `fitness-core.js` and covered by `tests/fitness-core.test.js`.
+
+- **Your records** (Overview): longest run, fastest run at 5–10K, 10K–half and
+  half+ lengths (average pace over the whole run), most climbing, biggest
+  Monday-to-Sunday week and longest daily streak, across your whole history.
+  A record set in the last two weeks that beat an earlier one gets a **New**
+  badge and says what it beat. A record inside the review window opens its run.
+  Runs only; hidden in walk mode.
+- **Aerobic efficiency** (Fitness): distance per heartbeat on easy and steady
+  runs of 20 minutes or more, with each metre climbed counted as six on the
+  flat, as weekly medians. The summary compares the last eight weeks with the
+  eight before: rising means more speed for the same effort.
+- **Race-day pacing** (each goal race card): mile or kilometre splits for the
+  goal time (or the predicted time), even and with a 2% negative split, each
+  with the running total. Both land exactly on the target.
+- **Search and commands**: <kbd>⌘K</kbd> / <kbd>Ctrl K</kbd> (or <kbd>/</kbd>)
+  opens a palette to jump to a view, switch theme, range, units or runs/walks,
+  import, edit the profile, share the week, or find a run in the window by
+  name or date. Commands named by the query rank first.
+- **Share week** (This week): draws a 1080×1350 recap image of the current
+  week on the device (distance, runs, time, pace, climb, daily bars, longest
+  run, readiness) to download or, where supported, share. Nothing is uploaded.
+
 ## GitHub workflows
 
 `Validate dashboard` runs on pushes to `main` and `codex/**` using a trusted

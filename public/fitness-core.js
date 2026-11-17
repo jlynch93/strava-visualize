@@ -379,6 +379,123 @@
     return { score: finalScore, ...band, advice, factors, phase };
   }
 
+  /* ---------- Personal records ---------- */
+
+  // Pace records by run length, so one long run cannot hold all three.
+  const RECORD_DISTANCES = [
+    { key: "fastest-5k", meters: 5000, below: 10000, label: "Fastest 5–10K run" },
+    { key: "fastest-10k", meters: 10000, below: 21097.5, label: "Fastest 10K–half run" },
+    { key: "fastest-half", meters: 21097.5, below: Infinity, label: "Fastest half+ run" }
+  ];
+
+  // Monday of the week a date falls in, as a local-day key.
+  function weekKey(date) {
+    const monday = new Date(date.getFullYear(), date.getMonth(), date.getDate() - ((date.getDay() + 6) % 7));
+    return dayKey(monday);
+  }
+
+  // Records across a run history: each is { key, label, value, unit, run?,
+  // date, previous, isNew }. "Fastest" records compare average pace over runs
+  // at least that long (a whole-run figure, not a split). A record is new when
+  // set in the last `freshDays` and it beat an earlier one. Runs within 2% of a
+  // boundary count toward the longer bucket (a GPS 5K often reads 4.95 km).
+  function personalRecords(runs, dateOf, { today = new Date(), freshDays = 14 } = {}) {
+    const dated = runs.map((run) => ({ run, date: dateOf(run) })).filter(({ date }) => !Number.isNaN(date.valueOf())).sort((a, b) => a.date - b.date);
+    if (!dated.length) return [];
+    const cutoff = new Date(today.getFullYear(), today.getMonth(), today.getDate() - freshDays);
+    const track = (key, label, unit, entries, better) => {
+      let best = null, previous = null;
+      for (const entry of entries) {
+        if (!Number.isFinite(entry.value) || entry.value <= 0) continue;
+        if (!best || better(entry.value, best.value)) { previous = best; best = entry; }
+      }
+      if (!best) return null;
+      return { key, label, unit, value: best.value, run: best.run || null, date: best.date, previous: previous ? { value: previous.value, date: previous.date } : null, isNew: Boolean(previous) && best.date >= cutoff, start: best.start || null };
+    };
+    const records = [];
+    records.push(track("longest", "Longest run", "meters", dated.map(({ run, date }) => ({ run, date, value: run.distance })), (a, b) => a > b));
+    for (const { key, meters, below, label } of RECORD_DISTANCES) {
+      records.push(track(key, label, "pace", dated.filter(({ run }) => run.distance >= meters * 0.98 && run.distance < below * 0.98 && run.moving_time > 0)
+        .map(({ run, date }) => ({ run, date, value: run.moving_time / run.distance })), (a, b) => a < b));
+    }
+    records.push(track("climb", "Most climbing", "meters", dated.map(({ run, date }) => ({ run, date, value: run.total_elevation_gain })), (a, b) => a > b));
+    // Biggest week: Monday-to-Sunday distance, dated by its Monday.
+    const weeks = new Map();
+    for (const { run, date } of dated) {
+      const key = weekKey(date);
+      const week = weeks.get(key) || { value: 0, date: new Date(date.getFullYear(), date.getMonth(), date.getDate() - ((date.getDay() + 6) % 7)), last: date };
+      week.value += run.distance; week.last = date;
+      weeks.set(key, week);
+    }
+    records.push(track("biggest-week", "Biggest week", "meters", [...weeks.values()].map((week) => ({ value: week.value, date: week.last, start: week.date })), (a, b) => a > b));
+    // Longest streak of consecutive days with a run.
+    const days = [...new Set(dated.map(({ date }) => dayKey(date)))].sort();
+    let run = 1, start = new Date(`${days[0]}T12:00:00`);
+    const streaks = [];
+    for (let index = 1; index <= days.length; index += 1) {
+      const gap = index < days.length ? (new Date(`${days[index]}T12:00:00`) - new Date(`${days[index - 1]}T12:00:00`)) / 86400000 : 0;
+      if (index < days.length && Math.round(gap) === 1) { run += 1; continue; }
+      streaks.push({ value: run, date: new Date(`${days[index - 1]}T12:00:00`), start });
+      run = 1; start = new Date(`${days[index]}T12:00:00`);
+    }
+    records.push(track("streak", "Longest streak", "days", streaks.filter((item) => item.value > 1), (a, b) => a > b));
+    return records.filter(Boolean);
+  }
+
+  /* ---------- Aerobic efficiency ---------- */
+
+  // Metres covered per heartbeat, with climbing counted as extra distance
+  // (1 m of climb ~ 6 m on the flat). Higher is fitter at the same effort.
+  function metersPerBeat(run) {
+    if (!(run.average_heartrate > 60) || !(run.moving_time >= 20 * 60) || !(run.distance > 0)) return null;
+    const effective = run.distance + 6 * (run.total_elevation_gain || 0);
+    return effective / (run.moving_time / 60 * run.average_heartrate);
+  }
+
+  // Weekly medians of metres per beat, plus the change over the last eight
+  // weeks against the eight before. Quality sessions and races are left out,
+  // so the trend compares like with like.
+  function efficiencyTrend(runs, dateOf, { types = null, today = new Date() } = {}) {
+    const weeks = new Map();
+    for (const run of runs) {
+      if (types && ["quality", "race"].includes(types.get(String(run.id))?.key)) continue;
+      const value = metersPerBeat(run);
+      const date = dateOf(run);
+      if (value === null || Number.isNaN(date.valueOf())) continue;
+      const key = weekKey(date);
+      if (!weeks.has(key)) weeks.set(key, []);
+      weeks.get(key).push(value);
+    }
+    const median = (values) => { const sorted = [...values].sort((a, b) => a - b); const mid = Math.floor(sorted.length / 2); return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2; };
+    const series = [...weeks.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([key, values]) => ({ week: new Date(`${key}T12:00:00`), value: median(values), runs: values.length }));
+    const ago = (days) => new Date(today.getFullYear(), today.getMonth(), today.getDate() - days);
+    const recent = series.filter((point) => point.week >= ago(56)).flatMap((point) => Array(point.runs).fill(point.value));
+    const before = series.filter((point) => point.week < ago(56) && point.week >= ago(112)).flatMap((point) => Array(point.runs).fill(point.value));
+    const change = recent.length >= 3 && before.length >= 3 ? median(recent) / median(before) - 1 : null;
+    return { series, current: recent.length ? median(recent) : null, change };
+  }
+
+  /* ---------- Race-day pacing ---------- */
+
+  // Splits for a goal time over a distance, every `splitMeters` (a mile or a
+  // kilometre), even or with a negative split: the second half `negative`
+  // (fraction) faster than the first, the same finish time either way.
+  function pacingPlan(meters, goalSeconds, { splitMeters = 1609.344, negative = 0 } = {}) {
+    if (!(meters > 0) || !(goalSeconds > 0) || !(splitMeters > 0)) return [];
+    const half = meters / 2;
+    // First-half pace p1 and second-half pace p2 = p1 * (1 - negative), with half*p1 + half*p2 = goal.
+    const firstPace = goalSeconds / (half * (2 - negative));
+    const secondPace = firstPace * (1 - negative);
+    const timeAt = (distance) => distance <= half ? distance * firstPace : half * firstPace + (distance - half) * secondPace;
+    const splits = [];
+    for (let at = splitMeters, index = 1; at - splitMeters < meters - 0.5; at += splitMeters, index += 1) {
+      const distance = Math.min(at, meters);
+      const from = distance === meters ? Math.min(at - splitMeters, meters) : at - splitMeters;
+      splits.push({ index, distance, partial: distance - from < splitMeters - 0.5, splitSeconds: timeAt(distance) - timeAt(from), elapsed: timeAt(distance) });
+    }
+    return splits;
+  }
+
   /* ---------- Finishing place ---------- */
 
   // Five-year age groups, as most races award them.
@@ -515,7 +632,7 @@
     estimateMaxHr, heartRateReserve, runVo2Estimate, runVdot, percentile, vo2Series,
     runLoad, dailyLoads, loadSeries, workloadRatios, formZone, readiness, dayKey, finite,
     RUN_TYPES, classifyRunType, isWalk, WALK_TYPES, classifyWalkType,
-    trainingPhase, recoveryDays, taperDays, projectRaceDay, TAPER_LOAD, RACE_WEEK_LOAD, ageGroup, projectPlace
+    trainingPhase, recoveryDays, taperDays, projectRaceDay, TAPER_LOAD, RACE_WEEK_LOAD, ageGroup, projectPlace, personalRecords, metersPerBeat, efficiencyTrend, pacingPlan, weekKey
   };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.FitnessCore = api;

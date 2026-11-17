@@ -225,3 +225,70 @@ test("a finish time is placed overall, by gender and by five-year age group", ()
   assert.equal(fit.ageGroup(12).label, "14 & under");
   assert.equal(fit.ageGroup(84).label, "80+");
 });
+
+const recordRun = (offset, km, minutes, extra = {}) => ({ id: `r${offset}-${km}`, date: new Date(2026, 10, 16 + offset, 7), distance: km * 1000, moving_time: minutes * 60, total_elevation_gain: 0, ...extra });
+const byKey = (records) => Object.fromEntries(records.map((record) => [record.key, record]));
+
+test("personal records: longest, fastest at distance, climbing, biggest week and streak", () => {
+  const runs = [
+    recordRun(-60, 10, 55), recordRun(-59, 5, 25), recordRun(-58, 6, 33, { total_elevation_gain: 300 }),
+    recordRun(-30, 21.1, 120), recordRun(-3, 24, 140), recordRun(-2, 5, 23), recordRun(-1, 8, 44)
+  ];
+  const records = byKey(fit.personalRecords(runs, (run) => run.date, { today: TODAY }));
+  assert.equal(records.longest.value, 24000);
+  assert.equal(records.longest.isNew, true);
+  assert.equal(records.longest.previous.value, 21100);
+  // 5K+ pace: 23 min over 5 km beats 25 min, and it is new.
+  assert.equal(Math.round(records["fastest-5k"].value * 1000), 276);
+  assert.equal(records["fastest-5k"].isNew, true);
+  // 10K to half: the 10 km in 55 min (330 s per km) is the only one, so not new.
+  assert.equal(Math.round(records["fastest-10k"].value * 1000), 330);
+  assert.equal(records["fastest-10k"].isNew, false);
+  // Half and longer: 24 km in 140 min beats 21.1 km in 120 min? No: 350 vs 341 s/km, the half holds.
+  assert.equal(Math.round(records["fastest-half"].value * 1000), 341);
+  // The 8 km in 44 min falls in the 5-10K bucket but is slower than the 5 km in 23.
+  assert.equal(records["fastest-5k"].run.distance, 5000);
+  assert.equal(records.climb.value, 300);
+  assert.equal(records.streak.value, 3);
+  // The last three runs fall in the week of Nov 9-15 (Mon-Sun) with 37 km.
+  assert.equal(records["biggest-week"].value, 37000);
+  assert.equal(records["biggest-week"].start.getDate(), 9);
+  // A first-ever record is not "new": there was nothing to beat.
+  assert.equal(byKey(fit.personalRecords([recordRun(-1, 5, 25)], (run) => run.date, { today: TODAY })).longest.isNew, false);
+  assert.deepEqual(fit.personalRecords([], (run) => run.date), []);
+});
+
+test("aerobic efficiency is metres per heartbeat, trended weekly without hard sessions", () => {
+  // 10 km in 50 min at 150 bpm: 10000 / (50 * 150) = 1.333 m per beat.
+  assert.equal(fit.metersPerBeat({ distance: 10000, moving_time: 3000, average_heartrate: 150 }).toFixed(3), "1.333");
+  // Climbing counts as extra distance; short or HR-less runs are skipped.
+  assert.ok(fit.metersPerBeat({ distance: 10000, moving_time: 3000, average_heartrate: 150, total_elevation_gain: 100 }) > 1.333);
+  assert.equal(fit.metersPerBeat({ distance: 3000, moving_time: 900, average_heartrate: 150 }), null);
+  assert.equal(fit.metersPerBeat({ distance: 10000, moving_time: 3000, average_heartrate: 0 }), null);
+  const runs = [];
+  for (let week = 0; week < 16; week += 1) {
+    // Same pace each week, heart rate falling from 160 to 145: efficiency rises.
+    runs.push({ id: `e${week}`, date: new Date(2026, 10, 16 - (15 - week) * 7 - 1, 7), distance: 10000, moving_time: 3000, average_heartrate: 160 - week, total_elevation_gain: 0 });
+  }
+  runs.push({ id: "hard", date: new Date(2026, 10, 14, 7), distance: 10000, moving_time: 2400, average_heartrate: 175 });
+  const types = new Map([["hard", { key: "quality" }]]);
+  const trend = fit.efficiencyTrend(runs, (run) => run.date, { types, today: TODAY });
+  assert.equal(trend.series.length, 16);
+  assert.ok(trend.change > 0.04 && trend.change < 0.08, `change ${trend.change}`);
+  assert.ok(trend.series.every((point) => point.runs === 1), "the quality session is left out");
+});
+
+test("a pacing plan reaches the goal time exactly, even or negative split", () => {
+  const even = fit.pacingPlan(42195, 3.5 * 3600);
+  assert.equal(even.length, 27);
+  assert.equal(even.at(-1).partial, true);
+  assert.ok(Math.abs(even.at(-1).elapsed - 3.5 * 3600) < 0.01);
+  assert.ok(Math.abs(even[0].splitSeconds - even[10].splitSeconds) < 0.01);
+  const negative = fit.pacingPlan(42195, 3.5 * 3600, { negative: 0.02 });
+  assert.ok(Math.abs(negative.at(-1).elapsed - 3.5 * 3600) < 0.01);
+  assert.ok(negative[0].splitSeconds > negative[20].splitSeconds, "second half is faster");
+  const km = fit.pacingPlan(5000, 1500, { splitMeters: 1000 });
+  assert.deepEqual(km.map((split) => Math.round(split.splitSeconds)), [300, 300, 300, 300, 300]);
+  assert.equal(km.at(-1).partial, false);
+  assert.deepEqual(fit.pacingPlan(0, 100), []);
+});

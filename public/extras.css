@@ -1,0 +1,89 @@
+/* Personal records, aerobic efficiency, race-day pacing, the command palette
+   and the weekly recap (extras.js). Built on the shared colour tokens, so
+   every theme styles them. */
+
+/* ---------- Records ---------- */
+.records { margin: 0 0 18px; padding: 16px 20px; background: var(--surface); border: 1px solid var(--rule); }
+.records[hidden] { display: none; }
+.records-head { display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: baseline; margin-bottom: 12px; }
+.records-head h2 { margin: 0; font-size: 1.05rem; }
+.records-head p { margin: 0; color: var(--ink-soft); font-size: .84rem; }
+.records-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px; margin: 0; padding: 0; list-style: none; }
+.record { min-width: 0; }
+.record-open, .record-body {
+  display: grid; gap: 2px; align-content: start; width: 100%; height: 100%; min-height: 0; padding: 12px 14px;
+  border: 1px solid var(--rule); border-radius: 10px; background: var(--surface-muted); color: var(--ink); font: inherit; text-align: left;
+}
+.record-open { justify-items: start; justify-content: stretch; align-items: start; white-space: normal; cursor: pointer; }
+.record-open:hover { border-color: var(--rule-strong); background: var(--surface); }
+.record.is-new :is(.record-open, .record-body) { border-color: var(--teal); box-shadow: inset 0 0 0 1px var(--teal); }
+.record-label { color: var(--ink-soft); font-size: .72rem; font-weight: 760; letter-spacing: .03em; text-transform: uppercase; }
+.record-new { margin-left: 4px; padding: 1px 6px; border-radius: 999px; background: var(--accent); color: var(--accent-ink); font-size: .64rem; letter-spacing: .04em; }
+.record-value { color: var(--ink-strong); font-size: 1.45rem; font-weight: 780; letter-spacing: -.02em; font-variant-numeric: tabular-nums; line-height: 1.2; }
+.record small { color: var(--ink-soft); font-size: .76rem; }
+.record-previous { color: var(--ink-strong) !important; font-weight: 650; }
+
+/* ---------- Aerobic efficiency ---------- */
+.efficiency-summary { margin: 0 0 10px; color: var(--ink-soft); font-size: .9rem; }
+.efficiency-summary strong { color: var(--ink-strong); }
+.series-line.efficiency-line { stroke: var(--series-a); }
+.key.efficiency-line { background: var(--series-a); }
+
+/* ---------- Race-day pacing ---------- */
+.pacing-plan { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--rule); }
+.pacing-plan > summary { cursor: pointer; color: var(--ink-strong); font-size: .86rem; font-weight: 700; }
+.pacing-plan > summary span { margin-left: 4px; color: var(--ink-soft); font-weight: 500; }
+.pacing-note { margin: 8px 0; color: var(--ink-soft); font-size: .8rem; }
+.fitness-columns > *, .goal-races, .goal-race { min-width: 0; }
+.pacing-scroll { max-height: 320px; overflow: auto; border: 1px solid var(--rule); border-radius: 8px; }
+.pacing-table { width: 100%; white-space: nowrap; border-collapse: collapse; font-size: .82rem; font-variant-numeric: tabular-nums; }
+.pacing-table th, .pacing-table td { padding: 5px 10px; border-bottom: 1px solid var(--rule); text-align: left; }
+.pacing-table thead th { position: sticky; top: 0; background: var(--surface); color: var(--ink-soft); font-size: .72rem; }
+.pacing-table th small { margin-left: 6px; color: var(--ink-faint); font-weight: 500; }
+.pacing-table td small { display: block; color: var(--ink-faint); font-size: .72rem; font-weight: 500; }
+.pacing-table tbody th { color: var(--ink-soft); font-weight: 650; }
+.pacing-table td { color: var(--ink-strong); font-weight: 650; }
+
+/* ---------- Share week ---------- */
+.week-head:has(.share-week) { justify-content: flex-start; }
+.week-head .share-week { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; }
+.share-week svg, .palette-button svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+/* ---------- Command palette ---------- */
+.palette-button { display: inline-flex; align-items: center; gap: 8px; }
+.palette-button kbd { padding: 1px 5px; border: 1px solid var(--rule-strong); border-radius: 4px; color: var(--ink-soft); font: 600 .68rem ui-monospace, SFMono-Regular, Menlo, monospace; }
+body:not(.has-history) .palette-button { display: none; }
+.command-palette { width: min(640px, calc(100vw - 32px)); max-width: none; margin: 12vh auto auto; padding: 0; overflow: hidden; border: 1px solid var(--rule-strong); border-radius: 14px; background: var(--surface); color: var(--ink); box-shadow: var(--shadow-sheet); }
+.command-palette::backdrop { background: rgba(10, 18, 22, 0.45); }
+.palette-field { display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-bottom: 1px solid var(--rule); }
+.palette-field svg { flex: none; width: 20px; height: 20px; fill: none; stroke: var(--ink-soft); stroke-width: 2; stroke-linecap: round; }
+.palette-field input { flex: 1; min-width: 0; padding: 4px 0; border: 0; background: transparent; color: var(--ink-strong); font: inherit; font-size: 1.05rem; }
+.palette-field input:focus-visible { outline: none; box-shadow: none; }
+.palette-list { max-height: min(52vh, 440px); margin: 0; padding: 6px; overflow-y: auto; list-style: none; }
+.palette-group { padding: 10px 10px 4px; color: var(--ink-faint); font-size: .7rem; font-weight: 760; letter-spacing: .06em; text-transform: uppercase; }
+.palette-item { display: flex; align-items: baseline; gap: 10px; padding: 9px 10px; border-radius: 8px; color: var(--ink); cursor: pointer; }
+.palette-item small { overflow: hidden; color: var(--ink-soft); font-size: .78rem; text-overflow: ellipsis; white-space: nowrap; }
+.palette-item em { margin-left: auto; color: var(--ink-faint); font-size: .72rem; font-style: normal; }
+.palette-item.is-active { background: var(--surface-muted); color: var(--ink-strong); box-shadow: inset 3px 0 0 var(--teal); }
+.palette-empty { padding: 16px 10px; color: var(--ink-soft); font-size: .88rem; }
+.palette-hint { margin: 0; padding: 8px 16px; border-top: 1px solid var(--rule); color: var(--ink-faint); font-size: .74rem; }
+.palette-hint kbd { margin-right: 2px; padding: 0 4px; border: 1px solid var(--rule-strong); border-radius: 3px; font: 600 .7rem ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+/* ---------- Weekly recap ---------- */
+.recap-dialog { width: min(440px, calc(100vw - 32px)); }
+.recap-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.recap-head h2 { margin: 0; font-size: 1.1rem; }
+.recap-head .modal-close { position: static; }
+.recap-dialog img { display: block; width: 100%; height: auto; border-radius: 10px; }
+.recap-actions { display: flex; gap: 10px; margin-top: 14px; }
+.recap-download { display: inline-flex; align-items: center; justify-content: center; min-height: 40px; padding: 0 14px; border: 1px solid var(--rule-strong); border-radius: 7px; color: var(--ink-strong); font-weight: 650; text-decoration: none; }
+.recap-note { margin: 10px 0 0; color: var(--ink-faint); font-size: .76rem; }
+
+@media (max-width: 700px) {
+  .palette-button { display: none; }
+  .records { padding: 14px; }
+  .records-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .record-value { font-size: 1.2rem; }
+  .week-head .share-week span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .command-palette { margin-top: 8vh; }
+}

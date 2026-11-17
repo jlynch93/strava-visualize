@@ -94,7 +94,7 @@
 :root[data-palette="aurora"] :is(
   .chart-panel, .data-panel, .readiness-hero, .fitness-panel, .fitness-kpis, .this-week, .today-strip,
   .secondary-disclosure, .key-run-card, .goal-race, .empty-window, .fitness-empty, .advanced-exploration,
-  .context-card, .block-review, .race-item, .race-result, .ledger-empty
+  .context-card, .block-review, .race-item, .race-result, .ledger-empty, .records
 ) {
   position: relative;
   border: 1px solid var(--glass-edge);
