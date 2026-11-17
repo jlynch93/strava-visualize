@@ -197,7 +197,17 @@ headlines, gradient chart bars (SVG gradients `#aurora-bar` that
 `experience.js` adds to the page), glowing lines and gauge, a light that circles
 the readiness panels, pill controls, panels that rise in on each view, a cursor
 spotlight on cards, and a floating glass tab bar on phones. All motion stops
-under the system's reduce-motion setting, and contrast is tested with it on. A theme is
+under the system's reduce-motion setting, and contrast is tested with it on.
+
+**Studio ◧** changes the layout rather than the colours (`public/theme-studio.css`).
+On wide screens (1100px and up) the header becomes a dark sidebar with
+icon-and-label navigation and the account at its foot; Overview becomes a
+bento grid with a tall readiness tile beside the week and block review;
+Fitness puts readiness beside the key numbers and pairs the VO2 max and load
+charts; the run ledger becomes floating row cards; settings open beside the
+sidebar. On phones it has a dark app bar and tab bar and turns the key numbers
+into a strip that scrolls sideways. The sidebar is dark because the colour
+tokens are redefined on the header itself, so everything inside it follows. A theme is
 a base (`data-theme`: light or dark) plus an optional palette (`data-palette`)
 that changes hue and accent only, keeping the base's lightness steps so text
 contrast holds. Chart series colours stay the validated light or dark set.

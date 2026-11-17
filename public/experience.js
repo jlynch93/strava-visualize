@@ -14,7 +14,8 @@ const THEMES = {
   broadsheet: { label: "Broadsheet", base: "light", palette: "broadsheet", paper: "#f6e4d2", accent: "#7a1b2b" },
   blossom: { label: "Blossom", base: "light", palette: "blossom", paper: "#fbeef3", accent: "#f08fb4" },
   blueprint: { label: "Blueprint", base: "dark", palette: "blueprint", paper: "#14357f", accent: "#f4e04d" },
-  aurora: { label: "Aurora ✦", base: "dark", palette: "aurora", paper: "#0b0a1a", accent: "#a78bfa" }
+  aurora: { label: "Aurora ✦", base: "dark", palette: "aurora", paper: "#0b0a1a", accent: "#a78bfa" },
+  studio: { label: "Studio ◧", base: "light", palette: "studio", paper: "#f2f1ed", accent: "#ff6a3d" }
 };
 function sanitizePreferences(saved) {
   return {

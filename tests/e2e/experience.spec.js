@@ -364,7 +364,7 @@ test("theme follows the system and can be pinned, with accessible contrast in da
   }
 });
 
-for (const [theme, base] of [["trail", "light"], ["ember", "dark"], ["ocean", "dark"], ["synthwave", "dark"], ["terminal", "dark"], ["broadsheet", "light"], ["blossom", "light"], ["blueprint", "dark"], ["aurora", "dark"]]) {
+for (const [theme, base] of [["trail", "light"], ["ember", "dark"], ["ocean", "dark"], ["synthwave", "dark"], ["terminal", "dark"], ["broadsheet", "light"], ["blossom", "light"], ["blueprint", "dark"], ["aurora", "dark"], ["studio", "light"]]) {
   test(`the ${theme} theme recolours the app, survives a reload and keeps accessible contrast`, async ({ page }) => {
     // Still frames: contrast is measured on settled panels, not mid-animation.
     await page.emulateMedia({ colorScheme: base === "dark" ? "light" : "dark", reducedMotion: "reduce" });
@@ -395,7 +395,7 @@ test("themes that change the typeface still fit a phone screen", async ({ page }
   // A wide fallback face, so the check does not depend on which fonts this machine has.
   await page.addStyleTag({ content: `*, *::before, *::after { font-family: "DejaVu Sans", "Liberation Sans", sans-serif !important; }` });
   await importHistory(page);
-  for (const theme of ["terminal", "broadsheet", "aurora"]) {
+  for (const theme of ["terminal", "broadsheet", "aurora", "studio"]) {
     await page.evaluate((name) => { preferences.theme = name; applyTheme(); render(); }, theme);
     for (const hash of ["#overview", "#fitness", "#planning", "#runs"]) {
       await page.evaluate((target) => { location.hash = target; }, hash);
@@ -425,6 +425,41 @@ test("aurora animates unless reduced motion is asked for, and its spotlight foll
   // Leaving Aurora leaves no theme-specific decoration behind.
   await page.evaluate(() => { preferences.theme = "dark"; applyTheme(); });
   await expect(page.locator("html")).not.toHaveAttribute("data-palette", /.+/);
+});
+
+test("studio changes the layout: a sidebar and bento grid on wide screens, a swipeable strip on phones", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/"); await importHistory(page);
+  await page.evaluate(() => { preferences.theme = "studio"; applyTheme(); render(); });
+  // The header is a sidebar down the left, with navigation stacked.
+  const header = await page.locator(".app-header").boundingBox();
+  expect(header.x).toBe(0);
+  expect(header.height).toBeGreaterThanOrEqual(899);
+  expect(header.width).toBeLessThan(300);
+  const tabs = await page.locator(".app-nav a").evaluateAll((links) => links.map((link) => link.getBoundingClientRect().top));
+  expect(new Set(tabs).size).toBe(4);
+  // Overview: readiness tile beside the week, not above it.
+  const today = await page.locator("#todayStrip").boundingBox();
+  const week = await page.locator("#thisWeek").boundingBox();
+  expect(week.x).toBeGreaterThan(today.x + today.width - 1);
+  expect(Math.abs(week.y - today.y)).toBeLessThan(4);
+  // Fitness: the numbers sit beside readiness.
+  await view(page, "Fitness");
+  const hero = await page.locator("#readinessHero").boundingBox();
+  const kpis = await page.locator("#fitnessKpis").boundingBox();
+  expect(kpis.x).toBeGreaterThan(hero.x + hero.width - 1);
+  // Settings open beside the sidebar and stay on screen.
+  await page.locator("#dataMenu > summary").click();
+  const menu = await page.locator(".data-menu-panel").boundingBox();
+  expect(menu.x).toBeGreaterThanOrEqual(header.width);
+  expect(menu.y + menu.height).toBeLessThanOrEqual(900);
+  await page.keyboard.press("Escape");
+
+  // Phone: the key numbers become a strip that scrolls sideways, inside the page.
+  await page.setViewportSize({ width: 390, height: 844 });
+  const strip = page.locator("#fitnessKpis");
+  await expect.poll(() => strip.evaluate((node) => node.scrollWidth > node.clientWidth)).toBe(true);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
 });
 
 test("this week compares completed runs with the plan or the recent average", async ({ page }) => {

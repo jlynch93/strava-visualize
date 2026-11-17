@@ -1,0 +1,192 @@
+/*
+ * Studio: a theme that changes the layout, not just the colours. On the light
+ * base (data-theme="light", data-palette="studio"):
+ * - Wide screens (1100px+): the header becomes a dark sidebar with icon-and-label
+ *   navigation and the account at the foot; Overview becomes a bento grid with
+ *   a tall readiness tile; Fitness puts readiness beside the numbers and pairs
+ *   the charts; the run ledger becomes floating row cards.
+ * - Phones: a dark app bar and tab bar, a dark readiness card, and the key
+ *   numbers as a swipeable strip.
+ * The sidebar and app bar are dark by redefining the colour tokens on the
+ * header, so everything inside it (buttons, menus, the account chip) follows.
+ */
+:root[data-palette="studio"] {
+  --paper: oklch(95.5% 0.006 85);
+  --paper-deep: oklch(92.5% 0.008 85);
+  --surface: oklch(100% 0 0);
+  --surface-muted: oklch(96.5% 0.006 85);
+  --ink: oklch(22% 0.01 270);
+  --ink-strong: oklch(15% 0.01 270);
+  --ink-soft: oklch(42% 0.012 270);
+  --ink-faint: oklch(52% 0.012 270);
+  --rule: oklch(90% 0.006 85);
+  --rule-strong: oklch(78% 0.01 85);
+  --accent: oklch(70% 0.2 38);
+  --accent-hover: oklch(65% 0.21 36);
+  --accent-ink: oklch(14% 0.02 40);
+  --teal: oklch(50% 0.11 190);
+  --panel-ink: oklch(17% 0.01 270);
+  --shadow-sheet: 0 30px 60px -20px rgba(20, 20, 30, 0.35);
+  --studio-rail: 248px;
+  --studio-card-shadow: 0 1px 2px rgba(20, 20, 30, 0.05), 0 8px 28px -14px rgba(20, 20, 30, 0.18);
+  --studio-radius: 18px;
+  --studio-gap: 20px;
+}
+/* Dark surfaces: the sidebar / app bar and the readiness tile. */
+:root[data-palette="studio"] :is(.app-header, .today-strip) {
+  color-scheme: dark;
+  --paper: oklch(17% 0.008 270);
+  --paper-deep: oklch(13% 0.008 270);
+  --surface: oklch(21% 0.01 270);
+  --surface-muted: oklch(26% 0.012 270);
+  --ink: oklch(91% 0.005 270);
+  --ink-strong: oklch(98% 0.003 270);
+  --ink-soft: oklch(80% 0.008 270);
+  --ink-faint: oklch(72% 0.01 270);
+  --rule: oklch(32% 0.01 270);
+  --rule-strong: oklch(45% 0.012 270);
+  --teal: oklch(78% 0.12 190);
+  --blue: oklch(76% 0.11 258);
+  --status-good: oklch(76% 0.16 153);
+  --status-ready: oklch(78% 0.12 190);
+  --status-warning: oklch(80% 0.14 75);
+  --status-critical: oklch(74% 0.16 26);
+  color: var(--ink);
+}
+
+/* ---------- Everywhere: cards without borders ---------- */
+:root[data-palette="studio"] body { background: var(--paper); }
+:root[data-palette="studio"] body::before { display: none; }
+:root[data-palette="studio"] :is(h1, h2) { letter-spacing: -0.03em; }
+:root[data-palette="studio"] :is(
+  .chart-panel, .data-panel, .readiness-hero, .fitness-panel, .fitness-kpis, .this-week, .block-review,
+  .secondary-disclosure, .key-run-card, .goal-race, .empty-window, .fitness-empty, .advanced-exploration, .toolbar
+) {
+  border: 0; border-radius: var(--studio-radius); background: var(--surface); box-shadow: var(--studio-card-shadow);
+}
+:root[data-palette="studio"] .chart-panel { border-top: 0; }
+:root[data-palette="studio"] .block-review { padding-bottom: 20px; }
+:root[data-palette="studio"] .block-evidence { border: 0; }
+:root[data-palette="studio"] :is(.kpi-tile, .metric-card) { border-left: 0; }
+:root[data-palette="studio"] .fitness-kpis { gap: 10px; padding: 10px; background: transparent; box-shadow: none; }
+:root[data-palette="studio"] .kpi-tile { border-radius: 14px; background: var(--surface); box-shadow: var(--studio-card-shadow); }
+:root[data-palette="studio"] .kpi-tile strong { font-size: 2.2rem; letter-spacing: -0.045em; }
+:root[data-palette="studio"] .week-day { border: 0; border-radius: 12px; background: var(--surface-muted); }
+:root[data-palette="studio"] .week-day.is-today { box-shadow: inset 0 0 0 2px var(--ink-strong); background: var(--surface); }
+:root[data-palette="studio"] :where(button, .file-button, .data-menu > summary, .today-link) { border-radius: 10px; }
+:root[data-palette="studio"] :is(button.primary, .context-save) { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); font-weight: 750; }
+:root[data-palette="studio"] :is(button.primary, .context-save):hover { border-color: var(--accent-hover); background: var(--accent-hover); color: var(--accent-ink); }
+:root[data-palette="studio"] :is(input, select, textarea) { border-radius: 10px; }
+:root[data-palette="studio"] .fitness-notes { border-left: 0; border-radius: 14px; box-shadow: inset 4px 0 0 var(--blue); }
+:root[data-palette="studio"] .plan-start { border-left: 0; border-radius: 14px; box-shadow: inset 4px 0 0 var(--teal); }
+:root[data-palette="studio"] .plan-draft { border-radius: var(--studio-radius); }
+:root[data-palette="studio"] .recommended-day { border-radius: 12px; }
+
+/* The readiness tile: dark, with a large score. */
+:root[data-palette="studio"] .today-strip {
+  border: 0; border-radius: var(--studio-radius); background: var(--paper);
+  background-image: radial-gradient(120% 90% at 100% 0%, oklch(70% 0.2 38 / 0.32), transparent 55%);
+  box-shadow: 0 20px 40px -22px rgba(20, 20, 30, 0.6);
+}
+:root[data-palette="studio"] .today-score { width: 76px; height: 76px; font-size: 1.8rem; border-width: 6px; }
+:root[data-palette="studio"] .today-link { border-color: var(--rule-strong); }
+:root[data-palette="studio"] .today-link:hover { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); }
+
+/* ---------- Wide screens: sidebar and bento ---------- */
+@media (min-width: 1100px) {
+  :root[data-palette="studio"] .app { width: auto; max-width: none; margin: 0; padding: 26px 40px 40px calc(var(--studio-rail) + 40px); }
+  :root[data-palette="studio"] :is(.app > *:not(.app-header)) { max-width: 1240px; }
+
+  /* The sidebar. */
+  :root[data-palette="studio"] .app-header {
+    position: fixed; inset: 0 auto 0 0; z-index: 40; display: flex; flex-direction: column; align-items: stretch; gap: 26px;
+    width: var(--studio-rail); margin: 0; padding: 26px 16px 20px; overflow-y: auto; border: 0; background: var(--paper);
+  }
+  :root[data-palette="studio"] .brand-lockup { padding: 0 8px; }
+  :root[data-palette="studio"] .brand-wordmark { color: var(--ink-strong); font-size: 1.3rem; }
+  :root[data-palette="studio"] .app-nav { display: flex; flex-direction: column; align-items: stretch; gap: 4px; width: 100%; }
+  :root[data-palette="studio"] body:not(.has-history) .app-nav { display: none; }
+  :root[data-palette="studio"] .app-nav a {
+    display: flex; align-items: center; justify-content: flex-start; gap: 12px; width: 100%; padding: 11px 12px; border-radius: 12px; text-align: left;
+    color: var(--ink-soft); font-weight: 650; background: transparent;
+  }
+  :root[data-palette="studio"] .app-nav a:hover { background: var(--surface); color: var(--ink-strong); }
+  :root[data-palette="studio"] .app-nav a[aria-current] { background: var(--surface-muted); color: var(--ink-strong); box-shadow: inset 3px 0 0 var(--accent); }
+  :root[data-palette="studio"] .nav-icon { display: block; width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  :root[data-palette="studio"] .app-nav a[aria-current] .nav-icon { color: var(--accent); }
+  :root[data-palette="studio"] .app-header > .header-actions { display: grid; grid-column: auto; justify-items: stretch; margin-top: auto; text-align: left; }
+  :root[data-palette="studio"] .header-actions .actions { display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start; gap: 8px; width: 100%; }
+  :root[data-palette="studio"] .header-actions .actions > :is(button, .file-button, details) { align-self: stretch; width: 100%; justify-content: flex-start; }
+  :root[data-palette="studio"] .header-actions .actions > :is(button, .file-button) { text-align: left; }
+  :root[data-palette="studio"] #sourceStatus { order: 2; margin-top: 10px; padding: 0 8px; color: var(--ink-faint); font-size: .76rem; }
+  :root[data-palette="studio"] .actions > .account-button:not([hidden]) { max-width: none; }
+  :root[data-palette="studio"] .data-menu > summary { justify-content: flex-start; width: 100%; }
+  /* Settings open beside the sidebar, anchored to its foot. */
+  :root[data-palette="studio"] .data-menu-panel { position: fixed; top: auto; right: auto; bottom: 18px; left: calc(var(--studio-rail) + 12px); }
+
+  /* The filters: a floating bar at the top of the content. */
+  :root[data-palette="studio"] .toolbar { top: 14px; padding: 14px 18px; margin-bottom: var(--studio-gap); }
+
+  /* Overview as a bento grid. */
+  :root[data-palette="studio"] #overview:not([hidden]) { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: var(--studio-gap); align-items: start; }
+  :root[data-palette="studio"] #overview > * { grid-column: 1 / -1; margin: 0; }
+  :root[data-palette="studio"] #overview > .today-strip:not([hidden]) {
+    grid-column: 1 / span 4; grid-row: span 2; align-self: stretch;
+    grid-template-columns: minmax(0, 1fr); align-content: space-between; gap: 22px; padding: 26px;
+  }
+  :root[data-palette="studio"] #overview > .today-strip .today-readiness { flex-direction: column; align-items: flex-start; gap: 14px; }
+  :root[data-palette="studio"] #overview > .today-strip .today-score { width: 108px; height: 108px; font-size: 2.6rem; border-width: 8px; }
+  :root[data-palette="studio"] #overview > .today-strip .today-readiness strong { font-size: 1.5rem; letter-spacing: -0.02em; }
+  :root[data-palette="studio"] #overview > .today-strip .today-facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+  :root[data-palette="studio"] #overview > .today-strip .today-link { justify-self: start; }
+  :root[data-palette="studio"] #overview:has(> .today-strip:not([hidden])) > :is(.this-week, .block-review) { grid-column: 5 / -1; }
+  :root[data-palette="studio"] #overview > .this-week { margin: 0; }
+  :root[data-palette="studio"] #overview > .overview-head { margin-bottom: 0; }
+
+  /* Fitness: readiness beside the numbers, charts in pairs. */
+  :root[data-palette="studio"] #fitnessBody:not([hidden]) { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: var(--studio-gap); align-items: start; }
+  :root[data-palette="studio"] #fitnessBody > * { grid-column: 1 / -1; margin: 0; }
+  :root[data-palette="studio"] #fitnessBody > * { order: 5; }
+  :root[data-palette="studio"] #fitnessBody > .readiness-hero { order: 1; grid-column: 1 / span 8; grid-template-columns: minmax(200px, 0.8fr) minmax(0, 1.2fr); gap: 24px; align-self: stretch; }
+  :root[data-palette="studio"] #fitnessBody > .fitness-notes { order: 3; }
+  :root[data-palette="studio"] #fitnessBody > #cyclePanel { order: 4; }
+  :root[data-palette="studio"] #fitnessBody > .fitness-kpis { order: 2; grid-column: 9 / -1; grid-template-columns: repeat(2, minmax(0, 1fr)); align-self: stretch; padding: 0; }
+  :root[data-palette="studio"] #fitnessBody > .fitness-kpis > :last-child:nth-child(odd) { grid-column: 1 / -1; }
+  :root[data-palette="studio"] #fitnessBody > .fitness-panel:has(#vo2Chart) { grid-column: 1 / span 6; }
+  :root[data-palette="studio"] #fitnessBody > .fitness-panel:has(#loadChart) { grid-column: 7 / -1; }
+  :root[data-palette="studio"] #fitnessBody > .fitness-columns { gap: var(--studio-gap); }
+
+  /* Runs: each row is a floating card. */
+  :root[data-palette="studio"] #runs { background: transparent; box-shadow: none; padding-inline: 0; }
+  :root[data-palette="studio"] #runs table { border-collapse: separate; border-spacing: 0 8px; }
+  :root[data-palette="studio"] #runs thead th { border: 0; }
+  :root[data-palette="studio"] #runs tbody td { border: 0; background: var(--surface); }
+  :root[data-palette="studio"] #runs tbody tr { box-shadow: var(--studio-card-shadow); border-radius: 14px; }
+  :root[data-palette="studio"] #runs tbody td:first-child { border-radius: 14px 0 0 14px; }
+  :root[data-palette="studio"] #runs tbody td:last-child { border-radius: 0 14px 14px 0; }
+  :root[data-palette="studio"] #runs tbody tr:hover td { background: var(--surface-muted); }
+
+  /* Plan: context on the left, the draft on the right. */
+  :root[data-palette="studio"] .chart-board { gap: var(--studio-gap); }
+}
+
+/* ---------- Phones: dark app bar, swipeable numbers ---------- */
+@media (max-width: 700px) {
+  :root[data-palette="studio"] .app { padding-top: 0; }
+  :root[data-palette="studio"] .app-header {
+    margin: 0 -16px 10px; padding: calc(12px + env(safe-area-inset-top, 0px)) 16px 12px; border: 0; background: var(--paper);
+  }
+  :root[data-palette="studio"] .app-header .brand-wordmark { color: var(--ink-strong); }
+  :root[data-palette="studio"] .app-nav { background: color-mix(in oklch, var(--paper) 94%, transparent); border-top-color: var(--rule); }
+  :root[data-palette="studio"] .app-nav a { color: var(--ink-faint); }
+  :root[data-palette="studio"] .app-nav a[aria-current] { color: var(--ink-strong); }
+  :root[data-palette="studio"] .app-nav a[aria-current]::before { background: var(--accent); }
+  :root[data-palette="studio"] .toolbar { margin: 0 0 12px; border-radius: 14px; }
+  :root[data-palette="studio"] .fitness-kpis {
+    display: flex; gap: 10px; margin-inline: -16px; padding: 4px 16px 12px; overflow-x: auto;
+    scroll-snap-type: x mandatory; scroll-padding-inline: 16px; scrollbar-width: none;
+  }
+  :root[data-palette="studio"] .fitness-kpis::-webkit-scrollbar { display: none; }
+  :root[data-palette="studio"] .fitness-kpis > .kpi-tile { flex: 0 0 min(64%, 220px); scroll-snap-align: start; }
+  :root[data-palette="studio"] .today-strip { padding: 18px; }
+}
