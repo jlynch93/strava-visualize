@@ -131,3 +131,20 @@ test.describe("positive UTC offset", () => {
     expect(await page.evaluate(() => bucketKey(new Date("2026-09-07T00:15:00"), "week"))).toBe("2026-09-07");
   });
 });
+
+test("64-bit Strava ids stay exact in the browser, from the API or an imported file", async ({ page }) => {
+  await page.goto("/");
+  const result = await page.evaluate(() => {
+    const exactParsing = JSON.parse("1", (key, value, context) => context?.source) === "1";
+    const fromFile = normalizeActivity(parseJsonExact('{"id":9007199254740993,"name":"Long run","start_date":"2027-06-02T07:00:00Z","distance":21100,"moving_time":7200}'));
+    const withIdStr = normalizeActivity({ id: 9007199254740992, id_str: "9007199254740993", start_date: "2027-06-02T07:00:00Z" });
+    const small = normalizeActivity({ id: 123, start_date: "2027-06-02T07:00:00Z" });
+    return { exactParsing, fromFile: fromFile.id, distance: fromFile.distance, withIdStr: withIdStr.id, small: small.id };
+  });
+  // id_str always wins, and every id is a string.
+  expect(result.withIdStr).toBe("9007199254740993");
+  expect(result.small).toBe("123");
+  expect(result.distance).toBe(21100);
+  // A bare 64-bit number in a file is exact wherever the browser supports it.
+  if (result.exactParsing) expect(result.fromFile).toBe("9007199254740993");
+});

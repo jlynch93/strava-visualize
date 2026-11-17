@@ -210,7 +210,7 @@ test("Activity routes require a session and report when pagination reaches its c
   const { session } = await signIn(worker, env);
   const capped = await worker.fetch(request("/api/activities?pages=0&per_page=-1", { cookie: session }), env);
   assert.equal(capped.status, 200);
-  assert.deepEqual(await capped.json(), { provider: "strava", activities: [{ id: 123 }], truncated: true });
+  assert.deepEqual(await capped.json(), { provider: "strava", activities: [{ id: "123" }], truncated: true });
   const listCall = calls.find((call) => call.url.pathname === "/api/v3/athlete/activities");
   assert.equal(listCall.url.searchParams.get("per_page"), "1");
   assert.equal(listCall.options.headers.authorization, "Bearer authorization_code-access");
@@ -241,7 +241,7 @@ test("Activity detail rejects malformed upstream payloads", async (t) => {
   const detail = await worker.fetch(request("/api/activities/123", { cookie: session }), env);
   assert.equal(detail.status, 200);
   assert.equal(requested, "https://www.strava.com/api/v3/activities/123");
-  assert.deepEqual(await detail.json(), { provider: "strava", activity: payload });
+  assert.deepEqual(await detail.json(), { provider: "strava", activity: { ...payload, id: "123" } });
   assert.match(detail.headers.get("cache-control"), /private, no-store/);
 
   const invalidList = await worker.fetch(request("/api/activities", { cookie: session }), env);

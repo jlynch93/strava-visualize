@@ -29,6 +29,20 @@ async function tokenRequest(params) {
 // so a 429 is expected under load and should read as "try again shortly".
 const RATE_LIMITED = "Strava is limiting requests right now. Your saved history is still here; try syncing again in a few minutes.";
 
+// Strava ids become 64-bit after June 1, 2027. id_str carries the exact value;
+// ids are always kept as strings from here on.
+export function stravaId(object) {
+  if (object?.id_str !== undefined && object.id_str !== null && object.id_str !== "") return String(object.id_str);
+  return object?.id === undefined || object.id === null ? "" : String(object.id);
+}
+
+export function normalizeStravaActivity(activity) {
+  if (!activity || typeof activity !== "object" || Array.isArray(activity)) return activity;
+  const normalized = { ...activity, id: stravaId(activity) };
+  if (activity.athlete && typeof activity.athlete === "object") normalized.athlete = { ...activity.athlete, id: stravaId(activity.athlete) };
+  return normalized;
+}
+
 async function apiGet(accessToken, path) {
   const { response, data } = await fetchJson(`${API}${path}`, {
     headers: { authorization: `Bearer ${accessToken}` }
@@ -72,11 +86,11 @@ export default {
       grant_type: "authorization_code"
     });
     const athlete = data.athlete || {};
-    if (!athlete.id) throw appError("Strava did not identify the athlete. Try connecting again.", 502);
+    if (!stravaId(athlete)) throw appError("Strava did not identify the athlete. Try connecting again.", 502);
     return {
       tokens: toTokens(data, searchParams.get("scope") || ""),
       account: {
-        id: String(athlete.id),
+        id: stravaId(athlete),
         displayName: [athlete.firstname, athlete.lastname].filter(Boolean).join(" ") || athlete.username || "Strava athlete",
         avatarUrl: athlete.profile_medium || athlete.profile || ""
       }
@@ -101,7 +115,7 @@ export default {
       if (before) params.set("before", before);
       const batch = await apiGet(accessToken, `/athlete/activities?${params}`);
       if (!Array.isArray(batch)) throw appError("Strava returned an invalid activity list.", 502);
-      activities.push(...batch);
+      activities.push(...batch.map(normalizeStravaActivity));
       if (batch.length < perPage) return { activities, truncated: false };
     }
     return { activities, truncated: true };
@@ -112,6 +126,6 @@ export default {
     if (!activity || typeof activity !== "object" || Array.isArray(activity)) {
       throw appError("Strava returned an invalid activity detail.", 502);
     }
-    return activity;
+    return normalizeStravaActivity(activity);
   }
 };

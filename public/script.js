@@ -387,7 +387,8 @@ function normalizeActivity(activity) {
   const startLatLng = normalizeLatLng(activity.start_latlng || activity["Start LatLng"])
     || normalizeLatLng([activity.start_latitude ?? activity["Start Latitude"], activity.start_longitude ?? activity["Start Longitude"]]);
   return {
-    id: first(activity.id, activity["Activity ID"]) ?? crypto.randomUUID(),
+    // Strava's id_str is exact even when id is a 64-bit number; ids are strings throughout.
+    id: String(first(activity.id_str, activity.id, activity["Activity ID"]) ?? crypto.randomUUID()),
     name: String(first(activity.name, activity["Activity Name"]) || "Untitled run"),
     sport_type: String(first(activity.sport_type, activity.type, activity["Activity Type"]) || "Run"),
     start_date: startDate,
@@ -2826,11 +2827,20 @@ document.addEventListener("visibilitychange", () => {
   }
 });
 
+// Integers above 2^53 (64-bit ids in a pasted or exported Strava JSON file)
+// are kept exactly as strings where the browser gives the reviver the source.
+function parseJsonExact(text) {
+  return JSON.parse(text, (key, value, context) =>
+    typeof value === "number" && Number.isInteger(value) && !Number.isSafeInteger(value) && typeof context?.source === "string" && /^-?\d+$/.test(context.source)
+      ? context.source
+      : value);
+}
+
 async function readApiJson(response) {
   const text = await response.text();
   if (text) {
     try {
-      return JSON.parse(text);
+      return parseJsonExact(text);
     } catch {
       return { error: text };
     }
@@ -3105,7 +3115,7 @@ async function importFile(file) {
   if (file.name.toLowerCase().endsWith(".csv")) {
     data = parseCsv(text);
   } else {
-    try { data = JSON.parse(text.replace(/^\uFEFF/, "")); }
+    try { data = parseJsonExact(text.replace(/^\uFEFF/, "")); }
     catch { throw new Error("This file is not valid JSON. Choose a Strava CSV or JSON export."); }
   }
   const rows = Array.isArray(data) ? data : data?.activities;

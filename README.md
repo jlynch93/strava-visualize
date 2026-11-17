@@ -416,6 +416,22 @@ expects. Strava is the first provider. Garmin will be added as another module.
 `/auth/login` and `/auth/callback` remain as aliases for Strava so existing
 Strava app settings keep working.
 
+### Strava 64-bit ids (from June 1, 2027)
+
+Strava's activity and athlete ids become 64-bit integers, which JavaScript
+numbers cannot hold exactly. Runlore keeps them exact end to end:
+
+- `parseJsonExact` (`src/http.js`, and in `public/script.js` for API replies and
+  imported JSON files) keeps any integer above 2^53 as its exact digits, using
+  the JSON.parse reviver's source text.
+- The Strava provider uses `id_str` when Strava sends it and always stores ids
+  as strings (`stravaId`, `normalizeStravaActivity`), for activities, their
+  athlete and the signed-in athlete. The database columns were already text.
+- The browser prefers `id_str` and treats every activity id as a string.
+
+`tests/strava-ids.test.js` covers two athletes whose ids round to the same
+number staying separate accounts, and a 64-bit activity id round-tripping.
+
 ### Garmin
 
 Garmin needs approval through the Garmin Connect Developer Program (Activity
