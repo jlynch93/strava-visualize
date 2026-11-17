@@ -350,10 +350,10 @@ test("theme follows the system and can be pinned, with accessible contrast in da
   const background = () => page.evaluate(() => getComputedStyle(document.body).backgroundColor);
   const dark = await background();
   await preferences(page);
-  await page.locator("#themePreference").selectOption("light");
+  await page.locator("#themePreference input[value=light]").check({ force: true });
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
   expect(await background()).not.toBe(dark);
-  await page.locator("#themePreference").selectOption("dark");
+  await page.locator("#themePreference input[value=dark]").check({ force: true });
   await page.reload(); await importHistory(page);
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   expect(await background()).toBe(dark);
@@ -363,6 +363,30 @@ test("theme follows the system and can be pinned, with accessible contrast in da
     expect(report.violations.filter((violation) => ["critical", "serious"].includes(violation.impact)), JSON.stringify(report.violations.map((violation) => violation.nodes.map((node) => node.target)))).toEqual([]);
   }
 });
+
+for (const [theme, base] of [["trail", "light"], ["ember", "dark"], ["ocean", "dark"]]) {
+  test(`the ${theme} theme recolours the app, survives a reload and keeps accessible contrast`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme: base === "dark" ? "light" : "dark" });
+    await page.goto("/"); await importHistory(page);
+    const background = () => page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+    const before = await background();
+    await preferences(page);
+    await page.locator(`#themePreference input[value=${theme}]`).check({ force: true });
+    await expect(page.locator("html")).toHaveAttribute("data-theme", base);
+    await expect(page.locator("html")).toHaveAttribute("data-palette", theme);
+    expect(await background()).not.toBe(before);
+    await page.reload(); await importHistory(page);
+    await expect(page.locator("html")).toHaveAttribute("data-palette", theme);
+    await preferences(page);
+    await expect(page.locator(`#themePreference input[value=${theme}]`)).toBeChecked();
+    await page.keyboard.press("Escape");
+    for (const name of ["Overview", "Fitness", "Plan", "Runs"]) {
+      await view(page, name);
+      const report = await new AxeBuilder({ page }).withTags(["wcag2aa"]).withRules(["color-contrast"]).analyze();
+      expect(report.violations.filter((violation) => ["critical", "serious"].includes(violation.impact)), JSON.stringify(report.violations.map((violation) => violation.nodes.map((node) => `${node.target} ${node.any?.[0]?.message}`)))).toEqual([]);
+    }
+  });
+}
 
 test("this week compares completed runs with the plan or the recent average", async ({ page }) => {
   await page.goto("/"); await importHistory(page);

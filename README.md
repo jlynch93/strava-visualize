@@ -184,9 +184,16 @@ and next week. Below 35 the draft becomes a recovery week. Between 35 and 54 the
 quality session becomes an easy run, and the draft says why. Your check-in and a
 manual intent still take priority.
 
-**Data & settings → Theme** offers Match system, Light, or Dark. Dark mode has
-its own colour steps, and the chart colours are validated against the dark
-surface.
+**Data & settings → Theme** offers Match system and five themes: **Daylight**
+and **Trail** (light), **Midnight**, **Ember** and **Ocean** (dark). A theme is
+a base (`data-theme`: light or dark) plus an optional palette (`data-palette`)
+that changes hue and accent only, keeping the base's lightness steps so text
+contrast holds. Chart series colours stay the validated light or dark set.
+The tests check contrast in every theme.
+
+The fitness charts run through today even when the last activity was days ago
+(fitness and fatigue keep moving on rest days), unless a custom range ends
+earlier.
 
 **Charts & metrics** (on Overview) holds the secondary charts. Each one fills
 its panel, uses round axis ticks in the units you have chosen, and has a legend

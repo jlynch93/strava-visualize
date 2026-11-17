@@ -2,19 +2,33 @@
 function readSaved(key, fallback) {
   try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch { return fallback; }
 }
+// Each theme is a base (light or dark) and, optionally, a palette that recolours it (theme.css).
+const THEMES = {
+  light: { label: "Daylight", base: "light", paper: "#f2f6ef", accent: "#d6ef3d" },
+  trail: { label: "Trail", base: "light", palette: "trail", paper: "#f7f1e4", accent: "#e9c04c" },
+  dark: { label: "Midnight", base: "dark", paper: "#0d181c", accent: "#d6ef3d" },
+  ember: { label: "Ember", base: "dark", palette: "ember", paper: "#1a1310", accent: "#f0a04b" },
+  ocean: { label: "Ocean", base: "dark", palette: "ocean", paper: "#0a1326", accent: "#5fdce0" }
+};
 function sanitizePreferences(saved) {
   return {
     units: saved?.units === "metric" ? "metric" : "imperial",
     weather: saved?.weather === true,
     rememberImports: saved?.rememberImports === true,
     analysisService: typeof saved?.analysisService === "string" ? saved.analysisService : "",
-    theme: ["light", "dark"].includes(saved?.theme) ? saved.theme : "system"
+    theme: Object.hasOwn(THEMES, saved?.theme) ? saved.theme : "system"
   };
 }
 const preferences = sanitizePreferences(readSaved("run-trends-preferences", {}));
 function applyTheme() {
-  if (preferences.theme === "system") delete document.documentElement.dataset.theme;
-  else document.documentElement.dataset.theme = preferences.theme;
+  const root = document.documentElement, theme = THEMES[preferences.theme];
+  if (theme) root.dataset.theme = theme.base; else delete root.dataset.theme;
+  if (theme?.palette) root.dataset.palette = theme.palette; else delete root.dataset.palette;
+  // The browser and status-bar tint follows the chosen theme, not the system.
+  document.querySelectorAll('meta[name="theme-color"]').forEach((meta) => {
+    meta.dataset.system ??= meta.content;
+    meta.content = theme ? theme.paper : meta.dataset.system;
+  });
 }
 applyTheme();
 let acceptedPlans = readSaved("run-trends-plans-v1", {});
@@ -83,7 +97,8 @@ function applySyncedValue(key, value) {
   if (key === "run-trends-preferences") {
     Object.assign(preferences, sanitizePreferences(value));
     applyTheme();
-    const controls = { unitPreference: preferences.units, themePreference: preferences.theme };
+    const controls = { unitPreference: preferences.units };
+    const themeInput = document.querySelector(`#themePreference input[value="${preferences.theme}"]`); if (themeInput) themeInput.checked = true;
     for (const [id, setting] of Object.entries(controls)) { const control = document.getElementById(id); if (control) control.value = setting; }
     const weather = document.getElementById("weatherPreference"); if (weather) weather.checked = preferences.weather;
   } else if (key === "run-trends-plans-v1") {
@@ -408,7 +423,7 @@ function rememberHistory() {
 }
 function initializeExperience() {
   const app = document.querySelector("#app");
-  app.insertAdjacentHTML("afterbegin", `<section class="settings-bar" aria-label="Preferences"><label>Theme <select id="themePreference"><option value="system">Match system</option><option value="light">Light</option><option value="dark">Dark</option></select></label><label>Units <select id="unitPreference"><option value="imperial">Miles / °F</option><option value="metric">Kilometers / °C</option></select></label><label><input id="weatherPreference" type="checkbox"> Modeled weather (shares rounded start location with Open-Meteo)</label><label><input id="rememberPreference" type="checkbox"> Remember imported history on this device</label><button id="removeSavedButton" type="button">Remove saved history</button><button id="backupContextButton" type="button">Back up goals and plans</button><label class="file-button">Restore goals and plans<input id="restoreContextInput" type="file" accept="application/json,.json"></label></section>`);
+  app.insertAdjacentHTML("afterbegin", `<section class="settings-bar" aria-label="Preferences"><fieldset id="themePreference" class="theme-picker"><legend>Theme</legend><label class="theme-option"><input type="radio" name="theme" value="system"><span><i style="--swatch-paper:#f2f6ef;--swatch-accent:#0d181c"></i>Match system</span></label>${Object.entries(THEMES).map(([value, theme]) => `<label class="theme-option"><input type="radio" name="theme" value="${value}"><span><i style="--swatch-paper:${theme.paper};--swatch-accent:${theme.accent}"></i>${theme.label}</span></label>`).join("")}</fieldset><label>Units <select id="unitPreference"><option value="imperial">Miles / °F</option><option value="metric">Kilometers / °C</option></select></label><label><input id="weatherPreference" type="checkbox"> Modeled weather (shares rounded start location with Open-Meteo)</label><label><input id="rememberPreference" type="checkbox"> Remember imported history on this device</label><button id="removeSavedButton" type="button">Remove saved history</button><button id="backupContextButton" type="button">Back up goals and plans</button><label class="file-button">Restore goals and plans<input id="restoreContextInput" type="file" accept="application/json,.json"></label></section>`);
   const settings = document.querySelector(".settings-bar");
   const disclosure = document.createElement("details"); disclosure.className = "preferences-disclosure data-menu"; disclosure.id = "dataMenu";
   disclosure.innerHTML = '<summary aria-label="Data &amp; settings"><svg class="summary-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg><span class="summary-label">Data &amp; settings</span></summary><div class="data-menu-panel"><div id="dataMenuActions" class="data-menu-actions"><h2>Your history</h2><p id="syncInfo"></p><button id="loadOlderButton" type="button" hidden>Load older activities</button><button id="fullSyncButton" type="button" hidden>Refresh loaded history</button></div></div>';
@@ -483,8 +498,9 @@ function initializeExperience() {
   document.querySelector("#cancelAnalysisConsent").addEventListener("click", cancelAnalysis);
   document.querySelector("#analysisConsent").addEventListener("cancel", cancelAnalysis);
   document.querySelector("#unitPreference").value = preferences.units;
-  document.querySelector("#themePreference").value = preferences.theme;
-  document.querySelector("#themePreference").addEventListener("change", (event) => { preferences.theme = event.target.value; persist("run-trends-preferences", preferences); applyTheme(); });
+  const checkTheme = () => { const input = document.querySelector(`#themePreference input[value="${preferences.theme}"]`); if (input) input.checked = true; };
+  checkTheme();
+  document.querySelector("#themePreference").addEventListener("change", (event) => { preferences.theme = event.target.value; persist("run-trends-preferences", preferences); applyTheme(); if (typeof render === "function") render(); });
   document.querySelector("#weatherPreference").checked = preferences.weather;
   document.querySelector("#rememberPreference").checked = preferences.rememberImports;
   document.querySelector("#unitPreference").addEventListener("change", (event) => { preferences.units = event.target.value; persist("run-trends-preferences", preferences); syncCoachingInputs(); render(); if (state.activeRunId) showWorkoutModal(state.activeRunId, state.modalTrigger); });

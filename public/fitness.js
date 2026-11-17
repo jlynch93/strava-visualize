@@ -220,7 +220,9 @@ function renderFitnessKpis(model) {
 function windowDays(model) {
   const { start, end } = getRangeDates();
   const today = new Date(); today.setHours(23, 59, 59, 999);
-  const finish = end && end < today ? end : today;
+  // Preset ranges end at the latest activity; fitness and fatigue keep moving
+  // on rest days, so the charts run through today unless a custom range ends earlier.
+  const finish = els.rangeSelect.value === "custom" && end && end < today ? end : today;
   const begin = start || model.loadSeries[0]?.date || finish;
   const days = [];
   for (let date = new Date(begin.getFullYear(), begin.getMonth(), begin.getDate()); date <= finish; date = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1)) days.push(date);

@@ -1,6 +1,8 @@
 /*
- * Dark theme. Follows the system setting unless the runner picks Light or Dark
- * in Data & settings (stored as data-theme on <html>). Loads last.
+ * Themes. data-theme on <html> is the base (light or dark; absent = follow the
+ * system) and data-palette recolours it: Trail on light, Ember and Ocean on
+ * dark. Palettes change hue only and keep each base's lightness steps, so
+ * text contrast holds. Chosen in Data & settings. Loads last.
  * Chart series steps are validated for the dark surface separately from light.
  */
 :root { --panel-ink: var(--ink-strong); --panel-text: var(--surface); }
@@ -83,3 +85,66 @@
   :root:not([data-theme="light"]) .heat-level-4 { fill: oklch(76% 0.11 185); background: oklch(76% 0.11 185); }
   :root:not([data-theme="light"]) input, :root:not([data-theme="light"]) select, :root:not([data-theme="light"]) textarea { background-color: var(--surface); color: var(--ink-strong); }
 }
+
+/* ---------- Palettes ---------- */
+/* Trail (light): warm sand paper, bark ink, a golden accent. */
+:root[data-palette="trail"] {
+  --paper: oklch(96.5% 0.018 85);
+  --paper-deep: oklch(93% 0.026 82);
+  --surface: oklch(99% 0.01 88);
+  --surface-muted: oklch(95% 0.022 84);
+  --ink: oklch(20% 0.03 60);
+  --ink-strong: oklch(14% 0.03 55);
+  --ink-soft: oklch(39% 0.03 62);
+  --ink-faint: oklch(54% 0.028 65);
+  --rule: oklch(79% 0.03 80);
+  --rule-strong: oklch(60% 0.04 75);
+  --accent: oklch(84% 0.16 88);
+  --accent-hover: oklch(78% 0.16 85);
+  --accent-ink: oklch(18% 0.04 70);
+  --panel-ink: oklch(22% 0.035 55);
+}
+/* Ember (dark): warm charcoal with an orange accent. */
+:root[data-palette="ember"] {
+  --paper: oklch(16% 0.014 45);
+  --paper-deep: oklch(13% 0.014 40);
+  --surface: oklch(20% 0.018 45);
+  --surface-muted: oklch(25.5% 0.022 48);
+  --ink: oklch(90% 0.014 70);
+  --ink-strong: oklch(97% 0.01 75);
+  --ink-soft: oklch(79% 0.022 65);
+  --ink-faint: oklch(70% 0.024 60);
+  --rule: oklch(33% 0.024 50);
+  --rule-strong: oklch(48% 0.035 52);
+  --accent: oklch(78% 0.16 62);
+  --accent-hover: oklch(72% 0.16 58);
+  --accent-ink: oklch(17% 0.04 50);
+  --panel-ink: oklch(11% 0.016 40);
+}
+/* Ocean (dark): deep navy with a cyan accent. */
+:root[data-palette="ocean"] {
+  --paper: oklch(16% 0.035 258);
+  --paper-deep: oklch(13% 0.035 260);
+  --surface: oklch(20% 0.04 256);
+  --surface-muted: oklch(25.5% 0.045 254);
+  --ink: oklch(90% 0.018 230);
+  --ink-strong: oklch(97% 0.012 225);
+  --ink-soft: oklch(79% 0.03 235);
+  --ink-faint: oklch(70% 0.035 238);
+  --rule: oklch(33% 0.045 255);
+  --rule-strong: oklch(48% 0.055 250);
+  --accent: oklch(85% 0.13 200);
+  --accent-hover: oklch(79% 0.13 202);
+  --accent-ink: oklch(17% 0.04 240);
+  --panel-ink: oklch(11% 0.035 260);
+}
+
+/* Theme picker: a swatch of each theme's paper, ink and accent. */
+.theme-picker { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; border: 0; min-width: 0; }
+.theme-picker legend { padding: 0; margin-bottom: 6px; font-weight: 650; }
+.theme-option { position: relative; }
+.theme-option input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+.theme-option span { display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 6px 12px 6px 8px; border: 1px solid var(--rule-strong); border-radius: 999px; font-size: .84rem; font-weight: 650; color: var(--ink); background: var(--surface); }
+.theme-option i { width: 22px; height: 22px; border-radius: 50%; border: 1px solid rgba(128, 128, 128, .55); background: linear-gradient(135deg, var(--swatch-paper) 0 50%, var(--swatch-accent) 50% 100%); }
+.theme-option input:checked + span { border-color: var(--ink-strong); box-shadow: inset 0 0 0 1px var(--ink-strong); color: var(--ink-strong); }
+.theme-option input:focus-visible + span { outline: 2px solid var(--teal); outline-offset: 2px; }
