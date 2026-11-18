@@ -259,6 +259,7 @@ document.querySelector("#paletteButton")?.addEventListener("click", openPalette)
 
 document.body.insertAdjacentHTML("beforeend", `<dialog id="recapDialog" class="recap-dialog" aria-labelledby="recapTitle">
   <div class="recap-head"><h2 id="recapTitle">Your week</h2><button id="recapClose" class="modal-close" type="button" aria-label="Close">×</button></div>
+  <fieldset id="recapStyles" class="recap-styles" hidden><legend class="visually-hidden">Image style</legend>${["year:The year", "distance:Distance", "speed:Speed", "consistency:Consistency", "habits:Habits"].map((item) => { const [value, label] = item.split(":"); return `<label><input type="radio" name="recapStyle" value="${value}"><span>${label}</span></label>`; }).join("")}</fieldset>
   <img id="recapImage" alt="">
   <div class="recap-actions"><button id="recapShare" class="primary" type="button" hidden>Share</button><a id="recapDownload" class="ghost-action recap-download" download>Download image</a></div>
   <p class="recap-note">Made on this device. Nothing is uploaded.</p>
@@ -359,7 +360,9 @@ function showRecapCanvas(canvas, name, alt, title) {
   }, "image/png");
   if (!dialog.open) dialog.showModal();
 }
+document.querySelector("#recapStyles").addEventListener("change", (event) => { if (event.target.name === "recapStyle") openYearRecap(event.target.value); });
 function openRecap() {
+  document.querySelector("#recapStyles").hidden = true;
   const data = weekRecapData();
   showRecapCanvas(drawRecap(data), `runlore-week-${localDateValue(data.start)}.png`, `Weekly recap: ${displayDistance(miles(data.meters), 1)} over ${data.count} ${data.walking ? "walks" : "runs"}, ${formatDuration(data.seconds)} moving.`, "Your week");
 }
@@ -579,54 +582,223 @@ function yearAccolades(data) {
   return list.slice(0, 8);
 }
 
-function drawYearRecap(data) {
+/* The year image comes in five styles, each with its own chart and accolades. */
+const YEAR_STYLES = [
+  { key: "year", label: "The year", accent: "#c8f04a", subtitle: "YOUR YEAR IN RUNNING" },
+  { key: "distance", label: "Distance", accent: "#5fd4c4", subtitle: "YOUR YEAR IN DISTANCE" },
+  { key: "speed", label: "Speed", accent: "#ff9b5e", subtitle: "YOUR YEAR IN SPEED" },
+  { key: "consistency", label: "Consistency", accent: "#b9a4ff", subtitle: "YOUR YEAR OF SHOWING UP" },
+  { key: "habits", label: "Habits", accent: "#ff8fc8", subtitle: "HOW YOU RAN THIS YEAR" }
+];
+let yearStyle = (() => { try { return localStorage.getItem("runlore-year-style") || "year"; } catch { return "year"; } })();
+
+const DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+const distanceText = (meters, digits = 1) => displayDistance(miles(meters), digits);
+const climbText = (meters) => preferences.units === "metric" ? `${Math.round(meters).toLocaleString()} m` : `${Math.round(feet(meters)).toLocaleString()} ft`;
+const paceText = (secondsPerMeter) => formatPace(secondsPerMeter * 1609.344);
+
+// Extra figures the Distance, Speed and Habits cards need.
+function yearCardExtras(data) {
+  const runs = yearRuns(data.year);
+  const weekStart = (date) => { const monday = new Date(date.getFullYear(), date.getMonth(), date.getDate() - ((date.getDay() + 6) % 7)); return monday; };
+  const firstMonday = weekStart(new Date(data.year, 0, 1));
+  const weekly = Array.from({ length: 53 }, () => 0);
+  runs.forEach((run) => { const index = Math.floor((weekStart(parseActivityDate(run)) - firstMonday) / (7 * 86400000)); if (index >= 0 && index < 53) weekly[index] += run.distance; });
+  const monthPace = Array.from({ length: 12 }, (_, month) => {
+    const inMonth = runs.filter((run) => parseActivityDate(run).getMonth() === month && run.distance > 0);
+    const meters = inMonth.reduce((sum, run) => sum + run.distance, 0);
+    return meters ? inMonth.reduce((sum, run) => sum + run.moving_time, 0) / meters : null;
+  });
+  const bests = Object.fromEntries(FitnessCore.personalRecords(runs, parseActivityDate).map((record) => [record.key, record]));
+  const model = fitnessModel();
+  const vo2Start = model?.vo2Points.find((point) => point.vo2max !== null && point.date.getFullYear() === data.year)?.vo2max ?? null;
+  const dayMeters = new Map();
+  runs.forEach((run) => { const key = localDateValue(parseActivityDate(run)); dayMeters.set(key, (dayMeters.get(key) || 0) + run.distance); });
+  // Median start time of day, when times are known.
+  const starts = runs.filter((run) => /\d{1,2}:\d{2}/.test(String(run.start_date_local || run.start_date || ""))).map((run) => { const date = parseActivityDate(run); return date.getHours() * 60 + date.getMinutes(); }).sort((a, b) => a - b);
+  const median = starts.length ? starts[Math.floor(starts.length / 2)] : null;
+  const medianStart = median === null ? null : new Date(2000, 0, 1, Math.floor(median / 60), median % 60).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  return { weekly, monthPace, bests, medianStart, vo2Now: model?.vo2?.value ?? null, vo2Start, dayMeters, averageMeters: runs.length ? data.meters / runs.length : 0, averageSeconds: runs.length ? data.seconds / runs.length : 0 };
+}
+
+function styleAccolades(style, data, extra) {
+  const facts = data.facts;
+  const list = [];
+  const push = (title, detail) => list.push({ title, detail });
+  if (style === "year") return yearAccolades(data);
+  if (style === "distance") {
+    const total = preferences.units === "metric" ? facts.meters / 1000 : miles(facts.meters);
+    const clubs = preferences.units === "metric" ? [500, 1000, 1500, 2000, 2500, 3000, 4000, 5000, 6000, 8000, 10000] : [250, 500, 750, 1000, 1500, 2000, 2500, 3000, 4000, 5000, 6000];
+    const club = clubs.filter((size) => total >= size).pop();
+    if (club) push(`${club.toLocaleString()} ${unitLabel()} club`, `${Math.round(total).toLocaleString()} ${unitLabel()} this year`);
+    if (data.longest) push(`Longest ${distanceText(data.longest.distance)}`, recordDate(parseActivityDate(data.longest)));
+    if (facts.biggestWeek) push(`Biggest week ${distanceText(facts.biggestWeek.meters)}`, `Week of ${recordDate(facts.biggestWeek.start)}`);
+    if (facts.ultras) push(`${facts.ultras}× ultra distance`, "Runs of 50 km or longer");
+    if (facts.marathons) push(`${facts.marathons}× marathon distance`, "Runs of 26.2 mi or longer");
+    if (facts.halves) push(`${facts.halves} half-marathon+ runs`, "Runs of 13.1 mi or longer");
+    const earth = facts.meters / 40075000;
+    if (earth >= 0.01) push(earth >= 1 ? `${earth.toFixed(2)}× around the Earth` : `${Math.round(earth * 100)}% around the Earth`, "Measured at the equator");
+    const everests = facts.climb / 8849;
+    if (everests >= 0.5) push(everests >= 1 ? `${everests.toFixed(1)}× Everest` : "Half an Everest", `${climbText(facts.climb)} climbed`);
+  } else if (style === "speed") {
+    // The year's best pace in each run length; called an all-time best when it is one.
+    [["fastest-5k", "5–10K"], ["fastest-10k", "10K–half"], ["fastest-half", "half+"]].forEach(([key, name]) => {
+      const best = extra.bests[key];
+      if (!best) return;
+      const allTime = data.records.find((record) => record.key === key);
+      push(`${allTime ? "All-time best" : "Year's best"} ${name}`, `${paceText(best.value)} · ${recordDate(best.date)}, ${distanceText(best.run.distance)}`);
+    });
+    if (extra.vo2Now && extra.vo2Start && extra.vo2Now - extra.vo2Start >= 0.5) push(`VO2 max +${(extra.vo2Now - extra.vo2Start).toFixed(1)}`, `${extra.vo2Start.toFixed(1)} → ${extra.vo2Now.toFixed(1)} since January`);
+    const paced = extra.monthPace.map((pace, month) => ({ pace, month })).filter((item) => item.pace);
+    if (paced.length >= 2) {
+      const fastest = paced.reduce((best, item) => item.pace < best.pace ? item : best);
+      push(`Fastest month: ${new Date(data.year, fastest.month, 1).toLocaleDateString(undefined, { month: "long" })}`, `${paceText(fastest.pace)} average`);
+    }
+  } else if (style === "consistency") {
+    if (facts.longestStreak >= 2) push(`${facts.longestStreak}-day streak`, "Most days in a row");
+    if (facts.monthsSoFar >= 3 && facts.monthsActive === facts.monthsSoFar) push("Every month", facts.monthsSoFar === 12 ? "Ran in all 12 months" : `All ${facts.monthsSoFar} months so far`);
+    if (facts.weeksSoFar) push(`${facts.weeksActive} of ${facts.weeksSoFar} weeks`, "Weeks with a run");
+    if (facts.mostRunsInWeek >= 3) push(`${facts.mostRunsInWeek} runs in a week`, "Your busiest week by runs");
+    if (facts.weeksSoFar) push(`${(facts.runs / facts.weeksSoFar).toFixed(1)} runs a week`, "On average");
+    push(`${facts.days} days you ran`, `${Math.round(facts.days / Math.max(1, Math.round((Math.min(new Date(), new Date(data.year, 11, 31)) - new Date(data.year, 0, 1)) / 86400000) + 1) * 100)}% of the year so far`);
+  } else if (style === "habits") {
+    const favourite = facts.weekdays.indexOf(Math.max(...facts.weekdays));
+    if (facts.runs) push(`${DAY_NAMES[favourite]} runner`, `${facts.weekdays[favourite]} runs on ${DAY_NAMES[favourite]}s`);
+    const weekend = facts.runs ? (facts.weekdays[5] + facts.weekdays[6]) / facts.runs : 0;
+    if (weekend >= 0.4) push("Weekend warrior", `${Math.round(weekend * 100)}% of runs on Sat or Sun`);
+    if (facts.knownTimes) {
+      if (facts.earlyRuns >= 5) push("Early bird", `${facts.earlyRuns} runs before 7 am`);
+      if (facts.lateRuns >= 5) push("Night owl", `${facts.lateRuns} runs after 8 pm`);
+      const slots = FitnessCore.TIME_OF_DAY;
+      const top = facts.timesOfDay.indexOf(Math.max(...facts.timesOfDay));
+      const words = { early: "Dawn patrol", morning: "Morning runner", midday: "Lunch-break runner", afternoon: "Afternoon runner", evening: "After-work runner", night: "Night runner" };
+      push(words[slots[top].key], `${Math.round(facts.timesOfDay[top] / facts.knownTimes * 100)}% of runs ${slots[top].label.toLowerCase().startsWith("before") || slots[top].label.toLowerCase().startsWith("after") ? slots[top].label.toLowerCase() : `between ${slots[top].label}`}`);
+    }
+    if (extra.averageMeters) push(`Typical run ${distanceText(extra.averageMeters)}`, `${formatDuration(extra.averageSeconds)} on average`);
+    if (extra.medianStart) push(`Out the door ${extra.medianStart}`, "Your usual start time");
+    const quietest = facts.weekdays.indexOf(Math.min(...facts.weekdays));
+    if (facts.runs >= 20) push(`${DAY_NAMES[quietest]} rest day`, facts.weekdays[quietest] ? `Only ${facts.weekdays[quietest]} ${facts.weekdays[quietest] === 1 ? "run" : "runs"} on ${DAY_NAMES[quietest]}s` : `No runs on ${DAY_NAMES[quietest]}s`);
+    const busiestMonth = data.months.indexOf(Math.max(...data.months));
+    if (data.runs) push(`Busiest in ${new Date(data.year, busiestMonth, 1).toLocaleDateString(undefined, { month: "long" })}`, `${distanceText(data.months[busiestMonth], 0)} that month`);
+    if (facts.weeksSoFar) push(`${(facts.runs / facts.weeksSoFar).toFixed(1)} runs a week`, "Your usual rhythm");
+  }
+  return list.slice(0, 8);
+}
+
+function drawYearCard(data, styleKey) {
+  const style = YEAR_STYLES.find((item) => item.key === styleKey) || YEAR_STYLES[0];
+  const extra = yearCardExtras(data);
   const canvas = document.createElement("canvas");
   const W = 1080, H = 1920; canvas.width = W; canvas.height = H;
   const ctx = canvas.getContext("2d");
   const font = (weight, size) => `${weight} ${size}px "SF Pro Display", "Inter", "Segoe UI", system-ui, sans-serif`;
+  const muted = "#9db4ad";
+  // Background with a glow in the style's colour.
   const background = ctx.createLinearGradient(0, 0, 0, H);
   background.addColorStop(0, "#101a2e"); background.addColorStop(1, "#0d181c");
   ctx.fillStyle = background; ctx.fillRect(0, 0, W, H);
-  const glow = ctx.createRadialGradient(W * 0.2, H * 0.12, 0, W * 0.2, H * 0.12, 760);
-  glow.addColorStop(0, "rgba(61, 143, 134, 0.35)"); glow.addColorStop(1, "rgba(61, 143, 134, 0)");
+  const glow = ctx.createRadialGradient(W * 0.85, H * 0.08, 0, W * 0.85, H * 0.08, 820);
+  glow.addColorStop(0, `${style.accent}40`); glow.addColorStop(1, `${style.accent}00`);
   ctx.fillStyle = glow; ctx.fillRect(0, 0, W, H);
+  // Header.
   ctx.fillStyle = "#c8f04a"; ctx.beginPath(); ctx.arc(96, 104, 14, 0, Math.PI * 2); ctx.fill();
   ctx.fillStyle = "#e8f1ec"; ctx.font = font(800, 40); ctx.fillText("runlore", 126, 118);
-  ctx.fillStyle = "#c8f04a"; ctx.font = font(800, 150); ctx.fillText(String(data.year), 72, 330);
-  ctx.fillStyle = "#9db4ad"; ctx.font = font(700, 36); ctx.fillText("YOUR YEAR IN RUNNING", 80, 395);
-  const [value, unit] = displayDistance(miles(data.meters), 0).split(" ");
-  ctx.fillStyle = "#ffffff"; ctx.font = font(800, 170); ctx.fillText(Number(value).toLocaleString(), 72, 580);
-  const width = ctx.measureText(Number(value).toLocaleString()).width;
-  ctx.fillStyle = "#c8f04a"; ctx.font = font(800, 64); ctx.fillText(unit, 72 + width + 20, 580);
-  const stats = [
-    [data.runs.toLocaleString(), "runs"], [`${Math.round(data.seconds / 3600).toLocaleString()} h`, "on your feet"],
-    [data.days.toLocaleString(), "days you ran"], [preferences.units === "metric" ? `${Math.round(data.climb).toLocaleString()} m` : `${Math.round(feet(data.climb)).toLocaleString()} ft`, "climbed"]
-  ];
-  stats.forEach(([big, small], index) => {
-    const x = 80 + (index % 2) * 470, y = 700 + Math.floor(index / 2) * 140;
-    ctx.fillStyle = "#ffffff"; ctx.font = font(800, 60); ctx.fillText(big, x, y);
-    ctx.fillStyle = "#9db4ad"; ctx.font = font(600, 30); ctx.fillText(small, x, y + 44);
+  ctx.fillStyle = style.accent; ctx.font = font(800, 150); ctx.fillText(String(data.year), 72, 330);
+  ctx.fillStyle = muted; ctx.font = font(700, 36); ctx.fillText(style.subtitle, 80, 395);
+
+  const big = (value, unit, y, caption) => {
+    ctx.fillStyle = "#ffffff"; ctx.font = font(800, value.length > 7 ? 130 : 170); ctx.fillText(value, 72, y);
+    const width = ctx.measureText(value).width;
+    if (unit) { ctx.fillStyle = style.accent; ctx.font = font(800, 64); ctx.fillText(unit, 72 + width + 20, y); }
+    if (caption) { ctx.fillStyle = muted; ctx.font = font(600, 32); ctx.fillText(caption, 80, y + 52); }
+  };
+  const stats = (pairs, top) => pairs.forEach(([value, label], index) => {
+    const x = 80 + (index % 2) * 470, y = top + Math.floor(index / 2) * 140;
+    ctx.fillStyle = "#ffffff"; ctx.font = font(800, 60); ctx.fillText(value, x, y);
+    ctx.fillStyle = muted; ctx.font = font(600, 30); ctx.fillText(label, x, y + 44);
   });
-  // Months.
-  const base = 1170, top = 990, barWidth = 60, gap = (W - 160 - barWidth * 12) / 11;
-  const most = Math.max(...data.months, 1);
-  const busiest = data.months.indexOf(most);
-  data.months.forEach((meters, month) => {
-    const x = 80 + month * (barWidth + gap);
-    const height = meters ? Math.max(8, (base - top) * meters / most) : 4;
-    ctx.fillStyle = meters ? (month === busiest ? "#c8f04a" : "#3d8f86") : "rgba(255,255,255,0.12)";
-    ctx.beginPath(); ctx.roundRect(x, base - height, barWidth, height, 10); ctx.fill();
-    ctx.fillStyle = "#9db4ad"; ctx.font = font(700, 26); ctx.textAlign = "center";
-    ctx.fillText(new Date(data.year, month, 1).toLocaleDateString(undefined, { month: "narrow" }), x + barWidth / 2, base + 40); ctx.textAlign = "left";
-  });
-  ctx.fillStyle = "#e8f1ec"; ctx.font = font(600, 30);
-  const footer = [data.longest ? `Longest ${displayDistance(miles(data.longest.distance), 1)}` : "", `Busiest ${new Date(data.year, busiest, 1).toLocaleDateString(undefined, { month: "long" })}`, data.records.length ? `${data.records.length} ${data.records.length === 1 ? "record" : "records"} set` : ""].filter(Boolean).join("   ·   ");
-  ctx.fillText(footer, 80, 1290);
-  // Accolades: two columns of badges.
-  const accolades = yearAccolades(data);
-  if (accolades.length) {
-    ctx.fillStyle = "#9db4ad"; ctx.font = font(700, 30); ctx.fillText("ACCOLADES", 80, 1370);
-    const columnWidth = (W - 160 - 24) / 2, rowHeight = 108, rowGap = 14, top = 1394;
+  const bars = (values, labels, top, base, { highlight = -1, gapRatio = 0.25, invert = false } = {}) => {
+    const count = values.length, width = W - 160;
+    const step = width / count, barWidth = step * (1 - gapRatio);
+    const present = values.filter((value) => value);
+    const most = Math.max(...present, 1), least = Math.min(...present, most);
+    values.forEach((value, index) => {
+      const x = 80 + index * step;
+      // Inverted values (pace: lower is better) scale so the fastest is tallest.
+      const share = !value ? 0 : invert ? 0.35 + 0.65 * (most === least ? 1 : (most - value) / (most - least)) : value / most;
+      const height = value ? Math.max(8, (base - top) * share) : 4;
+      ctx.fillStyle = value ? (index === highlight ? style.accent : `${style.accent}99`) : "rgba(255,255,255,0.12)";
+      ctx.beginPath(); ctx.roundRect(x, base - height, barWidth, height, Math.min(10, barWidth / 3)); ctx.fill();
+      if (labels[index]) { ctx.fillStyle = muted; ctx.font = font(700, 26); ctx.textAlign = "center"; ctx.fillText(labels[index], x + barWidth / 2, base + 40); ctx.textAlign = "left"; }
+    });
+  };
+  const monthLetters = Array.from({ length: 12 }, (_, month) => new Date(data.year, month, 1).toLocaleDateString(undefined, { month: "narrow" }));
+  let accoladesTop = 1394;
+
+  if (style.key === "year") {
+    const [value, unit] = distanceText(data.meters, 0).split(" ");
+    big(Number(value).toLocaleString(), unit, 580);
+    stats([[data.runs.toLocaleString(), "runs"], [`${Math.round(data.seconds / 3600).toLocaleString()} h`, "on your feet"], [data.days.toLocaleString(), "days you ran"], [climbText(data.climb), "climbed"]], 700);
+    const busiest = data.months.indexOf(Math.max(...data.months));
+    bars(data.months, monthLetters, 990, 1170, { highlight: busiest });
+    ctx.fillStyle = "#e8f1ec"; ctx.font = font(600, 30);
+    ctx.fillText([data.longest ? `Longest ${distanceText(data.longest.distance)}` : "", `Busiest ${new Date(data.year, busiest, 1).toLocaleDateString(undefined, { month: "long" })}`, data.records.length ? `${data.records.length} ${data.records.length === 1 ? "record" : "records"} set` : ""].filter(Boolean).join("   ·   "), 80, 1290);
+  } else if (style.key === "distance") {
+    const [value, unit] = distanceText(data.meters, 0).split(" ");
+    big(Number(value).toLocaleString(), unit, 580);
+    stats([[distanceText(extra.averageMeters), "average run"], [data.longest ? distanceText(data.longest.distance) : "–", "longest run"], [data.facts.biggestWeek ? distanceText(data.facts.biggestWeek.meters) : "–", "biggest week"], [climbText(data.climb), "climbed"]], 700);
+    const busiestWeek = extra.weekly.indexOf(Math.max(...extra.weekly));
+    ctx.fillStyle = muted; ctx.font = font(700, 26); ctx.fillText("EVERY WEEK", 80, 960);
+    bars(extra.weekly, extra.weekly.map((_, index) => index % 13 === 0 ? monthLetters[Math.min(11, Math.floor(index / 4.42))] : ""), 990, 1240, { highlight: busiestWeek, gapRatio: 0.3 });
+    accoladesTop = 1394;
+  } else if (style.key === "speed") {
+    const headline = extra.bests["fastest-5k"] || extra.bests["fastest-10k"] || extra.bests["fastest-half"];
+    if (headline) {
+      const [value, unit] = paceText(headline.value).split("/");
+      big(value, `/${unit}`, 580, `your fastest ${headline.label.replace(/^Fastest /, "").replace(/ run$/, "")} run this year`);
+    } else big("–", "", 580, "Not enough runs to rank paces yet");
+    const totalPace = data.meters ? data.seconds / data.meters : null;
+    stats([[totalPace ? paceText(totalPace) : "–", "average pace"], [extra.vo2Now ? extra.vo2Now.toFixed(1) : "–", "VO2 max now"], [extra.vo2Now && extra.vo2Start ? `${extra.vo2Now - extra.vo2Start >= 0 ? "+" : ""}${(extra.vo2Now - extra.vo2Start).toFixed(1)}` : "–", "VO2 max since January"], [String(data.records.filter((record) => record.unit === "pace").length), "pace records set"]], 760);
+    const fastest = extra.monthPace.reduce((best, pace, index) => pace && (best < 0 || pace < extra.monthPace[best]) ? index : best, -1);
+    ctx.fillStyle = muted; ctx.font = font(700, 26); ctx.fillText("AVERAGE PACE BY MONTH · TALLER IS FASTER", 80, 1020);
+    bars(extra.monthPace.map((pace) => pace || 0), monthLetters, 1050, 1250, { highlight: fastest, invert: true });
+    accoladesTop = 1394;
+  } else if (style.key === "consistency") {
+    big(data.days.toLocaleString(), "days", 580, `you ran on ${data.days === 1 ? "one day" : `${data.days} days`} this year`);
+    // A dot for every day: months across, days of the month down.
+    const left = 92, cell = (W - 184) / 12, rowHeight = 21, top = 690;
+    const most = Math.max(...extra.dayMeters.values(), 1);
+    for (let month = 0; month < 12; month += 1) {
+      const daysInMonth = new Date(data.year, month + 1, 0).getDate();
+      ctx.fillStyle = muted; ctx.font = font(700, 24); ctx.textAlign = "center"; ctx.fillText(monthLetters[month], left + month * cell + cell / 2, top - 14); ctx.textAlign = "left";
+      for (let day = 1; day <= daysInMonth; day += 1) {
+        const meters = extra.dayMeters.get(localDateValue(new Date(data.year, month, day))) || 0;
+        ctx.beginPath(); ctx.arc(left + month * cell + cell / 2, top + (day - 1) * rowHeight + 8, meters ? 6 + 3 * Math.min(1, meters / most) : 3, 0, Math.PI * 2);
+        ctx.fillStyle = meters ? style.accent : "rgba(255,255,255,0.12)"; ctx.globalAlpha = meters ? 0.55 + 0.45 * Math.min(1, meters / most) : 1; ctx.fill(); ctx.globalAlpha = 1;
+      }
+    }
+    accoladesTop = top + 31 * rowHeight + 70;
+  } else if (style.key === "habits") {
+    const favourite = data.facts.weekdays.indexOf(Math.max(...data.facts.weekdays));
+    big(DAY_NAMES[favourite], "", 560, `your favourite day: ${data.facts.weekdays[favourite]} runs`);
+    ctx.fillStyle = muted; ctx.font = font(700, 26); ctx.fillText("RUNS BY DAY", 80, 690);
+    bars(data.facts.weekdays, ["M", "T", "W", "T", "F", "S", "S"], 720, 900, { highlight: favourite, gapRatio: 0.35 });
+    if (data.facts.knownTimes) {
+      const slots = FitnessCore.TIME_OF_DAY;
+      const top = data.facts.timesOfDay.indexOf(Math.max(...data.facts.timesOfDay));
+      ctx.fillStyle = muted; ctx.font = font(700, 26); ctx.fillText("RUNS BY TIME OF DAY", 80, 1010);
+      bars(data.facts.timesOfDay, slots.map((slot) => slot.label), 1040, 1220, { highlight: top, gapRatio: 0.3 });
+    }
+    accoladesTop = 1394;
+  }
+
+  // Accolades: two columns of badges, as many rows as fit.
+  const accolades = styleAccolades(style.key, data, extra);
+  const columnWidth = (W - 160 - 24) / 2, rowHeight = 108, rowGap = 14;
+  const rows = Math.max(0, Math.floor((H - 30 - accoladesTop + rowGap) / (rowHeight + rowGap)));
+  const shown = accolades.slice(0, rows * 2);
+  if (shown.length) {
+    ctx.fillStyle = muted; ctx.font = font(700, 30); ctx.fillText("ACCOLADES", 80, accoladesTop - 24);
     const fit = (text, weight, size, maxWidth, minimum) => {
       let current = size;
       ctx.font = font(weight, current);
@@ -636,26 +808,33 @@ function drawYearRecap(data) {
       while (cut.length > 1 && ctx.measureText(`${cut}…`).width > maxWidth) cut = cut.slice(0, -1);
       return `${cut}…`;
     };
-    accolades.forEach((accolade, index) => {
-      const x = 80 + (index % 2) * (columnWidth + 24), y = top + Math.floor(index / 2) * (rowHeight + rowGap);
-      ctx.fillStyle = "rgba(255, 255, 255, 0.06)"; ctx.strokeStyle = "rgba(200, 240, 74, 0.3)"; ctx.lineWidth = 2;
+    shown.forEach((accolade, index) => {
+      const x = 80 + (index % 2) * (columnWidth + 24), y = accoladesTop + Math.floor(index / 2) * (rowHeight + rowGap);
+      ctx.fillStyle = "rgba(255, 255, 255, 0.06)"; ctx.strokeStyle = `${style.accent}55`; ctx.lineWidth = 2;
       ctx.beginPath(); ctx.roundRect(x, y, columnWidth, rowHeight, 18); ctx.fill(); ctx.stroke();
-      ctx.fillStyle = "#c8f04a"; ctx.beginPath(); ctx.arc(x + 46, y + rowHeight / 2, 24, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = style.accent; ctx.beginPath(); ctx.arc(x + 46, y + rowHeight / 2, 24, 0, Math.PI * 2); ctx.fill();
       ctx.fillStyle = "#0d181c"; ctx.font = font(800, 28); ctx.textAlign = "center"; ctx.fillText("★", x + 46, y + rowHeight / 2 + 10); ctx.textAlign = "left";
       const textWidth = columnWidth - 104;
       const title = fit(accolade.title, 800, 32, textWidth, 24);
       ctx.fillStyle = "#ffffff"; ctx.fillText(title, x + 88, y + 48);
       const detail = fit(accolade.detail, 600, 24, textWidth, 20);
-      ctx.fillStyle = "#9db4ad"; ctx.fillText(detail, x + 88, y + 82);
+      ctx.fillStyle = muted; ctx.fillText(detail, x + 88, y + 82);
     });
   }
-  return canvas;
+  return { canvas, accolades: shown };
 }
 
-function openYearRecap() {
+function openYearRecap(styleKey = yearStyle) {
+  yearStyle = YEAR_STYLES.some((item) => item.key === styleKey) ? styleKey : "year";
+  try { localStorage.setItem("runlore-year-style", yearStyle); } catch { /* Per-device convenience only. */ }
   const data = yearRecapData();
-  const accolades = yearAccolades(data).map((accolade) => accolade.title).join(", ");
-  showRecapCanvas(drawYearRecap(data), `runlore-${data.year}.png`, `${data.year} in running: ${displayDistance(miles(data.meters), 0)} over ${data.runs} runs.${accolades ? ` Accolades: ${accolades}.` : ""}`, `Your ${data.year}`);
+  const style = YEAR_STYLES.find((item) => item.key === yearStyle);
+  const { canvas, accolades } = drawYearCard(data, yearStyle);
+  const names = accolades.map((accolade) => accolade.title).join(", ");
+  showRecapCanvas(canvas, `runlore-${data.year}-${yearStyle}.png`, `${data.year} in running, ${style.label.toLowerCase()} card: ${displayDistance(miles(data.meters), 0)} over ${data.runs} runs.${names ? ` Accolades: ${names}.` : ""}`, `Your ${data.year}`);
+  const picker = document.querySelector("#recapStyles");
+  picker.hidden = false;
+  picker.querySelectorAll("input").forEach((input) => { input.checked = input.value === yearStyle; });
 }
 
 /* ---------- Hooks into the existing renderers ---------- */

@@ -145,7 +145,9 @@ test("a yearly goal shows the pace you are on and what the rest of the year need
   // The year as an image.
   await card.getByRole("button", { name: "Share your year" }).click();
   await expect(page.locator("#recapTitle")).toHaveText(`Your ${new Date().getFullYear()}`);
-  await expect(page.locator("#recapDownload")).toHaveAttribute("download", `runlore-${new Date().getFullYear()}.png`);
+  const year = new Date().getFullYear();
+  await page.evaluate(() => { try { localStorage.removeItem("runlore-year-style"); } catch { /* fine */ } });
+  await expect(page.locator("#recapDownload")).toHaveAttribute("download", new RegExp(`runlore-${year}-\\w+\\.png`));
   // A story-sized image with the accolades the year earned.
   await expect(page.locator("#recapImage")).toHaveAttribute("alt", /Accolades: [^.]*club/);
   const size = await page.locator("#recapImage").evaluate((image) => [image.naturalWidth, image.naturalHeight]);
@@ -275,4 +277,31 @@ test("pages end at the footer, with no blank scroll below", async ({ page }) => 
     const gap = await page.evaluate(() => document.documentElement.scrollHeight - (document.querySelector(".app-footer").getBoundingClientRect().bottom + scrollY));
     expect(gap, name).toBeLessThan(120);
   }
+});
+
+
+test("the year image comes in five styles, each with its own accolades", async ({ page }) => {
+  await loadDemo(page);
+  await page.locator("#yearGoal").getByRole("button", { name: "Share your year" }).click();
+  const styles = page.locator("#recapStyles label");
+  await expect(styles).toHaveText(["The year", "Distance", "Speed", "Consistency", "Habits"]);
+  const year = new Date().getFullYear();
+  const seen = new Map();
+  for (const [label, key, expected] of [["Distance", "distance", /around the Earth|club/], ["Speed", "speed", /best|VO2 max|Fastest month/], ["Consistency", "consistency", /weeks|days you ran/], ["Habits", "habits", /runner|rest day|Typical run/], ["The year", "year", /club|Every month/]]) {
+    await styles.filter({ hasText: label }).click();
+    await expect(page.locator("#recapDownload")).toHaveAttribute("download", `runlore-${year}-${key}.png`);
+    const alt = await page.locator("#recapImage").getAttribute("alt");
+    expect(alt).toContain(`${label.toLowerCase()} card`);
+    expect(alt).toMatch(expected);
+    seen.set(key, [await page.locator("#recapImage").getAttribute("src"), alt.split("Accolades: ")[1]]);
+    await expect(page.locator(`#recapStyles input[value="${key}"]`)).toBeChecked();
+  }
+  // Five different images with five different sets of accolades.
+  expect(new Set([...seen.values()].map(([src]) => src)).size).toBe(5);
+  expect(new Set([...seen.values()].map(([, accolades]) => accolades)).size).toBe(5);
+  // The choice is remembered; the week card has no style picker.
+  await page.locator("#recapClose").click();
+  await page.locator("#thisWeek").getByRole("button", { name: /Share week/ }).click();
+  await expect(page.locator("#recapStyles")).toBeHidden();
+  expect(await page.evaluate(() => localStorage.getItem("runlore-year-style"))).toBe("year");
 });

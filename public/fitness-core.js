@@ -516,6 +516,15 @@
 
   /* ---------- Year highlights (for accolades) ---------- */
 
+  const TIME_OF_DAY = [
+    { key: "early", label: "Before 7", from: 0, to: 7 },
+    { key: "morning", label: "7–11", from: 7, to: 11 },
+    { key: "midday", label: "11–2", from: 11, to: 14 },
+    { key: "afternoon", label: "2–5", from: 14, to: 17 },
+    { key: "evening", label: "5–8", from: 17, to: 20 },
+    { key: "night", label: "After 8", from: 20, to: 24 }
+  ];
+
   // Facts about one calendar year of runs that accolades are made from.
   // `hourOf` gives a run's local start hour (0-23) or null when unknown.
   function yearHighlights(runs, dateOf, year, { today = new Date(), hourOf = () => null } = {}) {
@@ -546,7 +555,12 @@
       longestStreak: streak,
       biggestWeek: biggest ? { meters: biggest[1], start: new Date(`${biggest[0]}T12:00:00`) } : null,
       monthsActive, monthsSoFar, weeksActive: weeks.size, weeksSoFar,
-      earlyRuns: hours.filter((hour) => hour < 7).length, lateRuns: hours.filter((hour) => hour >= 20).length
+      earlyRuns: hours.filter((hour) => hour < 7).length, lateRuns: hours.filter((hour) => hour >= 20).length,
+      // Runs by weekday, Monday first, and by time of day (when start times are known).
+      weekdays: [0, 1, 2, 3, 4, 5, 6].map((day) => inYear.filter(({ date }) => (date.getDay() + 6) % 7 === day).length),
+      timesOfDay: TIME_OF_DAY.map(({ from, to }) => hours.filter((hour) => hour >= from && hour < to).length),
+      knownTimes: hours.length,
+      mostRunsInWeek: Math.max(0, ...[...inYear.reduce((map, { date }) => map.set(weekKey(date), (map.get(weekKey(date)) || 0) + 1), new Map()).values()])
     };
   }
 
@@ -732,7 +746,7 @@
     estimateMaxHr, heartRateReserve, runVo2Estimate, runVdot, percentile, vo2Series,
     runLoad, dailyLoads, loadSeries, workloadRatios, formZone, readiness, dayKey, finite,
     RUN_TYPES, classifyRunType, isWalk, WALK_TYPES, classifyWalkType,
-    trainingPhase, recoveryDays, taperDays, projectRaceDay, TAPER_LOAD, RACE_WEEK_LOAD, ageGroup, projectPlace, personalRecords, metersPerBeat, efficiencyTrend, pacingPlan, weekKey, yearProjection, intensityBalance, shoeMileage, yearHighlights
+    trainingPhase, recoveryDays, taperDays, projectRaceDay, TAPER_LOAD, RACE_WEEK_LOAD, ageGroup, projectPlace, personalRecords, metersPerBeat, efficiencyTrend, pacingPlan, weekKey, yearProjection, intensityBalance, shoeMileage, yearHighlights, TIME_OF_DAY
   };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.FitnessCore = api;

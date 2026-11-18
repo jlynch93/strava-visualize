@@ -372,4 +372,10 @@ test("year highlights count long runs, streaks, consistency and early starts", (
   assert.equal(facts.earlyRuns, 4);
   assert.equal(facts.lateRuns, 1);
   assert.ok(facts.weeksSoFar >= 46 && facts.weeksSoFar <= 47);
+  // Jan 3 2026 is a Saturday: Sat, Sun, Mon, Tue; Apr 12 Sun; Jun 20 Sat; Nov 10-12 Tue-Thu.
+  assert.deepEqual(facts.weekdays, [1, 2, 1, 1, 0, 2, 2]);
+  // Start hours 6,6,6,21,7,6,9,9,9: four before 7, four 7-11, one after 8.
+  assert.deepEqual(facts.timesOfDay, [4, 4, 0, 0, 0, 1]);
+  assert.equal(facts.knownTimes, 9);
+  assert.equal(facts.mostRunsInWeek, 3);
 });

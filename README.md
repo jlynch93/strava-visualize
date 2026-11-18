@@ -354,6 +354,14 @@ in `fitness-core.js` and covered by `tests/fitness-core.test.js`.
   weeks), Everests climbed, half-marathon-plus runs, the biggest week, early-bird
   or night-owl runs (from local start times, when known) and the share of the
   way around the Earth. Facts come from `FitnessCore.yearHighlights`.
+  The image comes in five styles, chosen above the preview (and remembered on
+  the device), each with its own chart and accolades: **The year** (overview),
+  **Distance** (weekly mileage bars, distance club, long-run feats, Everests,
+  the Earth), **Speed** (the year's best pace in each run length, flagged when
+  it is an all-time best, VO2 max change since January, pace by month, the
+  fastest month), **Consistency** (a dot for every day of the year, streak,
+  weeks and months with a run, runs a week) and **Habits** (runs by weekday and
+  time of day, favourite and rest day, usual start time, typical run).
 
 ### Page structure
 

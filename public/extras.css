@@ -205,3 +205,12 @@ body:not(.has-history) .palette-button { display: none; }
   .progress-tabs [role="tab"] { flex: 1 1 auto; padding: 0 10px; }
 }
 #fitnessKpis[hidden] { display: none !important; }
+
+/* Year image styles */
+.recap-styles { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 12px; padding: 0; border: 0; min-width: 0; }
+.recap-styles[hidden] { display: none; }
+.recap-styles label { position: relative; }
+.recap-styles input { position: absolute; inset: 0; margin: 0; opacity: 0; cursor: pointer; }
+.recap-styles span { display: inline-flex; align-items: center; min-height: 34px; padding: 0 12px; border: 1px solid var(--rule-strong); border-radius: 999px; background: var(--surface); color: var(--ink); font-size: .82rem; font-weight: 700; }
+.recap-styles input:checked + span { border-color: var(--ink-strong); background: var(--ink-strong); color: var(--surface); }
+.recap-styles input:focus-visible + span { outline: 3px solid var(--blue); outline-offset: 2px; }
