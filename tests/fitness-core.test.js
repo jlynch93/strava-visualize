@@ -347,3 +347,29 @@ test("shoe mileage goes to the newest shoe in use on each run's day", () => {
   // A run before any shoe goes nowhere.
   assert.equal(old.runs + racer.runs + daily.runs, 3);
 });
+
+test("year highlights count long runs, streaks, consistency and early starts", () => {
+  const run = (month, day, km, hour = 9, climb = 0) => ({ date: new Date(2026, month, day, hour), distance: km * 1000, total_elevation_gain: climb });
+  const runs = [
+    run(0, 3, 21.1, 6), run(0, 4, 10, 6), run(0, 5, 8, 6), run(0, 6, 5, 21),   // a 4-day streak, 3 early, 1 late
+    run(3, 12, 42.2, 7, 500), run(5, 20, 55, 6, 1200),                        // marathon and ultra (both also halves)
+    run(10, 10, 12), run(10, 11, 12), run(10, 12, 12),                        // 36 km in the week of Nov 9
+    { date: new Date(2025, 11, 31, 9), distance: 50000 }                      // last year: left out
+  ];
+  const facts = fit.yearHighlights(runs, (item) => item.date, 2026, { today: TODAY, hourOf: (item) => item.date.getHours() });
+  assert.equal(facts.runs, 9);
+  assert.equal(facts.halves, 3);
+  assert.equal(facts.marathons, 2);
+  assert.equal(facts.ultras, 1);
+  assert.equal(facts.longestStreak, 4);
+  // Biggest week: the 55 km ultra on its own (week of Jun 15) beats 36 km in November.
+  assert.equal(facts.biggestWeek.meters, 55000);
+  assert.equal(facts.biggestWeek.start.getMonth(), 5);
+  assert.equal(facts.biggestWeek.start.getDate(), 15);
+  assert.equal(facts.climb, 1700);
+  assert.equal(facts.monthsActive, 4);
+  assert.equal(facts.monthsSoFar, 11);
+  assert.equal(facts.earlyRuns, 4);
+  assert.equal(facts.lateRuns, 1);
+  assert.ok(facts.weeksSoFar >= 46 && facts.weeksSoFar <= 47);
+});

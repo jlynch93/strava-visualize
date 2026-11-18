@@ -514,6 +514,42 @@
     return { ...result, goal, expectedByNow, ahead: soFar - expectedByNow, left, neededPerWeek: remainingDays ? left / remainingDays * 7 : 0, onTrack: projected >= goal, done: soFar >= goal };
   }
 
+  /* ---------- Year highlights (for accolades) ---------- */
+
+  // Facts about one calendar year of runs that accolades are made from.
+  // `hourOf` gives a run's local start hour (0-23) or null when unknown.
+  function yearHighlights(runs, dateOf, year, { today = new Date(), hourOf = () => null } = {}) {
+    const inYear = runs.map((run) => ({ run, date: dateOf(run) })).filter(({ date }) => !Number.isNaN(date.valueOf()) && date.getFullYear() === year);
+    const meters = inYear.reduce((sum, { run }) => sum + (Number(run.distance) || 0), 0);
+    const count = (minimum) => inYear.filter(({ run }) => run.distance >= minimum).length;
+    const days = [...new Set(inYear.map(({ date }) => dayKey(date)))].sort();
+    let streak = days.length ? 1 : 0, current = days.length ? 1 : 0;
+    for (let index = 1; index < days.length; index += 1) {
+      const gap = Math.round((new Date(`${days[index]}T12:00:00`) - new Date(`${days[index - 1]}T12:00:00`)) / 86400000);
+      current = gap === 1 ? current + 1 : 1;
+      streak = Math.max(streak, current);
+    }
+    const weeks = new Map();
+    for (const { run, date } of inYear) weeks.set(weekKey(date), (weeks.get(weekKey(date)) || 0) + run.distance);
+    const biggest = [...weeks.entries()].sort((a, b) => b[1] - a[1])[0] || null;
+    const lastDay = year === today.getFullYear() ? new Date(year, today.getMonth(), today.getDate()) : new Date(year, 11, 31);
+    const monthsSoFar = lastDay.getMonth() + 1;
+    const monthsActive = new Set(inYear.map(({ date }) => date.getMonth())).size;
+    // Weeks of the year so far (Mondays from the first week touching Jan 1).
+    const firstMonday = new Date(year, 0, 1 - ((new Date(year, 0, 1).getDay() + 6) % 7));
+    const weeksSoFar = Math.floor((lastDay - firstMonday) / (7 * 86400000)) + 1;
+    const hours = inYear.map(({ run }) => hourOf(run)).filter((hour) => Number.isInteger(hour));
+    return {
+      runs: inYear.length, meters, days: days.length,
+      climb: inYear.reduce((sum, { run }) => sum + (Number(run.total_elevation_gain) || 0), 0),
+      halves: count(21000), marathons: count(42000), ultras: count(50000),
+      longestStreak: streak,
+      biggestWeek: biggest ? { meters: biggest[1], start: new Date(`${biggest[0]}T12:00:00`) } : null,
+      monthsActive, monthsSoFar, weeksActive: weeks.size, weeksSoFar,
+      earlyRuns: hours.filter((hour) => hour < 7).length, lateRuns: hours.filter((hour) => hour >= 20).length
+    };
+  }
+
   /* ---------- Intensity balance ---------- */
 
   // Share of running time that was hard (quality sessions and races) over the
@@ -696,7 +732,7 @@
     estimateMaxHr, heartRateReserve, runVo2Estimate, runVdot, percentile, vo2Series,
     runLoad, dailyLoads, loadSeries, workloadRatios, formZone, readiness, dayKey, finite,
     RUN_TYPES, classifyRunType, isWalk, WALK_TYPES, classifyWalkType,
-    trainingPhase, recoveryDays, taperDays, projectRaceDay, TAPER_LOAD, RACE_WEEK_LOAD, ageGroup, projectPlace, personalRecords, metersPerBeat, efficiencyTrend, pacingPlan, weekKey, yearProjection, intensityBalance, shoeMileage
+    trainingPhase, recoveryDays, taperDays, projectRaceDay, TAPER_LOAD, RACE_WEEK_LOAD, ageGroup, projectPlace, personalRecords, metersPerBeat, efficiencyTrend, pacingPlan, weekKey, yearProjection, intensityBalance, shoeMileage, yearHighlights
   };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.FitnessCore = api;

@@ -146,6 +146,10 @@ test("a yearly goal shows the pace you are on and what the rest of the year need
   await card.getByRole("button", { name: "Share your year" }).click();
   await expect(page.locator("#recapTitle")).toHaveText(`Your ${new Date().getFullYear()}`);
   await expect(page.locator("#recapDownload")).toHaveAttribute("download", `runlore-${new Date().getFullYear()}.png`);
+  // A story-sized image with the accolades the year earned.
+  await expect(page.locator("#recapImage")).toHaveAttribute("alt", /Accolades: [^.]*club/);
+  const size = await page.locator("#recapImage").evaluate((image) => [image.naturalWidth, image.naturalHeight]);
+  expect(size).toEqual([1080, 1920]);
 });
 
 test("intensity balance compares easy and hard running time with 80/20", async ({ page }) => {

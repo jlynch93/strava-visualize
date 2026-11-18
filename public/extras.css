@@ -74,7 +74,7 @@ body:not(.has-history) .palette-button { display: none; }
 .recap-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
 .recap-head h2 { margin: 0; font-size: 1.1rem; }
 .recap-head .modal-close { position: static; }
-.recap-dialog img { display: block; width: 100%; height: auto; border-radius: 10px; }
+.recap-dialog img { display: block; width: auto; max-width: 100%; height: auto; max-height: min(64vh, 720px); margin: 0 auto; border-radius: 10px; }
 .recap-actions { display: flex; gap: 10px; margin-top: 14px; }
 .recap-download { display: inline-flex; align-items: center; justify-content: center; min-height: 40px; padding: 0 14px; border: 1px solid var(--rule-strong); border-radius: 7px; color: var(--ink-strong); font-weight: 650; text-decoration: none; }
 .recap-note { margin: 10px 0 0; color: var(--ink-faint); font-size: .76rem; }

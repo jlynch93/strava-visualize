@@ -539,8 +539,11 @@ function yearRecapData(year = new Date().getFullYear()) {
   const months = Array.from({ length: 12 }, (_, month) => runs.filter((run) => parseActivityDate(run).getMonth() === month).reduce((sum, run) => sum + run.distance, 0));
   const records = currentRecords().filter((record) => record.date.getFullYear() === year);
   const days = new Set(runs.map((run) => localDateValue(parseActivityDate(run)))).size;
+  // A run's local start hour, only when its timestamp has a time of day.
+  const hourOf = (run) => /\d{1,2}:\d{2}/.test(String(run.start_date_local || run.start_date || "")) ? parseActivityDate(run).getHours() : null;
+  const facts = FitnessCore.yearHighlights(runs, parseActivityDate, year, { hourOf });
   return {
-    year, runs: runs.length, days, months, records,
+    year, runs: runs.length, days, months, records, facts,
     meters: runs.reduce((sum, run) => sum + run.distance, 0),
     seconds: runs.reduce((sum, run) => sum + run.moving_time, 0),
     climb: runs.reduce((sum, run) => sum + (run.total_elevation_gain || 0), 0),
@@ -548,9 +551,37 @@ function yearRecapData(year = new Date().getFullYear()) {
   };
 }
 
+// Up to eight accolades earned this year, most notable first.
+function yearAccolades(data) {
+  const facts = data.facts;
+  const metric = preferences.units === "metric";
+  const unit = metric ? "km" : "mi";
+  const total = metric ? facts.meters / 1000 : miles(facts.meters);
+  const list = [];
+  const clubs = metric ? [500, 1000, 1500, 2000, 2500, 3000, 4000, 5000, 6000, 8000, 10000] : [250, 500, 750, 1000, 1500, 2000, 2500, 3000, 4000, 5000, 6000];
+  const club = clubs.filter((size) => total >= size).pop();
+  if (club) list.push({ title: `${club.toLocaleString()} ${unit} club`, detail: `${Math.round(total).toLocaleString()} ${unit} this year` });
+  if (facts.ultras) list.push({ title: facts.ultras === 1 ? "Ultra distance" : `${facts.ultras}× ultra distance`, detail: "Runs of 50 km or longer" });
+  else if (facts.marathons) list.push({ title: facts.marathons === 1 ? "Marathon distance" : `${facts.marathons}× marathon distance`, detail: "Runs of 26.2 mi or longer" });
+  // Records the image already shows elsewhere (longest run, biggest week) are left out here.
+  data.records.filter((record) => !["longest", "biggest-week"].includes(record.key)).slice(0, 2).forEach((record) => list.push({ title: record.label, detail: `Record · ${recordValue(record)}, ${recordDate(record.date)}` }));
+  if (facts.longestStreak >= 3) list.push({ title: `${facts.longestStreak}-day streak`, detail: "Most days in a row" });
+  if (facts.monthsSoFar >= 3 && facts.monthsActive === facts.monthsSoFar) list.push({ title: "Every month", detail: facts.monthsSoFar === 12 ? "Ran in all 12 months" : `Ran in all ${facts.monthsSoFar} months so far` });
+  else if (facts.weeksSoFar >= 8 && facts.weeksActive / facts.weeksSoFar >= 0.75) list.push({ title: `${facts.weeksActive} of ${facts.weeksSoFar} weeks`, detail: "Weeks with a run" });
+  const everests = facts.climb / 8849;
+  if (everests >= 0.5) list.push({ title: everests >= 1 ? `${everests.toFixed(1)}× Everest` : "Half an Everest", detail: `${metric ? `${Math.round(facts.climb).toLocaleString()} m` : `${Math.round(feet(facts.climb)).toLocaleString()} ft`} climbed` });
+  if (facts.halves >= 2 && facts.halves > facts.marathons) list.push({ title: `${facts.halves} half-marathon+ runs`, detail: "Runs of 13.1 mi or longer" });
+  if (facts.biggestWeek) list.push({ title: `Biggest week ${displayDistance(miles(facts.biggestWeek.meters), 1)}`, detail: `Week of ${recordDate(facts.biggestWeek.start)}` });
+  if (facts.earlyRuns >= 10) list.push({ title: "Early bird", detail: `${facts.earlyRuns} runs before 7 am` });
+  if (facts.lateRuns >= 10) list.push({ title: "Night owl", detail: `${facts.lateRuns} runs after 8 pm` });
+  const earth = facts.meters / 40075000;
+  if (earth >= 0.01) list.push({ title: earth >= 1 ? `${earth.toFixed(2)}× around the Earth` : `${Math.round(earth * 100)}% around the Earth`, detail: "Measured at the equator" });
+  return list.slice(0, 8);
+}
+
 function drawYearRecap(data) {
   const canvas = document.createElement("canvas");
-  const W = 1080, H = 1350; canvas.width = W; canvas.height = H;
+  const W = 1080, H = 1920; canvas.width = W; canvas.height = H;
   const ctx = canvas.getContext("2d");
   const font = (weight, size) => `${weight} ${size}px "SF Pro Display", "Inter", "Segoe UI", system-ui, sans-serif`;
   const background = ctx.createLinearGradient(0, 0, 0, H);
@@ -591,12 +622,40 @@ function drawYearRecap(data) {
   ctx.fillStyle = "#e8f1ec"; ctx.font = font(600, 30);
   const footer = [data.longest ? `Longest ${displayDistance(miles(data.longest.distance), 1)}` : "", `Busiest ${new Date(data.year, busiest, 1).toLocaleDateString(undefined, { month: "long" })}`, data.records.length ? `${data.records.length} ${data.records.length === 1 ? "record" : "records"} set` : ""].filter(Boolean).join("   ·   ");
   ctx.fillText(footer, 80, 1290);
+  // Accolades: two columns of badges.
+  const accolades = yearAccolades(data);
+  if (accolades.length) {
+    ctx.fillStyle = "#9db4ad"; ctx.font = font(700, 30); ctx.fillText("ACCOLADES", 80, 1370);
+    const columnWidth = (W - 160 - 24) / 2, rowHeight = 108, rowGap = 14, top = 1394;
+    const fit = (text, weight, size, maxWidth, minimum) => {
+      let current = size;
+      ctx.font = font(weight, current);
+      while (ctx.measureText(text).width > maxWidth && current > minimum) { current -= 2; ctx.font = font(weight, current); }
+      if (ctx.measureText(text).width <= maxWidth) return text;
+      let cut = text;
+      while (cut.length > 1 && ctx.measureText(`${cut}…`).width > maxWidth) cut = cut.slice(0, -1);
+      return `${cut}…`;
+    };
+    accolades.forEach((accolade, index) => {
+      const x = 80 + (index % 2) * (columnWidth + 24), y = top + Math.floor(index / 2) * (rowHeight + rowGap);
+      ctx.fillStyle = "rgba(255, 255, 255, 0.06)"; ctx.strokeStyle = "rgba(200, 240, 74, 0.3)"; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.roundRect(x, y, columnWidth, rowHeight, 18); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = "#c8f04a"; ctx.beginPath(); ctx.arc(x + 46, y + rowHeight / 2, 24, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = "#0d181c"; ctx.font = font(800, 28); ctx.textAlign = "center"; ctx.fillText("★", x + 46, y + rowHeight / 2 + 10); ctx.textAlign = "left";
+      const textWidth = columnWidth - 104;
+      const title = fit(accolade.title, 800, 32, textWidth, 24);
+      ctx.fillStyle = "#ffffff"; ctx.fillText(title, x + 88, y + 48);
+      const detail = fit(accolade.detail, 600, 24, textWidth, 20);
+      ctx.fillStyle = "#9db4ad"; ctx.fillText(detail, x + 88, y + 82);
+    });
+  }
   return canvas;
 }
 
 function openYearRecap() {
   const data = yearRecapData();
-  showRecapCanvas(drawYearRecap(data), `runlore-${data.year}.png`, `${data.year} in running: ${displayDistance(miles(data.meters), 0)} over ${data.runs} runs.`, `Your ${data.year}`);
+  const accolades = yearAccolades(data).map((accolade) => accolade.title).join(", ");
+  showRecapCanvas(drawYearRecap(data), `runlore-${data.year}.png`, `${data.year} in running: ${displayDistance(miles(data.meters), 0)} over ${data.runs} runs.${accolades ? ` Accolades: ${accolades}.` : ""}`, `Your ${data.year}`);
 }
 
 /* ---------- Hooks into the existing renderers ---------- */

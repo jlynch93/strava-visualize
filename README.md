@@ -346,9 +346,14 @@ in `fitness-core.js` and covered by `tests/fitness-core.test.js`.
 - **How it felt** (each run's detail): effort from 1 to 10 and a short note,
   saved as you choose and synced with your account; the ledger shows the effort
   beside the run's name.
-- **Year in review**: "Share your year" (or the palette) draws a 1080×1350
-  image of the year: distance, runs, hours, days run, climb, monthly bars, the
-  busiest month, the longest run and records set.
+- **Year in review**: "Share your year" (or the palette) draws a 1080×1920
+  story-sized image of the year: distance, runs, hours, days run, climb,
+  monthly bars, the longest run, busiest month and records set, then up to
+  eight **accolades** it earned: a distance club, marathon or ultra distance,
+  records set that year, the longest daily streak, running every month (or most
+  weeks), Everests climbed, half-marathon-plus runs, the biggest week, early-bird
+  or night-owl runs (from local start times, when known) and the share of the
+  way around the Earth. Facts come from `FitnessCore.yearHighlights`.
 
 ### Page structure
 
