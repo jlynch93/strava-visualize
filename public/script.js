@@ -1242,7 +1242,8 @@ function renderKeyRuns() {
     { label: "Longest", run: [...runs].sort((a, b) => miles(b.distance) - miles(a.distance))[0], reason: "Longest distance in this window" },
     { label: "Most time running", run: [...runs].sort((a, b) => activityLoad(b) - activityLoad(a))[0], reason: "Longest moving duration in this window" },
     { label: "Fastest comparable", run: [...runs].filter((run) => miles(run.distance) >= 4).sort((a, b) => paceSeconds(a) - paceSeconds(b))[0], reason: "Fastest run over four miles" }
-  ].filter((item) => item.run);
+  ].filter((item) => item.run)
+    .filter((item) => !(item.label === "Longest" && typeof currentRecords === "function" && String(currentRecords().find((record) => record.key === "longest")?.run?.id) === String(item.run.id)));
   const unique = candidates.filter((item, index, list) => list.findIndex((candidate) => String(candidate.run.id) === String(item.run.id)) === index);
   els.keyRuns.replaceChildren(...unique.map((item) => {
     const button = document.createElement("button");

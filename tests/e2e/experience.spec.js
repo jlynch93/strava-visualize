@@ -286,7 +286,9 @@ test("fitness view shows readiness, VO2 max, load and accepts a heart-rate profi
   await expect(page.locator(".app-nav a[href='#fitness']")).toHaveAttribute("aria-current", "page");
   await expect(page.locator(".readiness-gauge")).toHaveAttribute("aria-label", /Readiness \d+ out of 100/);
   await expect(page.locator(".readiness-factors li")).not.toHaveCount(0);
-  await expect(page.locator("#fitnessKpis")).toContainText(/VO2 max \(est\.\)\s*\d+\.\d/i);
+  // The numbers strip is gone: readiness, the load chart and the progress tabs carry them.
+  await expect(page.locator("#fitnessKpis")).toBeHidden();
+  await expect(page.locator("#progressPanel [role='tab'][aria-selected='true']")).toHaveText("VO2 max");
   await expect(page.locator("#vo2Chart svg")).toBeVisible();
   await expect(page.locator("#loadChart svg")).toBeVisible();
   await expect(page.locator("#racePredictions tbody tr")).toHaveCount(4);
@@ -299,7 +301,8 @@ test("fitness view shows readiness, VO2 max, load and accepts a heart-rate profi
   await page.keyboard.press("ArrowLeft");
   await expect(page.locator("#chartTooltip")).toContainText("Form");
 
-  const before = await page.locator("#fitnessKpis .kpi-tile").first().locator("strong").textContent();
+  const vo2 = page.locator("#todayStrip .today-facts dd").first();
+  const before = await vo2.textContent();
   await page.locator(".fitness-profile > summary").click();
   // Heart rate is edited in the profile popup and updates the estimates.
   await page.getByRole("button", { name: "Edit heart rate" }).click();
@@ -313,7 +316,7 @@ test("fitness view shows readiness, VO2 max, load and accepts a heart-rate profi
   await expect(details.locator(".runner-details-note")).toHaveText("Saved on this device.");
   await page.locator("#accountDialogClose").click();
   await expect(page.locator("#profileSummary")).toContainText("resting HR 45 (saved)");
-  await expect(page.locator("#fitnessKpis .kpi-tile").first().locator("strong")).not.toHaveText(before);
+  await expect(vo2).not.toHaveText(before);
   await page.reload();
   expect(await page.evaluate(() => athleteProfile.restHr)).toBe(45);
 
@@ -427,7 +430,7 @@ test("aurora animates unless reduced motion is asked for, and its spotlight foll
   await expect(page.locator("html")).not.toHaveAttribute("data-palette", /.+/);
 });
 
-test("studio changes the layout: a sidebar and bento grid on wide screens, a swipeable strip on phones", async ({ page }) => {
+test("studio changes the layout: a sidebar and bento grid on wide screens", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/"); await importHistory(page);
   await page.evaluate(() => { preferences.theme = "studio"; applyTheme(); render(); });
@@ -443,11 +446,13 @@ test("studio changes the layout: a sidebar and bento grid on wide screens, a swi
   const week = await page.locator("#thisWeek").boundingBox();
   expect(week.x).toBeGreaterThan(today.x + today.width - 1);
   expect(Math.abs(week.y - today.y)).toBeLessThan(4);
-  // Fitness: the numbers sit beside readiness.
+  // Fitness: with a goal race, the training cycle sits beside readiness.
+  await page.evaluate(() => { const date = new Date(); date.setDate(date.getDate() + 50); coachingContext.races = [{ id: "a", name: "City Half", date: localDateValue(date), distance: "Half marathon", priority: "A" }]; saveCoachingContext(); fitnessModelCache.key = ""; render(); });
   await view(page, "Fitness");
   const hero = await page.locator("#readinessHero").boundingBox();
-  const kpis = await page.locator("#fitnessKpis").boundingBox();
-  expect(kpis.x).toBeGreaterThan(hero.x + hero.width - 1);
+  const cycle = await page.locator("#cyclePanel").boundingBox();
+  expect(cycle.x).toBeGreaterThan(hero.x + hero.width - 1);
+  expect(Math.abs(cycle.y - hero.y)).toBeLessThan(4);
   // Settings open beside the sidebar and stay on screen.
   await page.locator("#dataMenu > summary").click();
   const menu = await page.locator(".data-menu-panel").boundingBox();
@@ -455,10 +460,9 @@ test("studio changes the layout: a sidebar and bento grid on wide screens, a swi
   expect(menu.y + menu.height).toBeLessThanOrEqual(900);
   await page.keyboard.press("Escape");
 
-  // Phone: the key numbers become a strip that scrolls sideways, inside the page.
+  // Phone: everything stays inside the page.
   await page.setViewportSize({ width: 390, height: 844 });
-  const strip = page.locator("#fitnessKpis");
-  await expect.poll(() => strip.evaluate((node) => node.scrollWidth > node.clientWidth)).toBe(true);
+  await page.waitForTimeout(200);
   expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
 });
 

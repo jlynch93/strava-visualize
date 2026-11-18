@@ -576,19 +576,11 @@ function renderRunningMetrics(model, days) {
     const early = recentMean(values, 0, span), late = recentMean(values, values.length - span);
     return early && late ? { early, late, change: late - early } : null;
   };
-  const efficiency = weeks.map((week) => week.effTime ? week.effSum / week.effTime : null);
   const cadence = weeks.map((week) => week.cadTime ? week.cadSum / week.cadTime : null);
-  // The current week is still filling up; leave it out of the load trend.
-  const currentWeek = localDateValue(TrainingCore.weekStart(new Date()));
-  const load = weeks.map((week) => localDateValue(week.start) === currentWeek ? null : week.load || 0);
   const easyPace = weeks.map((week) => week.easyMeters ? week.easySeconds / miles(week.easyMeters) : null);
   const cards = [
-    { label: "Aerobic efficiency", values: efficiency, format: (value) => `${value.toFixed(2)} m/beat`, betterUp: true,
-      about: "Distance covered per heartbeat on easy runs. Rising means more speed for the same effort." },
     { label: "Cadence", values: cadence, format: (value) => `${Math.round(value)} spm`, betterUp: null,
       about: "Steps per minute, time-weighted. Most runners settle between 165 and 185." },
-    { label: "Weekly load", values: load, format: (value) => `${Math.round(value)} pts`, betterUp: null,
-      about: "Sum of training load. One hour at threshold is about 100 points." },
     { label: "Easy pace", values: easyPace, format: formatPace, betterUp: false, invert: true,
       about: "Average pace of your easy runs. Faster at the same effort is a sign of fitness." }
   ];

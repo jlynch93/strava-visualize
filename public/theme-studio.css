@@ -3,10 +3,8 @@
  * base (data-theme="light", data-palette="studio"):
  * - Wide screens (1100px+): the header becomes a dark sidebar with icon-and-label
  *   navigation and the account at the foot; Overview becomes a bento grid with
- *   a tall readiness tile; Fitness puts readiness beside the numbers and pairs
- *   the charts; the run ledger becomes floating row cards.
- * - Phones: a dark app bar and tab bar, a dark readiness card, and the key
- *   numbers as a swipeable strip.
+ *   a tall readiness tile; Fitness puts readiness beside the training cycle; the run ledger becomes floating row cards.
+ * - Phones: a dark app bar and tab bar and a dark readiness card.
  * The sidebar and app bar are dark by redefining the colour tokens on the
  * header, so everything inside it (buttons, menus, the account chip) follows.
  */
@@ -143,18 +141,12 @@
   :root[data-palette="studio"] #overview > .this-week { margin: 0; }
   :root[data-palette="studio"] #overview > .overview-head { margin-bottom: 0; }
 
-  /* Fitness: readiness beside the numbers, charts in pairs. */
+  /* Fitness: readiness and the training cycle side by side, then full-width panels. */
   :root[data-palette="studio"] #fitnessBody:not([hidden]) { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: var(--studio-gap); align-items: start; }
   :root[data-palette="studio"] #fitnessBody > * { grid-column: 1 / -1; margin: 0; }
-  :root[data-palette="studio"] #fitnessBody > * { order: 5; }
-  :root[data-palette="studio"] #fitnessBody > .readiness-hero { order: 1; grid-column: 1 / span 8; grid-template-columns: minmax(200px, 0.8fr) minmax(0, 1.2fr); gap: 24px; align-self: stretch; }
-  :root[data-palette="studio"] #fitnessBody > .fitness-notes { order: 3; }
-  :root[data-palette="studio"] #fitnessBody > #cyclePanel { order: 4; }
-  :root[data-palette="studio"] #fitnessBody > .fitness-kpis { order: 2; grid-column: 9 / -1; grid-template-columns: repeat(2, minmax(0, 1fr)); align-self: stretch; padding: 0; }
-  :root[data-palette="studio"] #fitnessBody > .fitness-kpis > :last-child:nth-child(odd) { grid-column: 1 / -1; }
-  :root[data-palette="studio"] #fitnessBody > .fitness-panel:has(#vo2Chart) { grid-column: 1 / span 6; }
-  :root[data-palette="studio"] #fitnessBody > .fitness-panel:has(#loadChart) { grid-column: 7 / -1; }
-  :root[data-palette="studio"] #fitnessBody > .fitness-columns { gap: var(--studio-gap); }
+  :root[data-palette="studio"] #fitnessBody > .readiness-hero { grid-column: 1 / span 7; align-self: stretch; grid-template-columns: minmax(0, 1fr); }
+  :root[data-palette="studio"] #fitnessBody > #cyclePanel:not([hidden]) { grid-column: 8 / -1; align-self: stretch; }
+  :root[data-palette="studio"] #fitnessBody:not(:has(> #cyclePanel:not([hidden]))) > .readiness-hero { grid-column: 1 / -1; grid-template-columns: minmax(200px, 0.8fr) minmax(0, 1.2fr); }
 
   /* Runs: each row is a floating card. */
   :root[data-palette="studio"] #runs { background: transparent; box-shadow: none; padding-inline: 0; }
@@ -182,11 +174,6 @@
   :root[data-palette="studio"] .app-nav a[aria-current] { color: var(--ink-strong); }
   :root[data-palette="studio"] .app-nav a[aria-current]::before { background: var(--accent); }
   :root[data-palette="studio"] .toolbar { margin: 0 0 12px; border-radius: 14px; }
-  :root[data-palette="studio"] .fitness-kpis {
-    display: flex; gap: 10px; margin-inline: -16px; padding: 4px 16px 12px; overflow-x: auto;
-    scroll-snap-type: x mandatory; scroll-padding-inline: 16px; scrollbar-width: none;
-  }
-  :root[data-palette="studio"] .fitness-kpis::-webkit-scrollbar { display: none; }
-  :root[data-palette="studio"] .fitness-kpis > .kpi-tile { flex: 0 0 min(64%, 220px); scroll-snap-align: start; }
+  :root[data-palette="studio"] .progress-tabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
   :root[data-palette="studio"] .today-strip { padding: 18px; }
 }

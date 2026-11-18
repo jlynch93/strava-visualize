@@ -41,13 +41,21 @@ function renderRecords() {
     ? `${fresh.length} new in the last two weeks: ${fresh.map((record) => record.label.charAt(0).toLowerCase() + record.label.slice(1)).join(", ")}.`
     : "Across your whole history. A new best gets a badge for two weeks.";
   const ordered = [...fresh, ...records.filter((record) => !record.isNew)];
-  document.querySelector("#recordsList").innerHTML = ordered.map((record) => {
+  // One row: new bests first, the rest a tap away.
+  const shown = Math.max(4, fresh.length);
+  document.querySelector("#recordsList").innerHTML = ordered.map((record, index) => {
     const previous = record.isNew && record.previous ? `<small class="record-previous">Beat ${escapeHtml(recordValue({ ...record, value: record.previous.value }))} from ${escapeHtml(recordDate(record.previous.date))}</small>` : "";
     const body = `<span class="record-label">${escapeHtml(record.label)}${record.isNew ? ' <b class="record-new">New</b>' : ""}</span><strong class="record-value">${escapeHtml(recordValue(record))}</strong><small>${escapeHtml(recordDetail(record))}</small>${previous}`;
     const openable = record.run && inWindow.has(String(record.run.id));
-    return `<li class="record${record.isNew ? " is-new" : ""}">${openable ? `<button type="button" class="record-open" data-action="open-record" data-run-id="${escapeHtml(String(record.run.id))}" aria-label="${escapeHtml(`${record.label}: ${recordValue(record)}, ${recordDetail(record)}. Open run`)}">${body}</button>` : `<div class="record-body">${body}</div>`}</li>`;
+    return `<li class="record${record.isNew ? " is-new" : ""}${index >= shown ? " record-more" : ""}">${openable ? `<button type="button" class="record-open" data-action="open-record" data-run-id="${escapeHtml(String(record.run.id))}" aria-label="${escapeHtml(`${record.label}: ${recordValue(record)}, ${recordDetail(record)}. Open run`)}">${body}</button>` : `<div class="record-body">${body}</div>`}</li>`;
   }).join("");
+  const toggle = document.querySelector("#recordsToggle");
+  const hiddenCount = Math.max(0, ordered.length - shown);
+  toggle.hidden = !hiddenCount;
+  toggle.textContent = host.classList.contains("is-expanded") ? "Show fewer" : `All ${ordered.length} records`;
+  toggle.setAttribute("aria-expanded", String(host.classList.contains("is-expanded")));
 }
+document.querySelector("#recordsToggle")?.addEventListener("click", () => { document.querySelector("#records").classList.toggle("is-expanded"); renderRecords(); });
 
 document.addEventListener("click", (event) => {
   const button = event.target.closest?.("[data-action='open-record']");
@@ -89,6 +97,43 @@ function renderEfficiency() {
     ] })
   });
 }
+
+/* ---------- Progress tabs (VO2 max, efficiency, intensity) ---------- */
+
+let progressTab = (() => { try { return localStorage.getItem("runlore-progress-tab") || "vo2Section"; } catch { return "vo2Section"; } })();
+const progressTabs = () => [...document.querySelectorAll("#progressPanel [role='tab']")];
+// A measure without enough data hides its tab; the chosen tab falls back to the first one shown.
+function syncProgressTabs() {
+  const tabs = progressTabs();
+  tabs.forEach((tab) => { tab.hidden = document.getElementById(tab.dataset.tab).hidden; });
+  const available = tabs.filter((tab) => !tab.hidden);
+  const active = available.find((tab) => tab.dataset.tab === progressTab) || available[0];
+  tabs.forEach((tab) => {
+    const on = tab === active;
+    tab.setAttribute("aria-selected", String(on));
+    tab.tabIndex = on ? 0 : -1;
+    document.getElementById(tab.dataset.tab).classList.toggle("is-active", on);
+  });
+}
+function chooseProgressTab(tab, focus = false) {
+  progressTab = tab.dataset.tab;
+  try { localStorage.setItem("runlore-progress-tab", progressTab); } catch { /* Per-device convenience only. */ }
+  syncProgressTabs();
+  if (focus) tab.focus();
+  renderFitness(); // Charts measure their panel, so draw the one now shown.
+}
+document.querySelector("#progressPanel .progress-tabs")?.addEventListener("click", (event) => {
+  const tab = event.target.closest("[role='tab']");
+  if (tab) chooseProgressTab(tab);
+});
+document.querySelector("#progressPanel .progress-tabs")?.addEventListener("keydown", (event) => {
+  if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+  const tabs = progressTabs().filter((tab) => !tab.hidden);
+  const index = tabs.indexOf(document.activeElement);
+  const next = event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : (index + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
+  event.preventDefault();
+  chooseProgressTab(tabs[next], true);
+});
 
 /* ---------- 3. Race-day pacing ---------- */
 
@@ -570,9 +615,12 @@ goalRaceCard = function (goal) {
 };
 const baseRenderFitness = renderFitness;
 renderFitness = function () {
+  // Sync first so the chosen chart's panel is shown (and measurable) when it draws.
+  syncProgressTabs();
   baseRenderFitness();
   renderEfficiency();
   renderIntensity();
+  syncProgressTabs();
 };
 const baseShowWorkoutModal = showWorkoutModal;
 showWorkoutModal = function (runId, trigger) {

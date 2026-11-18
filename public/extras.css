@@ -170,3 +170,38 @@ body:not(.has-history) .palette-button { display: none; }
   .shoe-form div:first-child, .shoe-form button { grid-column: 1 / -1; }
   .rpe-scale span { height: 32px; font-size: .85rem; }
 }
+
+/* ---------- Structure: lead with what matters ---------- */
+/* Overview opens on readiness, not a page title: the title stays for screen readers. */
+#overview > .overview-head { position: absolute !important; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.overview-more[hidden] { display: none; }
+
+/* Records: one row, new bests first, the rest on request. */
+.records:not(.is-expanded) .record-more { display: none; }
+.records-toggle { margin-top: 10px; }
+
+/* Progress: one panel, a tab per measure. */
+.progress-tabs { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0 14px; padding: 4px; border-radius: 10px; background: var(--surface-muted); width: max-content; max-width: 100%; }
+.progress-tabs [role="tab"] { min-height: 36px; padding: 0 14px; border: 0; border-radius: 7px; background: transparent; color: var(--ink-soft); font-weight: 700; font-size: .86rem; }
+.progress-tabs [role="tab"][aria-selected="true"] { background: var(--surface); color: var(--ink-strong); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12); }
+.progress-tabs [role="tab"][hidden] { display: none; }
+.progress-tab-panel:not(.is-active), .progress-tab-panel[hidden] { display: none; }
+.progress-tab-panel .fitness-panel-head h2 { font-size: 1rem; }
+
+/* Plan: once a goal is set, the draft comes before the setup. */
+@media (min-width: 701px) {
+  body.has-history #planning:not([hidden]):has(#planStart[hidden]) { display: flex; flex-direction: column; }
+  #planning:has(#planStart[hidden]) > .panel-heading { order: 0; }
+  #planning:has(#planStart[hidden]) > #planProgress { order: 1; }
+  #planning:has(#planStart[hidden]) > #planHistoryWarning { order: 2; }
+  #planning:has(#planStart[hidden]) > #planActions { order: 3; }
+  #planning:has(#planStart[hidden]) > #acceptedPlan { order: 4; }
+  #planning:has(#planStart[hidden]) > #planDraftReview { order: 5; }
+  #planning:has(#planStart[hidden]) > .coaching-grid { order: 7; margin-top: 18px; }
+  #planning:has(#planStart[hidden]) > #planningContext { order: 8; }
+}
+@media (max-width: 700px) {
+  .progress-tabs { width: auto; }
+  .progress-tabs [role="tab"] { flex: 1 1 auto; padding: 0 10px; }
+}
+#fitnessKpis[hidden] { display: none !important; }

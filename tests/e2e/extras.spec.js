@@ -16,6 +16,14 @@ test("records list your bests, open the run behind them, and step aside for walk
   const records = page.locator("#records");
   await expect(records).toBeVisible();
   await expect(records.locator(".record")).toHaveCount(7);
+  // One row at first, new bests first; the rest on request.
+  const visible = records.locator(".record:visible");
+  const shown = await visible.count();
+  expect(shown).toBeGreaterThanOrEqual(4);
+  expect(shown).toBeLessThan(7);
+  await records.getByRole("button", { name: "All 7 records" }).click();
+  await expect(visible).toHaveCount(7);
+  await expect(records.locator("#recordsToggle")).toHaveAttribute("aria-expanded", "true");
   for (const label of ["Longest run", "Fastest 5–10K run", "Fastest 10K–half run", "Fastest half+ run", "Most climbing", "Biggest week", "Longest streak"]) {
     await expect(records.locator(".record-label", { hasText: label })).toHaveCount(1);
   }
@@ -32,6 +40,7 @@ test("records list your bests, open the run behind them, and step aside for walk
 test("aerobic efficiency charts metres per heartbeat and says which way it is going", async ({ page }) => {
   await loadDemo(page);
   await nav(page, "Fitness");
+  await page.getByRole("tab", { name: "Aerobic efficiency" }).click();
   const panel = page.locator("#efficiencyPanel");
   await expect(panel).toBeVisible();
   await expect(panel.locator("#efficiencySummary")).toContainText(/per heartbeat/);
@@ -142,6 +151,7 @@ test("a yearly goal shows the pace you are on and what the rest of the year need
 test("intensity balance compares easy and hard running time with 80/20", async ({ page }) => {
   await loadDemo(page);
   await nav(page, "Fitness");
+  await page.getByRole("tab", { name: "Intensity balance" }).click();
   const panel = page.locator("#intensityPanel");
   await expect(panel).toBeVisible();
   const label = await panel.locator(".intensity-bar").getAttribute("aria-label");
@@ -203,4 +213,60 @@ test("how a run felt is saved with it and shows in the ledger", async ({ page })
   await page.locator(".row-detail-button").first().click();
   await expect(page.locator(".rpe-scale input[value='7']")).toBeChecked();
   await expect(page.locator("#runFeelNote")).toHaveValue("Windy last mile");
+});
+
+
+test("the structure leads with today: overview opens on readiness, fitness groups by question", async ({ page }) => {
+  await loadDemo(page);
+  // No page title or duplicate demo label above readiness, and records come after the trend and key runs.
+  await expect(page.locator("#overviewTitle")).not.toBeInViewport();
+  const top = (selector) => page.locator(selector).evaluate((node) => node.getBoundingClientRect().top + scrollY);
+  expect(await top("#todayStrip")).toBeLessThan(await top("#thisWeek"));
+  expect(await top(".primary-chart")).toBeLessThan(await top("#records"));
+  expect(await top(".key-runs")).toBeLessThan(await top("#records"));
+  expect(await top("#records")).toBeLessThan(await top("#yearGoal"));
+  // The demo button goes once the demo is loaded.
+  await expect(page.locator("#demoButton")).toBeHidden();
+
+  await nav(page, "Fitness");
+  const order = ["#readinessHero", "#loadChart", "#racePredictions", "#progressPanel", "#trainingPaces", "#runningMetrics"];
+  const positions = [];
+  for (const selector of order) positions.push(await top(selector));
+  expect([...positions].sort((a, b) => a - b)).toEqual(positions);
+  // Running form no longer repeats efficiency or load.
+  await expect(page.locator("#runningMetrics")).not.toContainText("Aerobic efficiency");
+  await expect(page.locator("#runningMetrics")).not.toContainText("Weekly load");
+  // Progress tabs: arrow keys move between them, and the choice is remembered.
+  await page.getByRole("tab", { name: "VO2 max" }).focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(page.getByRole("tab", { name: "Aerobic efficiency" })).toBeFocused();
+  await expect(page.locator("#efficiencyPanel")).toBeVisible();
+  await expect(page.locator("#vo2Section")).toBeHidden();
+  await expect(page.locator("#efficiencyChart svg")).toBeVisible();
+  await page.reload();
+  await page.getByRole("button", { name: "Preview demo data", exact: true }).click();
+  await nav(page, "Fitness");
+  await expect(page.getByRole("tab", { name: "Aerobic efficiency" })).toHaveAttribute("aria-selected", "true");
+  // Data notes live with the heart-rate profile now.
+  await expect(page.locator(".fitness-profile #fitnessNotes")).toHaveCount(1);
+});
+
+test("plan shows the draft before the setup once a goal is set", async ({ page }) => {
+  await loadDemo(page);
+  await nav(page, "Plan");
+  const top = (selector) => page.locator(selector).evaluate((node) => node.getBoundingClientRect().top + scrollY);
+  await expect(page.locator("#planning .panel-heading")).toContainText("Saved to your account when you are signed in");
+  expect(await top(".coaching-grid")).toBeLessThan(await top("#planDraftReview"));
+  await page.evaluate(() => { coachingContext.goal = { miles: "30" }; saveCoachingContext(); render(); });
+  await expect(page.locator("#planStart")).toBeHidden();
+  expect(await top("#planDraftReview")).toBeLessThan(await top(".coaching-grid"));
+});
+
+test("pages end at the footer, with no blank scroll below", async ({ page }) => {
+  await loadDemo(page);
+  for (const name of ["Overview", "Fitness", "Plan", "Runs"]) {
+    await nav(page, name);
+    const gap = await page.evaluate(() => document.documentElement.scrollHeight - (document.querySelector(".app-footer").getBoundingClientRect().bottom + scrollY));
+    expect(gap, name).toBeLessThan(120);
+  }
 });

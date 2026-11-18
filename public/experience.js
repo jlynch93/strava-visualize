@@ -254,6 +254,7 @@ function renderSyncInfo() {
     : `${source}${state.lastSync ? ` · Synced ${new Date(state.lastSync).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : ""}`;
   const demoParent = isProviderSource() || state.dataSource === "import" ? document.querySelector("#dataMenuActions") : document.querySelector(".header-actions .actions");
   if (els.demoButton.parentElement !== demoParent) demoParent.append(els.demoButton);
+  els.demoButton.hidden = state.dataSource === "demo";
   const connectParent = state.dataSource === "import" ? document.querySelector("#dataMenuActions") : document.querySelector(".header-actions .actions");
   if (els.connectButton.parentElement !== connectParent) connectParent.prepend(els.connectButton);
 }
@@ -607,7 +608,7 @@ document.addEventListener("click", async (event) => {
 /* ---------- Aurora: shared gradients ---------- */
 // SVG fills cannot use CSS gradients, so the page carries two named ones that
 // theme-aurora.css points chart bars at. Unused by the other themes.
-document.body.insertAdjacentHTML("beforeend", `<svg class="aurora-defs" width="0" height="0" aria-hidden="true" focusable="false" style="position:absolute"><defs>
+document.body.insertAdjacentHTML("beforeend", `<svg class="aurora-defs" width="0" height="0" aria-hidden="true" focusable="false" style="position:absolute;top:0;left:0;width:0;height:0;overflow:hidden"><defs>
   <linearGradient id="aurora-bar" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#67e8f9"/><stop offset=".55" stop-color="#a78bfa"/><stop offset="1" stop-color="#a78bfa" stop-opacity=".35"/></linearGradient>
   <linearGradient id="aurora-bar-hot" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset=".4" stop-color="#f472b6"/><stop offset="1" stop-color="#a78bfa" stop-opacity=".5"/></linearGradient>
 </defs></svg>`);

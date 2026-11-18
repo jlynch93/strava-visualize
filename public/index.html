@@ -171,11 +171,6 @@
 
         <section id="todayStrip" class="today-strip" aria-label="Readiness today" data-native-units hidden></section>
         <section id="thisWeek" class="this-week" aria-label="This week" data-native-units hidden></section>
-        <section id="records" class="records" aria-labelledby="recordsTitle" data-native-units hidden>
-          <div class="records-head"><h2 id="recordsTitle">Your records</h2><p id="recordsSummary"></p></div>
-          <ul id="recordsList" class="records-list"></ul>
-        </section>
-        <section id="yearGoal" class="year-goal" aria-labelledby="yearGoalTitle" data-native-units hidden></section>
 
         <section class="block-review" aria-labelledby="blockReviewTitle">
           <div class="block-review-lead">
@@ -222,6 +217,14 @@
         </div>
         <div id="keyRuns" class="key-runs-grid"></div>
       </section>
+      <div class="overview-more" data-view-section="overview">
+        <section id="records" class="records" aria-labelledby="recordsTitle" data-native-units hidden>
+          <div class="records-head"><h2 id="recordsTitle">Your records</h2><p id="recordsSummary"></p></div>
+          <ul id="recordsList" class="records-list"></ul>
+          <button id="recordsToggle" class="link-action records-toggle" type="button" aria-controls="recordsList" hidden></button>
+        </section>
+        <section id="yearGoal" class="year-goal" aria-labelledby="yearGoalTitle" data-native-units hidden></section>
+      </div>
       <div class="analysis-row">
         <section id="signals" class="runner-intel data-panel" aria-labelledby="signalsTitle">
           <div class="panel-heading">
@@ -279,8 +282,7 @@
         </div>
         <div id="fitnessBody" hidden>
           <section id="readinessHero" class="readiness-hero" aria-label="Readiness to train"></section>
-          <ul id="fitnessNotes" class="fitness-notes" hidden></ul>
-          <div id="fitnessKpis" class="fitness-kpis" aria-label="Current fitness metrics"></div>
+          <div id="fitnessKpis" class="fitness-kpis" aria-label="Current fitness metrics" hidden></div>
 
           <section id="cyclePanel" class="fitness-panel" aria-labelledby="cycleTitle" hidden>
             <div class="fitness-panel-head">
@@ -288,29 +290,6 @@
               <a class="today-link" href="#planning">Edit races <span aria-hidden="true">→</span></a>
             </div>
             <div id="cycleTimeline" class="cycle-timeline"></div>
-          </section>
-
-          <section class="fitness-panel" aria-labelledby="vo2Title">
-            <div class="fitness-panel-head">
-              <div><h2 id="vo2Title">Estimated VO2 max</h2><p>Your aerobic ceiling in ml/kg/min. Rolling 6-week estimate from pace and heart rate; VDOT comes from your best effort.</p></div>
-              <div id="vo2Legend" class="chart-legend"></div>
-            </div>
-            <div id="vo2Chart" class="fitness-chart"></div>
-          </section>
-
-          <section id="efficiencyPanel" class="fitness-panel" aria-labelledby="efficiencyTitle" hidden>
-            <div class="fitness-panel-head">
-              <div><h2 id="efficiencyTitle">Aerobic efficiency</h2><p>Distance covered per heartbeat on easy and steady runs, with climbing counted. Rising means more speed for the same effort.</p></div>
-            </div>
-            <p id="efficiencySummary" class="efficiency-summary"></p>
-            <div id="efficiencyChart" class="fitness-chart"></div>
-          </section>
-
-          <section id="intensityPanel" class="fitness-panel" aria-labelledby="intensityTitle" hidden>
-            <div class="fitness-panel-head">
-              <div><h2 id="intensityTitle">Intensity balance</h2><p>Running time over the last four weeks, easy against hard. Most plans keep about 80% easy.</p></div>
-            </div>
-            <div id="intensityBalance"></div>
           </section>
 
           <section class="fitness-panel" aria-labelledby="loadTitle">
@@ -324,25 +303,61 @@
             <p id="raceDayProjection" class="race-projection" hidden></p>
           </section>
 
-          <div class="fitness-columns">
-            <section class="fitness-panel" aria-labelledby="predictionsTitle">
-              <div class="fitness-panel-head"><div><h2 id="predictionsTitle">Race predictions</h2><p>What your current fitness supports with good pacing and a taper.</p></div></div>
-              <div id="racePredictions"></div>
+          <section class="fitness-panel" aria-labelledby="predictionsTitle">
+            <div class="fitness-panel-head"><div><h2 id="predictionsTitle">Race predictions</h2><p>What your current fitness supports with good pacing and a taper.</p></div></div>
+            <div id="racePredictions"></div>
+          </section>
+
+          <section id="progressPanel" class="fitness-panel progress-panel" aria-labelledby="progressTitle">
+            <div class="fitness-panel-head"><div><h2 id="progressTitle">Progress</h2><p>The slow-moving signs of fitness. Choose one to chart.</p></div></div>
+            <div class="progress-tabs" role="tablist" aria-label="Progress measures">
+              <button type="button" role="tab" id="tab-vo2" aria-controls="vo2Section" data-tab="vo2Section">VO2 max</button>
+              <button type="button" role="tab" id="tab-efficiency" aria-controls="efficiencyPanel" data-tab="efficiencyPanel">Aerobic efficiency</button>
+              <button type="button" role="tab" id="tab-intensity" aria-controls="intensityPanel" data-tab="intensityPanel">Intensity balance</button>
+            </div>
+            <section id="vo2Section" class="progress-tab-panel" role="tabpanel" aria-labelledby="tab-vo2">
+              <div class="fitness-panel-head">
+                <div><h2 id="vo2Title">Estimated VO2 max</h2><p>Your aerobic ceiling in ml/kg/min. Rolling 6-week estimate from pace and heart rate; VDOT comes from your best effort.</p></div>
+                <div id="vo2Legend" class="chart-legend"></div>
+              </div>
+              <div id="vo2Chart" class="fitness-chart"></div>
             </section>
+            <section id="efficiencyPanel" class="progress-tab-panel" role="tabpanel" aria-labelledby="tab-efficiency" hidden>
+              <div class="fitness-panel-head">
+                <div><h2 id="efficiencyTitle">Aerobic efficiency</h2><p>Distance covered per heartbeat on easy and steady runs, with climbing counted. Rising means more speed for the same effort.</p></div>
+              </div>
+              <p id="efficiencySummary" class="efficiency-summary"></p>
+              <div id="efficiencyChart" class="fitness-chart"></div>
+            </section>
+            <section id="intensityPanel" class="progress-tab-panel" role="tabpanel" aria-labelledby="tab-intensity" hidden>
+              <div class="fitness-panel-head">
+                <div><h2 id="intensityTitle">Intensity balance</h2><p>Running time over the last four weeks, easy against hard. Most plans keep about 80% easy.</p></div>
+              </div>
+              <div id="intensityBalance"></div>
+            </section>
+          </section>
+
+          <div class="fitness-columns">
             <section class="fitness-panel" aria-labelledby="pacesTitle">
               <div class="fitness-panel-head"><div><h2 id="pacesTitle">Training paces</h2><p>Targets for each kind of session at today's fitness.</p></div></div>
               <div id="trainingPaces"></div>
             </section>
+
+
+
+
+
+
+            <section class="fitness-panel" aria-labelledby="metricsTitle">
+              <div class="fitness-panel-head"><div><h2 id="metricsTitle">Running form</h2><p>Cadence and easy pace, week by week across the review window.</p></div></div>
+              <div id="runningMetrics" class="running-metrics"></div>
+            </section>
           </div>
 
-          <section class="fitness-panel" aria-labelledby="metricsTitle">
-            <div class="fitness-panel-head"><div><h2 id="metricsTitle">Running metrics</h2><p>Weekly values across the review window.</p></div></div>
-            <div id="runningMetrics" class="running-metrics"></div>
-          </section>
-
           <details class="secondary-disclosure fitness-profile">
-            <summary>Heart-rate profile &amp; method<span id="profileSummary"></span></summary>
+            <summary>Heart rate, data notes &amp; method<span id="profileSummary"></span></summary>
             <div class="fitness-profile-body">
+              <ul id="fitnessNotes" class="fitness-notes" hidden></ul>
               <p class="profile-edit">Max and resting heart rate are part of your profile. <button type="button" class="link-action" data-action="open-profile" data-focus="maxHr">Edit heart rate</button></p>
               <div class="method-notes">
                 <h3>How these are calculated</h3>
@@ -356,7 +371,7 @@
       </section>
 
       <section id="planning" class="coaching-workspace data-panel" aria-labelledby="coachingWorkspaceTitle">
-        <div class="panel-heading"><h2 id="coachingWorkspaceTitle">Make room for your next week</h2><span>Goals and check-ins stay in this browser</span></div>
+        <div class="panel-heading"><h2 id="coachingWorkspaceTitle">Make room for your next week</h2><span>Saved to your account when you are signed in</span></div>
         <div class="coaching-grid">
           <details class="context-disclosure"><summary>Goal &amp; availability<span>Personalize your week</span></summary><form id="goalForm" class="context-card">
 

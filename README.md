@@ -350,6 +350,23 @@ in `fitness-core.js` and covered by `tests/fitness-core.test.js`.
   image of the year: distance, runs, hours, days run, climb, monthly bars, the
   busiest month, the longest run and records set.
 
+### Page structure
+
+Each tab leads with what you act on today:
+
+- **Overview**: readiness, this week, the block review with the distance trend,
+  key runs, then records (one row, new bests first, the rest on request) and
+  the yearly goal, then Charts & metrics and the coach. The page title is
+  kept for screen readers only. The window's longest run is not repeated in key
+  runs when it is also the all-time record shown below.
+- **Fitness**: readiness and the training cycle (today), fitness, fatigue and
+  form with the race-day projection and race predictions (what's coming),
+  Progress as one tabbed panel for VO2 max, aerobic efficiency and intensity
+  balance (the tab is remembered per device), then training paces beside
+  running form (cadence and easy pace), and data notes inside the heart-rate
+  disclosure.
+- **Plan**: once a goal or saved plan exists, the draft comes before the setup.
+
 ## GitHub workflows
 
 `Validate dashboard` runs on pushes to `main` and `codex/**` using a trusted
