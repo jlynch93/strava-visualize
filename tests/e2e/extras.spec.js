@@ -219,7 +219,9 @@ test("how a run felt is saved with it and shows in the ledger", async ({ page })
 test("the structure leads with today: overview opens on readiness, fitness groups by question", async ({ page }) => {
   await loadDemo(page);
   // No page title or duplicate demo label above readiness, and records come after the trend and key runs.
-  await expect(page.locator("#overviewTitle")).not.toBeInViewport();
+  // The title stays for screen readers but takes no visible space (1px, clipped).
+  const title = await page.locator("#overviewTitle").evaluate((node) => { const box = node.closest(".overview-head").getBoundingClientRect(); return [box.width, box.height]; });
+  expect(Math.max(...title)).toBeLessThanOrEqual(1);
   const top = (selector) => page.locator(selector).evaluate((node) => node.getBoundingClientRect().top + scrollY);
   expect(await top("#todayStrip")).toBeLessThan(await top("#thisWeek"));
   expect(await top(".primary-chart")).toBeLessThan(await top("#records"));
