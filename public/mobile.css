@@ -122,6 +122,11 @@
 
   .block-review { padding: 16px 14px; }
   .key-runs { margin: 16px 0; }
+  /* One column: no need to reserve two lines for names that line up across cards. */
+  .key-run-card { min-height: 0; }
+  .key-run-card strong { min-height: 0; margin: 6px 0 4px; }
+  .key-run-card small { margin-top: 4px; }
+  .key-runs .panel-heading { margin-bottom: 10px; }
 
   /* ---------- Runs list: the list first ---------- */
   .ledger-controls { display: flex; flex-wrap: wrap; gap: 8px; }

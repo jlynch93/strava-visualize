@@ -177,3 +177,6 @@
   :root[data-palette="studio"] .progress-tabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
   :root[data-palette="studio"] .today-strip { padding: 18px; }
 }
+
+/* Key runs is a heading over its own cards, not a card itself. */
+:root[data-palette="studio"] .key-runs { padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
