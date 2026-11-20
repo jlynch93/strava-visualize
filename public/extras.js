@@ -260,6 +260,7 @@ document.querySelector("#paletteButton")?.addEventListener("click", openPalette)
 document.body.insertAdjacentHTML("beforeend", `<dialog id="recapDialog" class="recap-dialog" aria-labelledby="recapTitle">
   <div class="recap-head"><h2 id="recapTitle">Your week</h2><button id="recapClose" class="modal-close" type="button" aria-label="Close">×</button></div>
   <fieldset id="recapStyles" class="recap-styles" hidden><legend class="visually-hidden">Image style</legend>${["year:The year", "distance:Distance", "speed:Speed", "consistency:Consistency", "habits:Habits"].map((item) => { const [value, label] = item.split(":"); return `<label><input type="radio" name="recapStyle" value="${value}"><span>${label}</span></label>`; }).join("")}</fieldset>
+  <div id="recapRunOptions" class="recap-run-options" hidden><label><input type="checkbox"> Show the route shape</label><small>Off by default: a route can show where you live or start from.</small></div>
   <img id="recapImage" alt="">
   <div class="recap-actions"><button id="recapShare" class="primary" type="button" hidden>Share</button><a id="recapDownload" class="ghost-action recap-download" download>Download image</a></div>
   <p class="recap-note">Made on this device. Nothing is uploaded.</p>
@@ -360,9 +361,11 @@ function showRecapCanvas(canvas, name, alt, title) {
   }, "image/png");
   if (!dialog.open) dialog.showModal();
 }
+document.querySelector("#recapRunOptions input").addEventListener("change", (event) => { if (runShareId) openRunShare(runShareId, event.target.checked); });
 document.querySelector("#recapStyles").addEventListener("change", (event) => { if (event.target.name === "recapStyle") openYearRecap(event.target.value); });
 function openRecap() {
   document.querySelector("#recapStyles").hidden = true;
+  document.querySelector("#recapRunOptions").hidden = true;
   const data = weekRecapData();
   showRecapCanvas(drawRecap(data), `runlore-week-${localDateValue(data.start)}.png`, `Weekly recap: ${displayDistance(miles(data.meters), 1)} over ${data.count} ${data.walking ? "walks" : "runs"}, ${formatDuration(data.seconds)} moving.`, "Your week");
 }
@@ -834,8 +837,211 @@ function openYearRecap(styleKey = yearStyle) {
   showRecapCanvas(canvas, `runlore-${data.year}-${yearStyle}.png`, `${data.year} in running, ${style.label.toLowerCase()} card: ${displayDistance(miles(data.meters), 0)} over ${data.runs} runs.${names ? ` Accolades: ${names}.` : ""}`, `Your ${data.year}`);
   const picker = document.querySelector("#recapStyles");
   picker.hidden = false;
+  document.querySelector("#recapRunOptions").hidden = true;
   picker.querySelectorAll("input").forEach((input) => { input.checked = input.value === yearStyle; });
 }
+
+/* ---------- 11. One run, in depth ---------- */
+
+const rawActivity = (id) => state.rawActivities.find((item) => String(normalizeActivity(item).id) === String(id)) || null;
+const routeOf = (id) => rawActivity(id)?.map?.summary_polyline || state.activityDetails?.get(String(id))?.map?.summary_polyline || "";
+
+// The runner's usual metres per heartbeat on easy runs in the six weeks before a run.
+function typicalPerBeat(run, model) {
+  const date = parseActivityDate(run);
+  const since = new Date(date - 42 * 86400000);
+  const values = model.runs.filter((item) => String(item.id) !== String(run.id) && ["easy", "long"].includes(model.types.get(String(item.id))?.group))
+    .filter((item) => { const when = parseActivityDate(item); return when < date && when >= since; })
+    .map(FitnessCore.metersPerBeat).filter((value) => value !== null).sort((a, b) => a - b);
+  return values.length >= 3 ? values[Math.floor(values.length / 2)] : null;
+}
+
+function runInsightsFor(run) {
+  const model = fitnessModel();
+  if (!model) return null;
+  const profile = model.profile?.usable ? model.profile : null;
+  const insights = FitnessCore.runInsights(run, { profile, typicalPerBeat: typicalPerBeat(run, model) });
+  const loadEntry = model.runLoads.find((item) => String(item.run.id) === String(run.id));
+  const date = parseActivityDate(run);
+  const weekLoads = model.runLoads.filter((item) => item.date < date && item.date >= new Date(date - 28 * 86400000)).reduce((sum, item) => sum + item.load, 0) / 4;
+  return { ...insights, load: loadEntry?.load ?? null, usualWeekLoad: weekLoads || null, type: model.types.get(String(run.id)) || runType(run) };
+}
+
+function runAnalysisSection(run) {
+  const insights = runInsightsFor(run);
+  if (!insights) return "";
+  const cards = [];
+  const card = (label, value, detail) => cards.push(`<div class="run-insight"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong><small>${escapeHtml(detail)}</small></div>`);
+  if (insights.load !== null) card("Training load", `${Math.round(insights.load)} points`, insights.usualWeekLoad ? `${insights.type.label} · ${Math.round(insights.load / insights.usualWeekLoad * 100)}% of your usual week` : insights.type.label);
+  if (insights.zone) card("Heart-rate zone", `Zone ${insights.zone.zone} · ${insights.zone.label}`, `${Math.round(insights.zone.reserve * 100)}% of heart-rate reserve${insights.percentOfMax ? ` · ${Math.round(insights.percentOfMax * 100)}% of max` : ""}`);
+  if (insights.metersPerBeat) {
+    const perBeat = preferences.units === "metric" ? `${insights.metersPerBeat.toFixed(2)} m` : `${(insights.metersPerBeat * 1.09361).toFixed(2)} yd`;
+    const easy = ["easy", "long"].includes(insights.type.group);
+    card("Efficiency", `${perBeat} per heartbeat`, insights.efficiencyChange === null ? "Climbing counted as extra distance" : easy ? `${insights.efficiencyChange >= 0 ? "+" : "−"}${Math.abs(insights.efficiencyChange * 100).toFixed(1)}% on your usual easy runs` : "Harder runs read higher; easy runs compare best");
+  }
+  if (insights.strideMeters) card("Stride", preferences.units === "metric" ? `${insights.strideMeters.toFixed(2)} m` : `${(insights.strideMeters * 3.28084).toFixed(1)} ft`, `${Math.round(insights.cadence)} steps a minute`);
+  if (insights.vo2) card("VO2 max from this run", insights.vo2.toFixed(1), "From pace against heart-rate reserve");
+  if (["quality", "race"].includes(insights.type.group) || insights.type.key === "race") {
+    const [fiveK, tenK, half, marathon] = insights.equivalents;
+    if (fiveK) card("Equal to", `${formatRaceTime(Math.round(fiveK.seconds))} for 5K`, `10K ${formatRaceTime(Math.round(tenK.seconds))} · half ${formatRaceTime(Math.round(half.seconds))} · marathon ${formatRaceTime(Math.round(marathon.seconds))}`);
+  }
+  if (!cards.length) return "";
+  return `<section class="run-analysis" aria-labelledby="runAnalysisTitle"><div class="run-analysis-head"><h3 id="runAnalysisTitle">What this run tells you</h3><button type="button" class="ghost-action share-run" data-action="share-run" data-run-id="${escapeHtml(String(run.id))}"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 15V3M7 8l5-5 5 5M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg><span>Share run</span></button></div><div class="run-insights">${cards.join("")}</div></section>`;
+}
+
+// Pacing, drift, grade-adjusted pace and best efforts once Strava's detail arrives.
+function pacingSection(activity) {
+  const metric = preferences.units === "metric";
+  const splits = (metric ? activity.splits_metric : activity.splits_standard) || activity.splits_metric || activity.splits_standard || [];
+  const analysis = FitnessCore.splitAnalysis(splits);
+  const efforts = (Array.isArray(activity.best_efforts) ? activity.best_efforts : []).filter((effort) => effort?.elapsed_time > 0);
+  if (!analysis && !efforts.length) return "";
+  const parts = [];
+  if (analysis) {
+    const split = (row) => formatPace(row.seconds / miles(row.meters));
+    const kindText = { negative: "Negative split", even: "Even split", positive: "Positive split" }[analysis.kind];
+    const cards = [
+      [`${kindText}`, analysis.kind === "even" ? "Within 1% each half" : `${Math.abs(analysis.change * 100).toFixed(1)}% ${analysis.change < 0 ? "faster" : "slower"} second half`],
+      ["Fastest split", `${unitLabel() === "km" ? "Km" : "Mile"} ${analysis.fastest.index + 1}: ${split(analysis.fastest)}`],
+      ["Slowest split", `${unitLabel() === "km" ? "Km" : "Mile"} ${analysis.slowest.index + 1}: ${split(analysis.slowest)}`],
+      ["Steadiness", `${(analysis.spread * 100).toFixed(1)}% pace variation`]
+    ];
+    if (analysis.decoupling !== null) cards.push([`${Math.abs(analysis.decoupling * 100).toFixed(1)}% heart-rate drift`, analysis.decoupling < 0.05 ? "Under 5%: a steady aerobic effort" : analysis.decoupling < 0.1 ? "Some drift: heat, hills or building fatigue" : "Large drift: this effort was costly"]);
+    if (analysis.gradeAdjustedPace) cards.push(["Grade-adjusted pace", `${formatPace(analysis.gradeAdjustedPace * 1609.344)} on the flat`]);
+    parts.push(`<div class="run-insights">${cards.map(([value, detail]) => `<div class="run-insight"><strong>${escapeHtml(value)}</strong><small>${escapeHtml(detail)}</small></div>`).join("")}</div>`);
+    // A bar per split: taller is faster.
+    const paces = analysis.rows.map((row) => row.seconds / row.meters);
+    const slowest = Math.max(...paces), fastest = Math.min(...paces);
+    const full = Math.max(...analysis.rows.map((row) => row.meters));
+    const label = (row, index) => row.meters < full * 0.9 ? (row.meters / unitMeters()).toFixed(1) : String(index + 1);
+    const bars = analysis.rows.map((row, index) => {
+      const share = slowest === fastest ? 0.8 : 0.3 + 0.7 * (slowest - paces[index]) / (slowest - fastest);
+      const partial = row.meters < full * 0.9;
+      return `<li style="--h:${Math.round(share * 100)}%" title="${escapeHtml(`${label(row, index)}: ${split(row)}${row.hr ? ` · ${Math.round(row.hr)} bpm` : ""}${partial ? " (partial)" : ""}`)}"><span class="split-bar${row === analysis.fastest ? " is-fastest" : ""}${partial ? " is-partial" : ""}"></span><small>${label(row, index)}</small></li>`;
+    }).join("");
+    parts.push(`<div class="split-chart-wrap"><span class="split-chart-label">Pace by ${metric ? "kilometre" : "mile"} · taller is faster</span><ol class="split-chart" aria-hidden="true">${bars}</ol></div>`);
+    // Every split, in the runner's units.
+    const rows = analysis.rows.map((row, index) => `<tr><th scope="row">${label(row, index)}</th><td>${split(row)}</td><td>${row.hr ? `${Math.round(row.hr)} bpm` : "–"}</td><td>${row.gradeSpeed ? formatPace(1609.344 / row.gradeSpeed) : "–"}</td><td>${row.climb ? (metric ? `${row.climb > 0 ? "+" : ""}${Math.round(row.climb)} m` : `${row.climb > 0 ? "+" : ""}${Math.round(feet(row.climb))} ft`) : "–"}</td></tr>`).join("");
+    parts.push(`<details class="split-table"><summary>All ${metric ? "kilometre" : "mile"} splits</summary><table><thead><tr><th scope="col">${metric ? "Km" : "Mile"}</th><th scope="col">Pace</th><th scope="col">Heart rate</th><th scope="col">Grade-adjusted</th><th scope="col">Elevation</th></tr></thead><tbody>${rows}</tbody></table></details>`);
+  }
+  if (efforts.length) {
+    const named = efforts.slice(0, 8).map((effort) => `<li${effort.pr_rank === 1 ? ' class="is-pr"' : ""}><span>${escapeHtml(effort.name)}</span><strong>${escapeHtml(formatRaceTime(effort.elapsed_time))}</strong>${effort.pr_rank ? `<b>${effort.pr_rank === 1 ? "PR" : `${effort.pr_rank === 2 ? "2nd" : "3rd"} best`}</b>` : ""}</li>`).join("");
+    parts.push(`<div class="best-efforts"><h4>Best efforts in this run</h4><ul>${named}</ul></div>`);
+  }
+  return `<section class="run-pacing" aria-labelledby="runPacingTitle"><h3 id="runPacingTitle">Pacing</h3>${parts.join("")}</section>`;
+}
+
+// The run as a story image.
+function drawRunCard(run, { showRoute = false } = {}) {
+  const insights = runInsightsFor(run) || {};
+  const detail = state.activityDetails?.get(String(run.id)) || null;
+  const metric = preferences.units === "metric";
+  const analysis = detail ? FitnessCore.splitAnalysis((metric ? detail.splits_metric : detail.splits_standard) || detail.splits_metric || []) : null;
+  const accents = { easy: "#5fd4c4", long: "#b9a4ff", quality: "#ff9b5e", race: "#ff8fc8" };
+  const accent = accents[insights.type?.group] || "#c8f04a";
+  const canvas = document.createElement("canvas");
+  const W = 1080, H = 1920; canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext("2d");
+  const font = (weight, size) => `${weight} ${size}px "SF Pro Display", "Inter", "Segoe UI", system-ui, sans-serif`;
+  const muted = "#9db4ad";
+  const background = ctx.createLinearGradient(0, 0, 0, H);
+  background.addColorStop(0, "#101a2e"); background.addColorStop(1, "#0d181c");
+  ctx.fillStyle = background; ctx.fillRect(0, 0, W, H);
+  const glow = ctx.createRadialGradient(W * 0.8, H * 0.1, 0, W * 0.8, H * 0.1, 820);
+  glow.addColorStop(0, `${accent}40`); glow.addColorStop(1, `${accent}00`);
+  ctx.fillStyle = glow; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = "#c8f04a"; ctx.beginPath(); ctx.arc(96, 104, 14, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = "#e8f1ec"; ctx.font = font(800, 40); ctx.fillText("runlore", 126, 118);
+  const date = parseActivityDate(run);
+  ctx.fillStyle = muted; ctx.font = font(600, 34); ctx.textAlign = "right"; ctx.fillText(date.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" }), W - 80, 118); ctx.textAlign = "left";
+  // Name: up to two lines.
+  ctx.fillStyle = accent; ctx.font = font(800, 72);
+  const words = String(run.name || "Run").split(/\s+/); const lines = [""];
+  words.forEach((word) => { const next = lines.at(-1) ? `${lines.at(-1)} ${word}` : word; if (ctx.measureText(next).width > W - 160 && lines.at(-1)) lines.push(word); else lines[lines.length - 1] = next; });
+  lines.slice(0, 2).forEach((line, index) => ctx.fillText(index === 1 && lines.length > 2 ? `${line}…` : line, 80, 250 + index * 84));
+  let y = 250 + Math.min(2, lines.length) * 84 + 30;
+  ctx.fillStyle = muted; ctx.font = font(700, 32); ctx.fillText(`${(insights.type?.label || "Run").toUpperCase()}${insights.zone ? ` · ZONE ${insights.zone.zone}` : ""}`, 80, y); y += 190;
+  const [value, unit] = displayDistance(miles(run.distance), 2).split(" ");
+  ctx.fillStyle = "#ffffff"; ctx.font = font(800, 180); ctx.fillText(value, 72, y);
+  const width = ctx.measureText(value).width; ctx.fillStyle = accent; ctx.font = font(800, 70); ctx.fillText(unit, 72 + width + 20, y);
+  y += 120;
+  const stats = [[formatDuration(run.moving_time), "time"], [formatPace(paceSeconds(run)), "pace"], [metric ? `${Math.round(run.total_elevation_gain || 0)} m` : `${Math.round(feet(run.total_elevation_gain)).toLocaleString()} ft`, "climbed"], [run.average_heartrate ? `${Math.round(run.average_heartrate)} bpm` : "–", "heart rate"]];
+  stats.forEach(([big, small], index) => { const x = 80 + (index % 2) * 470, row = y + Math.floor(index / 2) * 140; ctx.fillStyle = "#ffffff"; ctx.font = font(800, 60); ctx.fillText(big, x, row); ctx.fillStyle = muted; ctx.font = font(600, 30); ctx.fillText(small, x, row + 44); });
+  y += 300;
+  // Middle: the route (opt-in), or pace by split, or nothing.
+  const box = { x: 80, y, w: W - 160, h: 420 };
+  const points = showRoute ? FitnessCore.decodePolyline(routeOf(run.id)) : [];
+  if (points.length > 1) {
+    const lats = points.map(([lat]) => lat), lngs = points.map(([, lng]) => lng);
+    const midLat = (Math.min(...lats) + Math.max(...lats)) / 2 * Math.PI / 180;
+    const xs = lngs.map((lng) => lng * Math.cos(midLat));
+    const spanX = Math.max(...xs) - Math.min(...xs) || 1e-6, spanY = Math.max(...lats) - Math.min(...lats) || 1e-6;
+    const scale = Math.min(box.w / spanX, box.h / spanY) * 0.92;
+    const ox = box.x + (box.w - spanX * scale) / 2, oy = box.y + (box.h - spanY * scale) / 2;
+    ctx.strokeStyle = accent; ctx.lineWidth = 9; ctx.lineJoin = "round"; ctx.lineCap = "round"; ctx.shadowColor = `${accent}99`; ctx.shadowBlur = 18;
+    ctx.beginPath();
+    points.forEach(([lat], index) => { const px = ox + (xs[index] - Math.min(...xs)) * scale, py = oy + (Math.max(...lats) - lat) * scale; if (index) ctx.lineTo(px, py); else ctx.moveTo(px, py); });
+    ctx.stroke(); ctx.shadowBlur = 0;
+  } else if (analysis) {
+    ctx.fillStyle = muted; ctx.font = font(700, 26); ctx.fillText(`PACE BY ${metric ? "KILOMETRE" : "MILE"} · TALLER IS FASTER`, 80, box.y + 10);
+    const paces = analysis.rows.map((row) => row.seconds / row.meters); const slow = Math.max(...paces), fast = Math.min(...paces);
+    const step = box.w / analysis.rows.length, barWidth = step * 0.7, base = box.y + box.h - 40;
+    const full = Math.max(...analysis.rows.map((row) => row.meters));
+    analysis.rows.forEach((row, index) => {
+      const share = slow === fast ? 0.8 : 0.3 + 0.7 * (slow - paces[index]) / (slow - fast);
+      const height = (box.h - 110) * share;
+      ctx.fillStyle = row === analysis.fastest ? accent : row.meters < full * 0.9 ? `${accent}44` : `${accent}99`;
+      ctx.beginPath(); ctx.roundRect(box.x + index * step, base - height, barWidth, height, Math.min(10, barWidth / 3)); ctx.fill();
+      if (analysis.rows.length <= 30 && (analysis.rows.length <= 15 || index % 2 === 0)) { ctx.fillStyle = muted; ctx.font = font(700, 24); ctx.textAlign = "center"; ctx.fillText(String(index + 1), box.x + index * step + barWidth / 2, base + 34); ctx.textAlign = "left"; }
+    });
+  } else box.h = 0;
+  y = box.y + (box.h ? box.h + 60 : 20);
+  // Highlights.
+  const highlights = [];
+  const note = runNote(run.id);
+  const records = currentRecords().filter((record) => record.run && String(record.run.id) === String(run.id));
+  records.forEach((record) => highlights.push({ title: record.label, detail: "All-time record" }));
+  (detail?.best_efforts || []).filter((effort) => effort.pr_rank === 1).slice(0, 2).forEach((effort) => highlights.push({ title: `${effort.name} PR`, detail: formatRaceTime(effort.elapsed_time) }));
+  if (analysis && analysis.kind === "negative") highlights.push({ title: "Negative split", detail: `${Math.abs(analysis.change * 100).toFixed(1)}% faster second half` });
+  if (insights.load !== null && insights.load !== undefined) highlights.push({ title: `${Math.round(insights.load)} load points`, detail: insights.usualWeekLoad ? `${Math.round(insights.load / insights.usualWeekLoad * 100)}% of a usual week` : "Training load" });
+  if (insights.vo2) highlights.push({ title: `VO2 max ${insights.vo2.toFixed(1)}`, detail: "Estimated from this run" });
+  if (insights.efficiencyChange !== null && insights.efficiencyChange !== undefined && insights.efficiencyChange > 0.02 && ["easy", "long"].includes(insights.type?.group)) highlights.push({ title: `+${(insights.efficiencyChange * 100).toFixed(0)}% efficiency`, detail: "Against your usual easy runs" });
+  if (["quality", "race"].includes(insights.type?.group) && insights.equivalents?.[0]) highlights.push({ title: `Worth a ${formatRaceTime(Math.round(insights.equivalents[0].seconds))} 5K`, detail: "Equivalent effort" });
+  if (note?.rpe) highlights.push({ title: `Felt ${note.rpe}/10`, detail: RPE_WORDS[note.rpe] });
+  if (analysis?.decoupling !== null && analysis?.decoupling !== undefined && analysis.decoupling < 0.05) highlights.push({ title: "Steady heart rate", detail: `${(analysis.decoupling * 100).toFixed(1)}% drift` });
+  const columnWidth = (W - 160 - 24) / 2, rowHeight = 108, rowGap = 14;
+  const rows = Math.max(0, Math.floor((H - 30 - y - 40 + rowGap) / (rowHeight + rowGap)));
+  const shown = highlights.slice(0, rows * 2);
+  if (shown.length) {
+    ctx.fillStyle = muted; ctx.font = font(700, 30); ctx.fillText("HIGHLIGHTS", 80, y);
+    y += 24;
+    shown.forEach((item, index) => {
+      const x = 80 + (index % 2) * (columnWidth + 24), top = y + Math.floor(index / 2) * (rowHeight + rowGap);
+      ctx.fillStyle = "rgba(255, 255, 255, 0.06)"; ctx.strokeStyle = `${accent}55`; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.roundRect(x, top, columnWidth, rowHeight, 18); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = accent; ctx.beginPath(); ctx.arc(x + 46, top + rowHeight / 2, 24, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = "#0d181c"; ctx.font = font(800, 28); ctx.textAlign = "center"; ctx.fillText("★", x + 46, top + rowHeight / 2 + 10); ctx.textAlign = "left";
+      ctx.fillStyle = "#ffffff"; ctx.font = font(800, 32); ctx.fillText(item.title.slice(0, 26), x + 88, top + 48);
+      ctx.fillStyle = muted; ctx.font = font(600, 24); ctx.fillText(String(item.detail).slice(0, 34), x + 88, top + 82);
+    });
+  }
+  return { canvas, highlights: shown, hasRoute: points.length > 1 };
+}
+
+let runShareId = null;
+function openRunShare(runId, showRoute = false) {
+  const run = state.filteredRuns.find((candidate) => String(candidate.id) === String(runId)) || state.rawActivities.map(normalizeActivity).find((candidate) => String(candidate.id) === String(runId));
+  if (!run) return;
+  runShareId = String(run.id);
+  const { canvas, highlights } = drawRunCard(run, { showRoute });
+  document.querySelector("#recapStyles").hidden = true;
+  const options = document.querySelector("#recapRunOptions");
+  options.hidden = !routeOf(run.id);
+  options.querySelector("input").checked = showRoute;
+  const slug = String(run.name || "run").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "run";
+  showRecapCanvas(canvas, `runlore-${localDateValue(parseActivityDate(run))}-${slug}.png`, `${run.name}: ${displayDistance(miles(run.distance), 2)} in ${formatDuration(run.moving_time)} at ${formatPace(paceSeconds(run))}.${highlights.length ? ` Highlights: ${highlights.map((item) => item.title).join(", ")}.` : ""}`, "Share this run");
+}
+document.addEventListener("click", (event) => { const button = event.target.closest?.("[data-action='share-run']"); if (button) openRunShare(button.dataset.runId); });
 
 /* ---------- Hooks into the existing renderers ---------- */
 
@@ -866,6 +1072,17 @@ showWorkoutModal = function (runId, trigger) {
   const run = state.filteredRuns.find((candidate) => String(candidate.id) === String(runId));
   const body = els.workoutModalContent.querySelector(".workout-body");
   if (run && body && !body.querySelector(".run-feel")) body.insertAdjacentHTML("afterbegin", feelSection(run));
+  if (run && body && !body.querySelector(".run-analysis")) body.querySelector(".run-feel")?.insertAdjacentHTML("afterend", runAnalysisSection(run));
+};
+const baseHydrateRunDetail = hydrateRunDetail;
+hydrateRunDetail = async function (run, session) {
+  await baseHydrateRunDetail(run, session);
+  const activity = state.activityDetails?.get(String(run.id));
+  const root = document.querySelector("#enrichedRun");
+  if (!activity || !root || session !== state.modalSession || root.querySelector(".run-pacing")) return;
+  const pacing = pacingSection(activity);
+  // Our pacing view (with its own splits table in the runner's units) replaces the plain table.
+  if (pacing) root.innerHTML = pacing;
 };
 const baseRenderTable = renderTable;
 renderTable = function (...args) {

@@ -496,6 +496,105 @@
     return splits;
   }
 
+  /* ---------- One run, in depth ---------- */
+
+  // Heart-rate zone from the share of heart-rate reserve (Karvonen).
+  const HR_ZONES = [
+    { zone: 1, label: "Recovery", below: 0.6 },
+    { zone: 2, label: "Easy aerobic", below: 0.7 },
+    { zone: 3, label: "Steady", below: 0.8 },
+    { zone: 4, label: "Threshold", below: 0.9 },
+    { zone: 5, label: "Max effort", below: Infinity }
+  ];
+  function heartRateZone(avgHr, profile) {
+    const reserve = heartRateReserve(avgHr, profile);
+    if (reserve === null) return null;
+    return { ...HR_ZONES.find((item) => reserve < item.below), reserve };
+  }
+
+  // What can be worked out from one run's summary: zone, efficiency, stride,
+  // VO2 max and race equivalents. `typicalPerBeat` is the runner's usual
+  // metres per heartbeat on easy runs, for comparison.
+  function runInsights(run, { profile = null, typicalPerBeat = null } = {}) {
+    const meters = Number(run.distance) || 0, seconds = Number(run.moving_time) || 0;
+    const elapsed = Number(run.elapsed_time) || seconds;
+    const rawCadence = Number(run.average_cadence) || 0;
+    // Strava reports running cadence per leg (about 85); double it to steps per minute.
+    const cadence = rawCadence && rawCadence < 120 ? rawCadence * 2 : rawCadence;
+    const speed = seconds ? meters / seconds : 0;
+    const perBeat = metersPerBeat(run);
+    const vdot = runVdot(run);
+    return {
+      zone: run.average_heartrate ? heartRateZone(run.average_heartrate, profile) : null,
+      percentOfMax: run.average_heartrate && profile?.maxHr ? run.average_heartrate / profile.maxHr : null,
+      metersPerBeat: perBeat,
+      efficiencyChange: perBeat && typicalPerBeat ? perBeat / typicalPerBeat - 1 : null,
+      cadence: cadence || null,
+      strideMeters: cadence && speed ? speed * 60 / cadence : null,
+      vo2: profile ? runVo2Estimate(run, profile) : null,
+      vdot,
+      equivalents: vdot ? [5000, 10000, 21097.5, 42195].map((distance) => ({ meters: distance, seconds: predictRaceSeconds(vdot, distance) })) : [],
+      movingShare: elapsed ? seconds / elapsed : null,
+      climbPerKm: meters ? (Number(run.total_elevation_gain) || 0) / (meters / 1000) : 0
+    };
+  }
+
+  // Pacing from recorded splits (Strava's splits_metric or splits_standard):
+  // first half against second, fastest and slowest, steadiness, heart-rate
+  // drift (aerobic decoupling) and grade-adjusted pace where provided.
+  function splitAnalysis(splits) {
+    const rows = (Array.isArray(splits) ? splits : []).map((split, index) => ({
+      index, meters: Number(split.distance) || 0, seconds: Number(split.moving_time) || Number(split.elapsed_time) || 0,
+      hr: Number(split.average_heartrate) || null, gradeSpeed: Number(split.average_grade_adjusted_speed) || null,
+      climb: Number(split.elevation_difference) || 0
+    })).filter((row) => row.meters > 0 && row.seconds > 0);
+    if (rows.length < 2) return null;
+    const full = Math.max(...rows.map((row) => row.meters));
+    const whole = rows.filter((row) => row.meters >= full * 0.9);
+    if (whole.length < 2) return null;
+    const pace = (list) => list.reduce((sum, row) => sum + row.seconds, 0) / list.reduce((sum, row) => sum + row.meters, 0);
+    const middle = Math.floor(whole.length / 2);
+    const first = whole.slice(0, middle), second = whole.slice(whole.length - middle);
+    const firstPace = pace(first), secondPace = pace(second);
+    const change = secondPace / firstPace - 1;
+    const paces = whole.map((row) => row.seconds / row.meters);
+    const mean = paces.reduce((sum, value) => sum + value, 0) / paces.length;
+    const spread = Math.sqrt(paces.reduce((sum, value) => sum + (value - mean) ** 2, 0) / paces.length) / mean;
+    const byPace = [...whole].sort((a, b) => a.seconds / a.meters - b.seconds / b.meters);
+    // Decoupling: how much speed per heartbeat fell from the first half to the second.
+    const withHr = whole.every((row) => row.hr);
+    const efficiency = (list) => list.reduce((sum, row) => sum + row.meters, 0) / list.reduce((sum, row) => sum + row.seconds * row.hr, 0);
+    const decoupling = withHr ? 1 - efficiency(second) / efficiency(first) : null;
+    const graded = rows.every((row) => row.gradeSpeed) ? rows.reduce((sum, row) => sum + row.meters / row.gradeSpeed, 0) / rows.reduce((sum, row) => sum + row.meters, 0) : null;
+    return {
+      rows, firstPace, secondPace, change,
+      kind: change < -0.01 ? "negative" : change > 0.01 ? "positive" : "even",
+      fastest: byPace[0], slowest: byPace.at(-1), spread, decoupling, gradeAdjustedPace: graded
+    };
+  }
+
+  // Google's encoded polyline format (Strava's map.summary_polyline).
+  function decodePolyline(encoded) {
+    const points = [];
+    let index = 0, lat = 0, lng = 0;
+    const text = String(encoded || "");
+    while (index < text.length) {
+      for (const axis of [0, 1]) {
+        let result = 0, shift = 0, byte;
+        do {
+          if (index >= text.length) return points;
+          byte = text.charCodeAt(index++) - 63;
+          result |= (byte & 0x1f) << shift;
+          shift += 5;
+        } while (byte >= 0x20);
+        const delta = result & 1 ? ~(result >> 1) : result >> 1;
+        if (axis === 0) lat += delta; else lng += delta;
+      }
+      points.push([lat / 1e5, lng / 1e5]);
+    }
+    return points;
+  }
+
   /* ---------- Yearly goal ---------- */
 
   // Where a calendar year's distance is heading at the pace so far, and what
@@ -746,7 +845,7 @@
     estimateMaxHr, heartRateReserve, runVo2Estimate, runVdot, percentile, vo2Series,
     runLoad, dailyLoads, loadSeries, workloadRatios, formZone, readiness, dayKey, finite,
     RUN_TYPES, classifyRunType, isWalk, WALK_TYPES, classifyWalkType,
-    trainingPhase, recoveryDays, taperDays, projectRaceDay, TAPER_LOAD, RACE_WEEK_LOAD, ageGroup, projectPlace, personalRecords, metersPerBeat, efficiencyTrend, pacingPlan, weekKey, yearProjection, intensityBalance, shoeMileage, yearHighlights, TIME_OF_DAY
+    trainingPhase, recoveryDays, taperDays, projectRaceDay, TAPER_LOAD, RACE_WEEK_LOAD, ageGroup, projectPlace, personalRecords, metersPerBeat, efficiencyTrend, pacingPlan, weekKey, yearProjection, intensityBalance, shoeMileage, yearHighlights, TIME_OF_DAY, HR_ZONES, heartRateZone, runInsights, splitAnalysis, decodePolyline
   };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.FitnessCore = api;

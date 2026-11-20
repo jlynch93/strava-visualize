@@ -379,3 +379,42 @@ test("year highlights count long runs, streaks, consistency and early starts", (
   assert.equal(facts.knownTimes, 9);
   assert.equal(facts.mostRunsInWeek, 3);
 });
+
+test("one run's insights: zone, efficiency, stride, VO2 max and race equivalents", () => {
+  const profile = { maxHr: 190, restHr: 50 };
+  const run = { distance: 10000, moving_time: 2700, elapsed_time: 3000, average_heartrate: 162, average_cadence: 88, total_elevation_gain: 50 };
+  const insights = fit.runInsights(run, { profile, typicalPerBeat: 1.3 });
+  // 162 bpm is 80% of reserve: threshold.
+  assert.equal(insights.zone.zone, 4);
+  assert.equal(insights.zone.label, "Threshold");
+  // Per-leg cadence 88 doubles to 176 spm; 10 km in 45 min is 3.70 m/s, 1.26 m a step.
+  assert.equal(insights.cadence, 176);
+  assert.equal(insights.strideMeters.toFixed(2), "1.26");
+  assert.equal(insights.movingShare, 0.9);
+  assert.ok(insights.efficiencyChange !== null);
+  assert.ok(insights.vdot > 40 && insights.vdot < 50, `vdot ${insights.vdot}`);
+  // The 10K equivalent of a 45:00 10K is about 45:00.
+  assert.ok(Math.abs(insights.equivalents[1].seconds - 2700) < 60);
+  assert.equal(fit.runInsights({ distance: 5000, moving_time: 1500 }).zone, null);
+});
+
+test("split analysis finds negative splits, drift and grade-adjusted pace", () => {
+  const km = (seconds, hr, gradeSpeed) => ({ distance: 1000, moving_time: seconds, average_heartrate: hr, average_grade_adjusted_speed: gradeSpeed });
+  const splits = [km(300, 150, 3.4), km(298, 152, 3.4), km(296, 155, 3.4), km(290, 160, 3.5), km(288, 163, 3.5), km(286, 166, 3.5), { distance: 300, moving_time: 80, average_heartrate: 168, average_grade_adjusted_speed: 3.8 }];
+  const result = fit.splitAnalysis(splits);
+  assert.equal(result.kind, "negative");
+  assert.ok(result.change < -0.01);
+  assert.equal(result.fastest.index, 5);
+  assert.equal(result.slowest.index, 0);
+  // Faster but with heart rate rising more: some decoupling.
+  assert.ok(result.decoupling > 0 && result.decoupling < 0.1, `decoupling ${result.decoupling}`);
+  assert.ok(result.gradeAdjustedPace > 0.27 && result.gradeAdjustedPace < 0.3);
+  assert.equal(fit.splitAnalysis([km(300)]), null);
+  assert.equal(fit.splitAnalysis([km(300), km(300)]).kind, "even");
+});
+
+test("Strava's encoded polylines decode to points", () => {
+  // Google's documented example.
+  assert.deepEqual(fit.decodePolyline("_p~iF~ps|U_ulLnnqC_mqNvxq`@"), [[38.5, -120.2], [40.7, -120.95], [43.252, -126.453]]);
+  assert.deepEqual(fit.decodePolyline(""), []);
+});

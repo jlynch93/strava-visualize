@@ -1180,6 +1180,8 @@ function attachTooltip(element, title, rows, { keyboard = true } = {}) {
   if (keyboard) {
     element.setAttribute("tabindex", "0");
     element.setAttribute("aria-describedby", "chartTooltip");
+    // A label needs a role to be allowed: chart marks read as images.
+    if (!element.getAttribute("role")) element.setAttribute("role", "img");
     element.setAttribute("aria-label", `${title}. ${cleanRows.map((row) => `${row.label}: ${row.value}`).join(". ")}`);
   } else {
     element.setAttribute("aria-hidden", "true");

@@ -380,6 +380,26 @@ Each tab leads with what you act on today:
   disclosure.
 - **Plan**: once a goal or saved plan exists, the draft comes before the setup.
 
+### One run, in depth
+
+Each run's detail opens with **What this run tells you**, worked out from the
+run's own numbers (any source): training load (and its share of a usual week),
+heart-rate zone from heart-rate reserve, distance per heartbeat against your
+usual easy runs, stride length from pace and cadence, a VO2 max estimate, and
+for quality sessions and races what the effort is worth over 5K, 10K, half and
+marathon. For Strava runs, the detail adds **Pacing** from the recorded splits
+in your units: negative, even or positive split, fastest and slowest split,
+pace variation, heart-rate drift (aerobic decoupling), grade-adjusted pace, a
+pace bar per split (the partial last split is faded) with every split in a
+table, and Strava's best efforts with PR flags. The calculations are
+`FitnessCore.runInsights`, `splitAnalysis` and `decodePolyline`.
+
+**Share run** draws a 1080×1920 image of the run: name, date, type and zone,
+distance, time, pace, climb and heart rate, pace by split (when Strava's detail
+is loaded), and highlights such as records, PRs, a negative split, load, VO2
+max, efficiency, the race equivalent and how it felt. The route shape is
+opt-in and off by default, because a route can show where you live.
+
 ## GitHub workflows
 
 `Validate dashboard` runs on pushes to `main` and `codex/**` using a trusted
