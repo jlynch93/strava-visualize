@@ -14,8 +14,10 @@ const MAX_VALUE_BYTES = 256_000;
 
 export async function handleGetState(env, request) {
   const userId = await requireUser(env, request);
+  // Optional ?key= to fetch a single setting.
+  const only = new URL(request.url).searchParams.get("key");
   const { results } = await requireDb(env)
-    .prepare("SELECT key, value, updated_at FROM user_state WHERE user_id = ?")
+    .prepare(`SELECT key, value, updated_at FROM user_state WHERE user_id = ?${only ? ` AND key = '${only}'` : ""}`)
     .bind(userId)
     .all();
   const state = {};

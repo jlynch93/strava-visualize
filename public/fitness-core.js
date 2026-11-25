@@ -449,7 +449,7 @@
   function metersPerBeat(run) {
     if (!(run.average_heartrate > 60) || !(run.moving_time >= 20 * 60) || !(run.distance > 0)) return null;
     const effective = run.distance + 6 * (run.total_elevation_gain || 0);
-    return effective / (run.moving_time / 60 * run.average_heartrate);
+    return effective / (run.moving_time * run.average_heartrate);
   }
 
   // Weekly medians of metres per beat, plus the change over the last eight

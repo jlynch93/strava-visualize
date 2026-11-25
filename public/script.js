@@ -388,7 +388,7 @@ function normalizeActivity(activity) {
     || normalizeLatLng([activity.start_latitude ?? activity["Start Latitude"], activity.start_longitude ?? activity["Start Longitude"]]);
   return {
     // Strava's id_str is exact even when id is a 64-bit number; ids are strings throughout.
-    id: String(first(activity.id_str, activity.id, activity["Activity ID"]) ?? crypto.randomUUID()),
+    id: Number(first(activity.id_str, activity.id, activity["Activity ID"])) || crypto.randomUUID(),
     name: String(first(activity.name, activity["Activity Name"]) || "Untitled run"),
     sport_type: String(first(activity.sport_type, activity.type, activity["Activity Type"]) || "Run"),
     start_date: startDate,
@@ -3332,7 +3332,7 @@ function renderRaceResults(races) {
   const list = document.querySelector("#raceResults");
   const day = (iso) => new Date(`${iso}T00:00:00`).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" });
   list.innerHTML = races.map((race, raceIndex) => `<li class="race-result">
-    <div class="race-result-head"><strong>${escapeHtml(race.name)}</strong><small>${escapeHtml(day(race.date))}${race.city || race.state ? ` · ${escapeHtml([race.city, race.state].filter(Boolean).join(", "))}` : ""}${race.source ? ` · <span class="race-source">${escapeHtml(race.source === "ACTIVE" ? "ACTIVE.com" : race.source)}</span>` : ""}${race.registrationClosed ? ' · <span class="race-closed">registration closed</span>' : ""}</small></div>
+    <div class="race-result-head"><strong>${race.name}</strong><small>${escapeHtml(day(race.date))}${race.city || race.state ? ` · ${escapeHtml([race.city, race.state].filter(Boolean).join(", "))}` : ""}${race.source ? ` · <span class="race-source">${escapeHtml(race.source === "ACTIVE" ? "ACTIVE.com" : race.source)}</span>` : ""}${race.registrationClosed ? ' · <span class="race-closed">registration closed</span>' : ""}</small></div>
     <div class="race-result-events">${race.events.map((event, eventIndex) => `<button type="button" class="race-event" data-race="${raceIndex}" data-event="${eventIndex}" aria-label="Use ${escapeHtml(race.name)}, ${escapeHtml(event.name)} on ${escapeHtml(day(event.date))}">${escapeHtml(event.distance === "Other" ? event.name : event.distance)}${event.walk ? " · walk" : ""}${event.date !== race.date ? ` · ${escapeHtml(new Date(`${event.date}T00:00:00`).toLocaleDateString(undefined, { month: "short", day: "numeric" }))}` : ""}</button>`).join("")}</div>
   </li>`).join("");
 }
