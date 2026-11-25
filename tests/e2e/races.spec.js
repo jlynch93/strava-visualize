@@ -328,3 +328,28 @@ test("races from ACTIVE.com show their source, keep their link and skip the plac
   await nav(page, "Fitness");
   await expect(page.locator(".goal-race").first()).toContainText("ACTIVE.com races do not have here");
 });
+
+// Race names and cities come from RunSignup and ACTIVE.com, so they are
+// untrusted: markup in them must show as text, never become elements or run.
+test("markup in a race name or city from search shows as text and never runs", async ({ page }) => {
+  const name = '<img src=x onerror="window.__xss=1">Evil 5K';
+  await page.route("**/api/races/search?*", (route) => route.fulfill({ json: { source: "RunSignup", races: [
+    { id: "66", source: "RunSignup", name, date: iso(30), city: "<b>Bold</b>town", state: "OH", url: "https://runsignup.com/Race/OH/Boldtown/Evil5K", events: [{ id: "a", name: "<i>5K</i>", date: iso(30), km: 5, distance: "Other", walk: false }] }
+  ] } }));
+  await loadDemo(page);
+  await nav(page, "Plan");
+  await page.locator("#racesDisclosure > summary").click();
+  await page.fill("#raceSearch", "evil");
+  const result = page.locator(".race-result");
+  await expect(result).toHaveCount(1);
+  await expect(result).toContainText(name);
+  await expect(result).toContainText("<b>Bold</b>town");
+  await expect(result.locator(".race-event")).toHaveText("<i>5K</i>");
+  await expect(result.locator("img, b, i")).toHaveCount(0);
+  await result.locator(".race-event").click();
+  await page.locator("#raceForm button[type=submit]").click();
+  const saved = page.locator("#raceList .race-item");
+  await expect(saved).toContainText("Evil 5K");
+  await expect(saved.locator("img")).toHaveCount(0);
+  expect(await page.evaluate(() => window.__xss)).toBeUndefined();
+});
