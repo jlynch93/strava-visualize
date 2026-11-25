@@ -1,0 +1,99 @@
+# Lets open-nitpick answer on pull requests (https://github.com/jdziat/open-nitpick):
+# - a reply under one of its findings: it reads the reply and resolves the
+#   thread if the reason holds;
+# - "@open-nitpick <question>": answered in the same thread;
+# - "@open-nitpick review" / "restart-review" / "resolve".
+# Same model and runner as the AI review (nitpick.yml).
+name: AI review replies
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+
+permissions:
+  # contents: write only so "resolve" can resolve a thread (see nitpick.yml).
+  contents: write
+  pull-requests: write
+  issues: write
+
+concurrency:
+  # One run per pull request at a time, with replies kept apart from mentions
+  # so people talking to each other cannot cancel a pending question.
+  group: >-
+    nitpick-respond-${{
+      github.event.issue.number || github.event.pull_request.number
+    }}-${{
+      contains(github.event.comment.body, '@open-nitpick') && 'mention' || 'reply'
+    }}
+
+jobs:
+  respond:
+    runs-on: ${{ vars.RUNS_ON || 'self-hosted' }}
+    timeout-minutes: ${{ vars.NITPICK_PROVIDER == 'ollama' && 30 || 10 }}
+    # Comment events run here with this repository's secrets and on the
+    # self-hosted machine whoever wrote the comment, so only the owner and
+    # collaborators can start one: anyone else could otherwise spend the model
+    # and the runner one comment at a time. A reply starts a run even when it
+    # is not to the reviewer; nitpick then stops before calling the model.
+    # "@open-nitpick fix" needs a separate workflow with a fix model, so it is
+    # left out.
+    if: >-
+      (
+        contains(github.event.comment.body, '@open-nitpick') ||
+        github.event.comment.in_reply_to_id != null
+      ) &&
+      github.event.comment.user.type != 'Bot' &&
+      !contains(github.event.comment.body, '@open-nitpick fix') &&
+      (github.event_name == 'pull_request_review_comment' || github.event.issue.pull_request != null) &&
+      contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association)
+    env:
+      # A job's if cannot read secrets; a step's if can read env.
+      HAS_KEY: ${{ secrets.NITPICK_API_KEY != '' || vars.NITPICK_PROVIDER == 'ollama' }}
+    steps:
+      - name: No model key
+        if: env.HAS_KEY != 'true'
+        run: echo "::notice::AI review replies skipped. Set NITPICK_PROVIDER=ollama (and NITPICK_MODEL) or add the NITPICK_API_KEY secret to turn it on."
+
+      # A comment event checks out the default branch, never the pull
+      # request's code; nitpick reads the pull request through the API.
+      - uses: actions/checkout@v4
+        if: env.HAS_KEY == 'true'
+        with:
+          fetch-depth: 0
+
+      # Runner-side config for Ollama, in a file outside the checkout that
+      # nitpick trusts (NITPICK_USER_CONFIG). Two reasons it lives here:
+      # - nitpick refuses a private or plain-HTTP base_url from the repository's
+      #   own .nitpick.yaml, since a pull request could edit it;
+      # - small local hardware needs small requests: only the changed lines
+      #   (not whole files, which for public/script.js is ~55k tokens), no
+      #   imported definitions, and one file per call within ~6k tokens, one
+      #   call at a time (a small machine only queues parallel ones), so a
+      #   request fits an 8k context and answers in minutes.
+      - name: Ollama settings
+        if: env.HAS_KEY == 'true' && vars.NITPICK_PROVIDER == 'ollama'
+        env:
+          OLLAMA_BASE_URL: ${{ vars.OLLAMA_BASE_URL }}
+        run: |
+          file="$RUNNER_TEMP/nitpick-runner.yaml"
+          {
+            if [ -n "$OLLAMA_BASE_URL" ]; then
+              printf 'models:\n  default:\n    base_url: "%s"\n    allow_private_endpoint: true\n    timeout: 15m\n' "$OLLAMA_BASE_URL"
+            else
+              printf 'models:\n  default:\n    timeout: 15m\n'
+            fi
+            printf 'review:\n  include_full_files: false\n  related_context: false\n  max_files_per_request: 1\n  token_budget_per_request: 6000\n  concurrency: 1\n'
+          } > "$file"
+          cat "$file"
+          echo "NITPICK_USER_CONFIG=$file" >> "$GITHUB_ENV"
+
+      - uses: jdziat/open-nitpick@a32fa26e7231335da3179daf91a72b100e5e9bdb # v2.8.0
+        if: env.HAS_KEY == 'true'
+        with:
+          version: v2.8.0
+          command: respond
+          provider: ${{ vars.NITPICK_PROVIDER || 'openrouter' }}
+          model: ${{ vars.NITPICK_MODEL || 'z-ai/glm-5.3-flash' }}
+          api-key: ${{ secrets.NITPICK_API_KEY }}

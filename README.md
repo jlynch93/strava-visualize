@@ -457,20 +457,36 @@ variables (Settings → Secrets and variables → Actions → Variables):
   different machine from the runner, set `OLLAMA_BASE_URL` too, e.g.
   `http://192.168.1.20:11434/v1`. For small hardware the workflow sends only
   the changed lines, one file and one request at a time (about 6k tokens), and
-  allows up to an hour. (Not `fast-review`: in v2.8.0 it ignores the runner's
-  model choice and falls back to `.nitpick.yaml`'s OpenRouter model.) Pick the model by the
-  Ollama machine's free memory: `qwen2.5-coder:1.5b` (~2 GB), `qwen2.5-coder:3b`
-  (~3 GB, the best fit for small machines), `qwen2.5-coder:7b` (~6 GB). Smaller
-  models miss more and flag more that isn't wrong. Give Ollama an 8k context
-  (`OLLAMA_CONTEXT_LENGTH=8192` where Ollama runs); a smaller default cuts the
-  request short.
-- A hosted provider: the `NITPICK_API_KEY` secret (OpenRouter by default,
-  roughly two cents a review).
+  allows up to an hour. Give Ollama an 8k context (`OLLAMA_CONTEXT_LENGTH=8192`
+  where Ollama runs); a smaller default cuts the request short. Model size
+  matters more than anything else: on a test pull request with five planted
+  bugs (SQL injection, a token in a log, unescaped HTML, a 64-bit id as a
+  number, seconds used as minutes), `qwen2.5-coder:3b` found none,
+  `qwen2.5-coder:7b` pointed at four but misexplained two, and
+  `qwen3-coder:30b` found all five.
+- A hosted provider: the `NITPICK_API_KEY` secret (OpenRouter's
+  `z-ai/glm-5.3-flash` unless the variables say otherwise, well under a cent a
+  review).
 
-With neither, the job is skipped with a notice. What it checks for in this
-codebase (private data, escaping, D1 parameters, 64-bit ids, units) is in
+`.nitpick.yaml` deliberately names no model: the workflows pass the variables
+as `LLM_PROVIDER`/`LLM_MODEL`, which nitpick uses only when the file names none,
+so every command uses the same model. With neither a key nor Ollama, the jobs
+are skipped with a notice. What the reviewer checks for in this codebase
+(private data, escaping, D1 parameters, 64-bit ids, units) is in
 `.nitpick.yaml` under `instructions`; preview the exact prompt without spending
-anything with `nitpick explain-config -path src/races.js`.
+anything with `LLM_PROVIDER=ollama LLM_MODEL=<model> nitpick explain-config -path src/races.js`,
+and review uncommitted changes locally with
+`LLM_PROVIDER=ollama LLM_MODEL=<model> nitpick review`.
+
+`AI review replies` lets you talk to the reviewer on a pull request. Reply under
+one of its findings to explain or disagree, and it resolves the thread if the
+reason holds. `@open-nitpick <question>` asks about the change,
+`@open-nitpick review` and `@open-nitpick restart-review` review again, and
+`@open-nitpick resolve` closes a thread. Only the owner and collaborators can
+start it, it never runs pull request code, and it uses the same model and
+runner as the review. The review can also resolve its own findings once the
+code they point at is fixed, which is why both workflows have
+`contents: write`: GitHub refuses to resolve a review thread without it.
 
 ### Self-hosted runner
 
