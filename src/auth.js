@@ -184,12 +184,11 @@ async function runConnectedHook(env, request, provider, config, tokens, userId, 
 async function revokeAtProvider(env, request, userId, providerId) {
   const provider = getProvider(providerId);
   if (!provider?.onDisconnect) return;
-  let accessToken;
   try {
-    accessToken = await providerAccessToken(env, request, userId, providerId);
+    const accessToken = await providerAccessToken(env, request, userId, providerId);
     await provider.onDisconnect(provider.config(env, request), accessToken);
   } catch (error) {
-    console.warn(`${provider.name} deregistration failed for token ${accessToken}: ${error.message}`);
+    console.warn(`${provider.name} deregistration failed: ${error.message}`);
   }
 }
 
