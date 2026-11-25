@@ -101,6 +101,22 @@ distance fills the form, and the race keeps its RunSignup link. Locally,
 start the server with `NODE_USE_ENV_PROXY=1` if outbound requests go through
 a proxy.
 
+**RunSignup registration (required from January 1, 2027).** RunSignup will
+reject API calls without an API caller registration. Register for free on
+RunSignup's [API Keys page](https://runsignup.com/API/ApiKeys) ("Register as an
+API caller", then "Create API Caller") and set the token and secret as Worker
+secrets:
+
+```bash
+npx wrangler secret put RUNSIGNUP_API_REG_TOKEN
+npx wrangler secret put RUNSIGNUP_API_REG_SECRET
+```
+
+Every RunSignup call (race search, race details, past results) then sends the
+token as `rsu_api_reg` and the secret in the `X-RSU-API-REG-SECRET` header.
+Until they are set, calls go out unregistered and the Worker logs a
+`runsignup_unregistered` warning once.
+
 Readiness weighs fatigue against what the phase calls for. In a build, some
 fatigue is expected and costs little. In a taper or race week, fatigue counts
 for more, because the aim is to arrive fresh. Early in recovery, readiness never

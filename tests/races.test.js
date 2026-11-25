@@ -138,3 +138,28 @@ test("the field route validates its input and returns the latest edition with re
     assert.ok(calls.every((url) => url.startsWith("https://runsignup.com/Rest/race/38072")));
   } finally { globalThis.fetch = realFetch; }
 });
+
+test("RunSignup calls carry the API caller registration when it is configured", async () => {
+  const { runsignupRequest } = await racesPromise;
+  const plain = runsignupRequest("https://runsignup.com/Rest/races?format=json", {});
+  assert.equal(plain.url.searchParams.get("rsu_api_reg"), null);
+  assert.equal(plain.headers["X-RSU-API-REG-SECRET"], undefined);
+  const registered = runsignupRequest("https://runsignup.com/Rest/races?format=json&name=trot", { RUNSIGNUP_API_REG_TOKEN: "tok123", RUNSIGNUP_API_REG_SECRET: "sec456" });
+  assert.equal(registered.url.searchParams.get("rsu_api_reg"), "tok123");
+  assert.equal(registered.url.searchParams.get("name"), "trot");
+  assert.equal(registered.headers["X-RSU-API-REG-SECRET"], "sec456");
+  // The secret goes in a header, never in the URL.
+  assert.doesNotMatch(String(registered.url), /sec456/);
+
+  // Through the Worker: the search sends both.
+  const worker = await workerPromise;
+  let seen;
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (input, init) => { seen = { url: new URL(String(input)), headers: init.headers }; return Response.json({ races: [] }); };
+  try {
+    const response = await worker.fetch(new Request("https://runlore.app/api/races/search?q=turkey+trot"), { RUNSIGNUP_API_REG_TOKEN: "tok123", RUNSIGNUP_API_REG_SECRET: "sec456" }, {});
+    assert.equal(response.status, 200);
+    assert.equal(seen.url.searchParams.get("rsu_api_reg"), "tok123");
+    assert.equal(seen.headers["X-RSU-API-REG-SECRET"], "sec456");
+  } finally { globalThis.fetch = realFetch; }
+});

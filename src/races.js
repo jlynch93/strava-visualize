@@ -4,6 +4,26 @@ import { appError, json } from "./http.js";
 // browser makes no third-party requests, results can be cached, and only the
 // fields the race form uses are passed on (no descriptions or HTML).
 const RUNSIGNUP = "https://runsignup.com/Rest/races";
+
+// From January 1, 2027 RunSignup rejects API calls that do not carry an API
+// caller registration: the token as the rsu_api_reg parameter and the secret
+// in the X-RSU-API-REG-SECRET header. Register (free) at
+// https://runsignup.com/API/ApiKeys and set both as Worker secrets.
+let warnedUnregistered = false;
+export function runsignupRequest(url, env = {}) {
+  const target = new URL(url);
+  const headers = { accept: "application/json" };
+  const token = String(env.RUNSIGNUP_API_REG_TOKEN || "").trim();
+  const secret = String(env.RUNSIGNUP_API_REG_SECRET || "").trim();
+  if (token && secret) {
+    target.searchParams.set("rsu_api_reg", token);
+    headers["X-RSU-API-REG-SECRET"] = secret;
+  } else if (!warnedUnregistered) {
+    warnedUnregistered = true;
+    console.warn(JSON.stringify({ event: "runsignup_unregistered", message: "Set RUNSIGNUP_API_REG_TOKEN and RUNSIGNUP_API_REG_SECRET: RunSignup rejects unregistered API calls from January 1, 2027." }));
+  }
+  return { url: target, headers };
+}
 const CACHE_SECONDS = 6 * 60 * 60;
 const MAX_RESULTS = 12;
 
@@ -95,7 +115,7 @@ function todayIso() {
   return new Date().toISOString().slice(0, 10);
 }
 
-export async function handleRaceSearch(request, ctx) {
+export async function handleRaceSearch(request, ctx, env = {}) {
   const url = new URL(request.url);
   const query = String(url.searchParams.get("q") || "").trim().replace(/\s+/g, " ").slice(0, 60);
   if (query.length < 3) throw appError("Type at least three letters of the race name.", 400);
@@ -119,7 +139,8 @@ export async function handleRaceSearch(request, ctx) {
 
   let response;
   try {
-    response = await fetch(upstream, { headers: { accept: "application/json" }, signal: AbortSignal.timeout(8_000) });
+    const call = runsignupRequest(upstream, env);
+    response = await fetch(call.url, { headers: call.headers, signal: AbortSignal.timeout(8_000) });
   } catch {
     throw appError("Race search is not responding right now. Enter the race by hand.", 504);
   }
@@ -177,10 +198,11 @@ export function anonymousField(results) {
   return field.sort((a, b) => a[0] - b[0]);
 }
 
-async function runsignupJson(url) {
+async function runsignupJson(url, env) {
   let response;
   try {
-    response = await fetch(url, { headers: { accept: "application/json" }, signal: AbortSignal.timeout(10_000) });
+    const call = runsignupRequest(url, env);
+    response = await fetch(call.url, { headers: call.headers, signal: AbortSignal.timeout(10_000) });
   } catch {
     throw appError("Past results are not responding right now.", 504);
   }
@@ -188,11 +210,11 @@ async function runsignupJson(url) {
   try { return await response.json(); } catch { throw appError("Past results returned an unreadable answer.", 502); }
 }
 
-async function editionField(raceId, eventId) {
+async function editionField(raceId, eventId, env) {
   const rows = [];
   let best = null;
   for (let page = 1; page <= RESULTS_MAX_PAGES; page += 1) {
-    const data = await runsignupJson(`https://runsignup.com/Rest/race/${raceId}/results/get-results?format=json&event_id=${eventId}&results_per_page=${RESULTS_PAGE}&page=${page}${best ? `&individual_result_set_id=${best}` : ""}`);
+    const data = await runsignupJson(`https://runsignup.com/Rest/race/${raceId}/results/get-results?format=json&event_id=${eventId}&results_per_page=${RESULTS_PAGE}&page=${page}${best ? `&individual_result_set_id=${best}` : ""}`, env);
     const sets = (Array.isArray(data?.individual_results_sets) ? data.individual_results_sets : []).filter((set) => set?.public_results !== "F");
     // An event can hold several result sets (walkers, wheelchair); take the largest.
     const set = best ? sets.find((item) => item.individual_result_set_id === best) : sets.sort((a, b) => (b.results?.length || 0) - (a.results?.length || 0))[0];
@@ -206,7 +228,7 @@ async function editionField(raceId, eventId) {
 
 // GET /api/races/field?race=<RunSignup race id>&km=<distance>
 // The most recent past edition's finish times, with gender and age only.
-export async function handleRaceField(request, ctx) {
+export async function handleRaceField(request, ctx, env = {}) {
   const url = new URL(request.url);
   const raceId = String(url.searchParams.get("race") || "");
   const km = Number(url.searchParams.get("km"));
@@ -219,11 +241,11 @@ export async function handleRaceField(request, ctx) {
   const cached = cache ? await cache.match(cacheKey) : null;
   if (cached) return cached;
 
-  const data = await runsignupJson(`https://runsignup.com/Rest/race/${raceId}?format=json&most_recent_events_only=F&race_event_days=F`);
+  const data = await runsignupJson(`https://runsignup.com/Rest/race/${raceId}?format=json&most_recent_events_only=F&race_event_days=F`, env);
   let found = null;
   // Last year's edition may have no posted results; look back a few years.
   for (const edition of pastEditions(data?.race, km, today).slice(0, 3)) {
-    const field = await editionField(raceId, edition.id);
+    const field = await editionField(raceId, edition.id, env);
     if (field.length >= 10) { found = { ...edition, field }; break; }
   }
   const result = json(found

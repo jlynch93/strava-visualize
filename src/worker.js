@@ -34,8 +34,8 @@ async function handleRequest(request, env, ctx) {
   const activityRoute = pathname.match(/^\/api\/activities\/(\d+)$/);
   if (activityRoute && method === "GET") return handleActivity(env, request, activityRoute[1]);
   if (pathname === "/api/weather" && method === "GET") return handleWeather(request);
-  if (pathname === "/api/races/search" && method === "GET") return handleRaceSearch(request, ctx);
-  if (pathname === "/api/races/field" && method === "GET") return handleRaceField(request, ctx);
+  if (pathname === "/api/races/search" && method === "GET") return handleRaceSearch(request, ctx, env);
+  if (pathname === "/api/races/field" && method === "GET") return handleRaceField(request, ctx, env);
   if (pathname === "/api/insights" && method === "POST") return handleInsights(env, request);
   if (pathname === "/api/state" && method === "GET") return handleGetState(env, request);
   const stateRoute = pathname.match(/^\/api\/state\/([a-z0-9-]+)$/);
