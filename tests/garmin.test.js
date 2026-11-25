@@ -62,7 +62,7 @@ function summary(overrides = {}) {
 }
 
 // Fakes Garmin's token, user-id, backfill and registration endpoints.
-function mockGarmin(t, { userId = "garmin-user-1", backfillStatus = 202, callbackData = [], permissions = ["ACTIVITY_EXPORT"], registered = () => true } = {}) {
+function mockGarmin(t, { userId = "garmin-user-1", backfillStatus = 202, callbackData = [], permissions = ["ACTIVITY_EXPORT"], registered = () => true, deregistrationStatus = 204 } = {}) {
   const calls = [];
   t.mock.method(globalThis, "fetch", async (url, options = {}) => {
     const target = new URL(url);
@@ -84,7 +84,7 @@ function mockGarmin(t, { userId = "garmin-user-1", backfillStatus = 202, callbac
       const status = typeof backfillStatus === "function" ? backfillStatus() : backfillStatus;
       return new Response(status === 202 ? "" : "{}", { status });
     }
-    if (target.pathname.endsWith("/user/registration")) return new Response(null, { status: 204 });
+    if (target.pathname.endsWith("/user/registration")) return new Response(deregistrationStatus === 204 ? null : "{}", { status: deregistrationStatus });
     if (target.pathname.includes("/activities")) return Response.json(callbackData);
     return Response.json({});
   });
@@ -312,6 +312,26 @@ test("Disconnecting Garmin deregisters at Garmin and deletes its stored activiti
   assert.equal(deregistration.options.method, "DELETE");
   assert.equal(deregistration.options.headers.authorization, "Bearer garmin-access");
   assert.equal(await testEnv.DB.prepare("SELECT COUNT(*) AS count FROM activities").first("count"), 0);
+});
+
+test("A failed Garmin deregistration is logged without the user's tokens", async (t) => {
+  const worker = await workerPromise;
+  const testEnv = env();
+  mockGarmin(t, { deregistrationStatus: 500 });
+  const logged = [];
+  for (const level of ["log", "info", "warn", "error"]) {
+    t.mock.method(console, level, (...args) => logged.push(args.map((arg) => (typeof arg === "string" ? arg : JSON.stringify(arg) ?? String(arg))).join(" ")));
+  }
+  const strava = await signIn(worker, testEnv, "strava");
+  await signIn(worker, testEnv, "garmin", strava.session);
+
+  const response = await worker.fetch(request("/api/connections/garmin", { cookie: strava.session, method: "DELETE" }), testEnv);
+  assert.equal(response.status, 200);
+  const warning = logged.find((line) => line.includes("deregistration failed"));
+  assert.ok(warning, `the failure was not logged; logged: ${JSON.stringify(logged)}`);
+  for (const secret of ["garmin-access", "garmin-refresh"]) {
+    assert.ok(!logged.some((line) => line.includes(secret)), `a log line carries the token ${secret}: ${warning}`);
+  }
 });
 
 test("The webhook route is handled by the Worker before static assets", () => {
