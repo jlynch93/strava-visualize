@@ -448,13 +448,44 @@ HTML, cache headers, stylesheets, and client script. It does not deploy changes.
 to v2.8.0) on pull requests, pushes to `main`, and on demand. On a pull request
 it posts inline review comments; on a push to `main` it writes its review of the
 pushed commits to the run's job summary. It is advisory (`fail-on: none`) and
-never fails a build for its findings. It needs the `NITPICK_API_KEY` repository
-secret (an OpenRouter key by default, roughly two cents a review); without it
-the job is skipped with a notice. Set the `NITPICK_PROVIDER` and `NITPICK_MODEL`
-repository variables to use another provider, e.g. `anthropic`. What it checks
-for in this codebase (private data, escaping, D1 parameters, 64-bit ids, units)
-is in `.nitpick.yaml` under `instructions`; preview the exact prompt without
-spending anything with `nitpick explain-config -path src/races.js`.
+never fails a build for its findings. Choose the model with repository
+variables (Settings → Secrets and variables → Actions → Variables):
+
+- Ollama on the self-hosted runner: `NITPICK_PROVIDER` = `ollama`,
+  `NITPICK_MODEL` = a model from `ollama list` (a coding model of 14B or more
+  reviews noticeably better). No key. If Ollama runs on a different machine
+  from the runner, set `OLLAMA_BASE_URL` too, e.g. `http://192.168.1.20:11434/v1`.
+- A hosted provider: the `NITPICK_API_KEY` secret (OpenRouter by default,
+  roughly two cents a review).
+
+With neither, the job is skipped with a notice. What it checks for in this
+codebase (private data, escaping, D1 parameters, 64-bit ids, units) is in
+`.nitpick.yaml` under `instructions`; preview the exact prompt without spending
+anything with `nitpick explain-config -path src/races.js`.
+
+### Self-hosted runner
+
+Every workflow runs on a self-hosted runner (`runs-on: self-hosted`). To fall
+back to GitHub's runners, for example while that machine is off, set the
+repository variable `RUNS_ON` to `ubuntu-latest`; delete it to go back. Jobs
+queued while no runner is online wait (up to 24 hours) rather than fail.
+Pull requests from forks never run on the self-hosted machine: their browser
+tests use GitHub's runners and they get no AI review.
+
+One-time setup on the runner machine (Linux):
+
+1. Register it: Settings → Actions → Runners → New self-hosted runner, and
+   follow the download and `./config.sh` steps shown there.
+2. Run it as a service so it survives logouts and reboots (from the runner
+   folder): `sudo ./svc.sh install && sudo ./svc.sh start`.
+   `sudo ./svc.sh status` checks it.
+3. Install the browsers' system libraries once (the workflow installs the
+   browsers but cannot use sudo): `sudo npx playwright install-deps chromium firefox`
+   from a checkout of this repository after `npm ci`.
+4. Make sure `git`, `curl`, `python3` and `unzip` exist. Node 22 is installed by
+   the workflows themselves.
+5. For AI review with Ollama: `ollama serve` running and the model pulled
+   (`ollama pull <model>`), reachable from the runner.
 
 ## Definition of done
 

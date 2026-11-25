@@ -17,7 +17,11 @@ concurrency:
 jobs:
   smoke-test:
     name: Browser smoke test
-    runs-on: ubuntu-latest
+    # Self-hosted runner by default; set the RUNS_ON repository variable to
+    # ubuntu-latest to fall back to GitHub's runners while it is offline.
+    # Pull requests from forks always use GitHub's runners: their code must
+    # never run on the self-hosted machine.
+    runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) && 'ubuntu-latest' || vars.RUNS_ON || 'self-hosted' }}
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
@@ -30,8 +34,15 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # GitHub's runners get the browsers' system libraries too (sudo apt).
+      # A self-hosted runner has no passwordless sudo, so install those once
+      # by hand there (see README) and only the browsers here.
       - name: Install browsers
+        if: runner.environment == 'github-hosted'
         run: npx playwright install --with-deps chromium firefox
+      - name: Install browsers (self-hosted)
+        if: runner.environment != 'github-hosted'
+        run: npx playwright install chromium firefox
 
       - name: Run browser smoke test
         run: npm run test:e2e:all

@@ -15,7 +15,9 @@ permissions:
 jobs:
   verify:
     if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
+    # Self-hosted runner by default; set the RUNS_ON repository variable to
+    # ubuntu-latest to fall back to GitHub's runners while it is offline.
+    runs-on: ${{ vars.RUNS_ON || 'self-hosted' }}
     timeout-minutes: 5
     steps:
       - name: Verify the active production release

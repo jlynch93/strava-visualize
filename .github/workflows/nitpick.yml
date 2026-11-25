@@ -1,9 +1,12 @@
 # AI code review with open-nitpick (https://github.com/jdziat/open-nitpick).
 #
-# Needs one repository secret: NITPICK_API_KEY, an API key for the model
-# provider (OpenRouter by default). Without it the job is skipped, not failed.
-# Optional repository variables NITPICK_PROVIDER and NITPICK_MODEL choose a
-# different provider/model (run "nitpick providers" for the list).
+# Model: either
+# - Ollama on the self-hosted runner: repository variables NITPICK_PROVIDER =
+#   ollama and NITPICK_MODEL = the model name from "ollama list". No key. If
+#   Ollama is on another machine than the runner, also set OLLAMA_BASE_URL
+#   (e.g. http://192.168.1.20:11434/v1); the default is localhost:11434.
+# - A hosted provider (OpenRouter by default): the NITPICK_API_KEY secret.
+# With neither, the job is skipped with a notice, not failed.
 #
 # - Pull requests: findings are posted as inline review comments.
 # - Pushes to main: there is no pull request to comment on, so the review of
@@ -30,7 +33,10 @@ concurrency:
 
 jobs:
   review:
-    runs-on: ubuntu-latest
+    # Self-hosted runner by default; set the RUNS_ON repository variable to
+    # ubuntu-latest to fall back to GitHub's runners while it is offline.
+    # (Forked pull requests are not reviewed at all, see the if below.)
+    runs-on: ${{ vars.RUNS_ON || 'self-hosted' }}
     timeout-minutes: 20
     # Forked pull requests and Dependabot runs get no secrets, so they would
     # only fail with "API key is required".
@@ -40,16 +46,23 @@ jobs:
       github.actor != 'dependabot[bot]'
     env:
       # A step's if cannot read secrets; it can read env.
-      HAS_KEY: ${{ secrets.NITPICK_API_KEY != '' }}
+      HAS_KEY: ${{ secrets.NITPICK_API_KEY != '' || vars.NITPICK_PROVIDER == 'ollama' }}
     steps:
       - name: No model key
         if: env.HAS_KEY != 'true'
-        run: echo "::notice::AI review skipped. Add the NITPICK_API_KEY repository secret to turn it on."
+        run: echo "::notice::AI review skipped. Set NITPICK_PROVIDER=ollama (and NITPICK_MODEL) or add the NITPICK_API_KEY secret to turn it on."
 
       - uses: actions/checkout@v4
         if: env.HAS_KEY == 'true'
         with:
           fetch-depth: 0 # the reviewer diffs against the base branch or the pushed range
+
+      # Only when set: an empty value must not replace the localhost default.
+      - name: Ollama address
+        if: env.HAS_KEY == 'true' && vars.OLLAMA_BASE_URL != ''
+        env:
+          OLLAMA_BASE_URL: ${{ vars.OLLAMA_BASE_URL }}
+        run: echo "LLM_BASE_URL=$OLLAMA_BASE_URL" >> "$GITHUB_ENV"
 
       - uses: jdziat/open-nitpick@a32fa26e7231335da3179daf91a72b100e5e9bdb # v2.8.0
         if: env.HAS_KEY == 'true'

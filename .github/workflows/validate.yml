@@ -13,7 +13,9 @@ concurrency:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    # Self-hosted runner by default; set the RUNS_ON repository variable to
+    # ubuntu-latest to fall back to GitHub's runners while it is offline.
+    runs-on: ${{ vars.RUNS_ON || 'self-hosted' }}
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
