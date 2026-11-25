@@ -117,17 +117,35 @@ export function normalizeRaces(data, { from, to }) {
 
 const ACTIVE_SEARCH = "https://api.amp.active.com/v2/search";
 
-// "2026-11-26T08:00:00" -> "2026-11-26".
-function activeDate(value) {
-  const match = String(value || "").match(/^(\d{4}-\d{2}-\d{2})/);
-  return match && Number.isFinite(Date.parse(match[1])) ? match[1] : null;
+// ACTIVE gives start times in UTC (timezone "UTC") with the race's own zone in
+// localTimeZoneId: "2026-11-27T03:00:00" in US/Pacific is the evening of the 26th.
+export function activeDate(value, item = {}) {
+  const text = String(value || "");
+  const match = text.match(/^(\d{4}-\d{2}-\d{2})(?:T(\d{2}:\d{2}(?::\d{2})?))?/);
+  if (!match || !Number.isFinite(Date.parse(match[1]))) return null;
+  const zone = String(item.localTimeZoneId || item.place?.timezone || "");
+  if (match[2] && String(item.timezone || "").toUpperCase() === "UTC" && zone) {
+    try {
+      const instant = new Date(`${match[1]}T${match[2]}Z`);
+      const parts = new Intl.DateTimeFormat("en-CA", { timeZone: zone, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(instant);
+      const get = (type) => parts.find((part) => part.type === type)?.value;
+      if (get("year") && get("month") && get("day")) return `${get("year")}-${get("month")}-${get("day")}`;
+    } catch { /* Unknown zone: fall back to the UTC date. */ }
+  }
+  return match[1];
 }
 
-// Only ACTIVE's own pages are linked, always over https.
+// Only ACTIVE's own pages are linked, always over https, and without ACTIVE's
+// "cmp" tracking tag (it carries the API account's name).
 function activeUrl(...candidates) {
   for (const candidate of candidates) {
     const text = String(candidate || "").trim().replace(/^http:\/\//i, "https://");
-    if (/^https:\/\/(www\.)?active\.com\//i.test(text)) return text.slice(0, 300);
+    if (!/^https:\/\/(www\.)?active\.com\//i.test(text)) continue;
+    try {
+      const url = new URL(text);
+      url.searchParams.delete("cmp");
+      return url.toString().slice(0, 300);
+    } catch { continue; }
   }
   return "";
 }
@@ -139,11 +157,13 @@ function activeEvents(item, name, date) {
     .map((entry) => entry?.attribute || entry).filter((attribute) => /distance/i.test(String(attribute?.attributeType || "")))
     .map((attribute) => String(attribute.attributeValue || ""));
   const components = (Array.isArray(item.assetComponents) ? item.assetComponents : []).map((component) => String(component?.assetName || ""));
-  const labels = [...new Set([...attributes, ...components].map((label) => label.trim()).filter(Boolean))];
+  // "Turkey Trot - 10k race" -> "10k race".
+  const prefix = new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*[-–:]\\s*`, "i");
+  const labels = [...new Set([...attributes, ...components].map((label) => label.trim().replace(prefix, "")).filter(Boolean))];
   const events = [];
   for (const label of labels.length ? labels : [name]) {
-    // Virtual entries and kids' dashes are not races to train for.
-    if (/virtual|\bkids?\b|\byouth\b|\btot\b|\bdash\b/i.test(label)) continue;
+    // Virtual entries and kids' races are not races to train for (a "5k dash" is a 5K).
+    if (/virtual|\bkids?\b|\byouth\b|\btots?\b|\bchildren\b/i.test(label)) continue;
     const km = parseDistanceKm(label, label);
     if (km !== null && km < 1) continue;
     const distance = distanceCategory(km);
@@ -159,9 +179,9 @@ export function normalizeActiveRaces(data, { from, to }) {
   for (const item of Array.isArray(data?.results) ? data.results : []) {
     if (!item || typeof item !== "object") continue;
     const name = String(item.assetName || "").trim().slice(0, 100);
-    const date = activeDate(item.activityStartDate);
+    const date = activeDate(item.activityStartDate, item);
     if (!name || !date || date < from || date > to || /virtual/i.test(name)) continue;
-    const end = activeDate(item.activityEndDate) || date;
+    const end = activeDate(item.activityEndDate, item) || date;
     if (dayDiff(date, end) > 2) continue;
     const events = activeEvents(item, name, date);
     if (!events.length) continue;

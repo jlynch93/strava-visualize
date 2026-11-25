@@ -1,0 +1,34 @@
+{
+  "retries": 0, "total_results": 10000, "items_per_page": 2, "start_index": 0,
+  "_note": "Trimmed from a real ACTIVE Activity Search API v2 reply (November 2026); the account name in cmp is replaced.",
+  "results": [
+    {
+      "assetGuid": "5ee822cf-59ea-4922-be74-d0f4053404d9", "assetName": "Turkey Trot",
+      "timezone": "UTC", "localTimeZoneId": "US/Pacific",
+      "activityStartDate": "2026-11-26T17:00:00", "activityEndDate": "2026-11-26T19:30:00",
+      "place": { "placeName": "Soaring Eagle Park Sammamish Washington", "cityName": "Sammamish", "stateProvinceCode": "WA", "countryCode": "USA", "timezone": "America/Los_Angeles" },
+      "urlAdr": "http://www.active.com/sammamish-wa/running/distance-running-races/turkey-trot-2026?cmp=39-35-example",
+      "homePageUrlAdr": "https://www.sammamishrunning.com/",
+      "registrationUrlAdr": "http://www.active.com/sammamish-wa/running/distance-running-races/turkey-trot-2026",
+      "assetAttributes": [{ "attribute": { "tagId": 58705, "attributeValue": "5K", "attributeType": "Distance (running)" } }],
+      "assetTopics": [{ "sequence": 1, "topic": { "topicId": 27, "topicName": "Running" } }],
+      "assetComponents": [
+        { "assetGuid": "e7178174", "assetName": "Turkey Trot - 10k race", "activityStartDate": "2026-11-26T17:00:00" },
+        { "assetGuid": "c3b0f767", "assetName": "Turkey Trot - 5k dash", "activityStartDate": "2026-11-26T17:00:00" },
+        { "assetGuid": "63420c36", "assetName": "Turkey Trot - 2k Kids run", "activityStartDate": "2026-11-26T17:00:00" },
+        { "assetGuid": "b6846c95", "assetName": "Turkey Trot - 5 mile technical Trail Race", "activityStartDate": "2026-11-26T17:00:00" },
+        { "assetGuid": "6bb10657", "assetName": "Turkey Trot - 10 mile Technical Trail Race", "activityStartDate": "2026-11-26T17:00:00" }
+      ],
+      "salesStatus": "registration-open"
+    },
+    {
+      "assetGuid": "b51bd514-b844-4fdc-b33d-6c3080ef1b0b", "assetName": "Turkey Trot - Turkey Trot 2K",
+      "timezone": "UTC", "localTimeZoneId": "US/Central",
+      "activityStartDate": "2025-12-08T06:00:00", "activityEndDate": "2027-01-19T05:59:59",
+      "place": { "cityName": "McAllen", "stateProvinceCode": "TX" },
+      "urlAdr": "", "homePageUrlAdr": "http://mcallenmarathon.com", "registrationUrlAdr": "",
+      "assetAttributes": [{ "attribute": { "attributeValue": "10K", "attributeType": "Distance (running)" } }, { "attribute": { "attributeValue": "5K", "attributeType": "Distance (running)" } }],
+      "assetComponents": [], "assetParentAsset": { "assetGuid": "96d4c9b1-7d35-486f-9dc3-7d559fd6d1b4" }
+    }
+  ]
+}

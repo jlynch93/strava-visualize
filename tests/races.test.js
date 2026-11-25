@@ -244,3 +244,31 @@ test("race search adds ACTIVE when its key is set, and survives one source faili
     assert.equal(response.headers.get("cache-control"), "no-store");
   } finally { globalThis.fetch = realFetch; }
 });
+
+test("a real ACTIVE reply: local race day, sub-event distances, kids' runs dropped, no tracking tag", async () => {
+  const { normalizeActiveRaces } = await racesPromise;
+  const reply = JSON.parse(fs.readFileSync(path.join(__dirname, "fixtures/active-search.json"), "utf8"));
+  const races = normalizeActiveRaces(reply, { from: "2026-11-01", to: "2027-11-01" });
+  // The McAllen listing is a year-long registration window that started in 2025: not a race day.
+  assert.equal(races.length, 1);
+  const [trot] = races;
+  assert.equal(trot.name, "Turkey Trot");
+  assert.equal(trot.date, "2026-11-26");
+  assert.equal(trot.city, "Sammamish");
+  assert.equal(trot.state, "WA");
+  // The race name is trimmed from sub-event names; the "5k dash" is the 5K; the kids' 2K is gone.
+  assert.deepEqual(trot.events.map((event) => event.distance === "Other" ? event.name : event.distance), ["5K", "5 mile technical Trail Race", "10K", "10 mile Technical Trail Race"]);
+  assert.equal(trot.url, "https://www.active.com/sammamish-wa/running/distance-running-races/turkey-trot-2026");
+  // Fallback links lose the cmp tag that carries the account name.
+  const fallback = normalizeActiveRaces({ results: [{ ...reply.results[0], registrationUrlAdr: "" }] }, { from: "2026-11-01", to: "2027-11-01" });
+  assert.doesNotMatch(fallback[0].url, /cmp=/);
+});
+
+test("ACTIVE start times in UTC become the race's local day", async () => {
+  const { activeDate } = await racesPromise;
+  assert.equal(activeDate("2026-11-27T03:00:00", { timezone: "UTC", localTimeZoneId: "US/Pacific" }), "2026-11-26");
+  assert.equal(activeDate("2026-11-26T17:00:00", { timezone: "UTC", localTimeZoneId: "US/Pacific" }), "2026-11-26");
+  assert.equal(activeDate("2026-11-27T03:00:00", { timezone: "UTC", localTimeZoneId: "Not/AZone" }), "2026-11-27");
+  assert.equal(activeDate("2026-11-27", {}), "2026-11-27");
+  assert.equal(activeDate("", {}), null);
+});
