@@ -128,8 +128,9 @@ Only the **Search API** key is needed (ACTIVE issues several keys; the others
 are for registration and campground systems). Both sources are asked at once;
 a race listed on both appears once, from RunSignup, whose past results power
 the projected place. ACTIVE listings are trimmed to in-person running races
-within a year (virtual events, memberships and kids' dashes are dropped), each
-links only to its active.com page, and results show where they came from. If
+within a year (virtual events, memberships, recreation-department classes and
+kids' dashes are dropped), each links only to its active.com page, results show
+where they came from, and races whose registration has closed say so. If
 one source does not answer, the other's races still come back, flagged, and
 that answer is not cached. Without the key nothing calls ACTIVE.
 

@@ -1,34 +1,243 @@
 {
-  "retries": 0, "total_results": 10000, "items_per_page": 2, "start_index": 0,
-  "_note": "Trimmed from a real ACTIVE Activity Search API v2 reply (November 2026); the account name in cmp is replaced.",
+  "retries": 0,
+  "total_results": 10000,
+  "items_per_page": 2,
+  "start_index": 0,
+  "_note": "Trimmed from real ACTIVE Activity Search API v2 replies (November 2026); account names in cmp are replaced.",
   "results": [
     {
-      "assetGuid": "5ee822cf-59ea-4922-be74-d0f4053404d9", "assetName": "Turkey Trot",
-      "timezone": "UTC", "localTimeZoneId": "US/Pacific",
-      "activityStartDate": "2026-11-26T17:00:00", "activityEndDate": "2026-11-26T19:30:00",
-      "place": { "placeName": "Soaring Eagle Park Sammamish Washington", "cityName": "Sammamish", "stateProvinceCode": "WA", "countryCode": "USA", "timezone": "America/Los_Angeles" },
+      "assetGuid": "5ee822cf-59ea-4922-be74-d0f4053404d9",
+      "assetName": "Turkey Trot",
+      "timezone": "UTC",
+      "localTimeZoneId": "US/Pacific",
+      "activityStartDate": "2026-11-26T17:00:00",
+      "activityEndDate": "2026-11-26T19:30:00",
+      "place": {
+        "placeName": "Soaring Eagle Park Sammamish Washington",
+        "cityName": "Sammamish",
+        "stateProvinceCode": "WA",
+        "countryCode": "USA",
+        "timezone": "America/Los_Angeles"
+      },
       "urlAdr": "http://www.active.com/sammamish-wa/running/distance-running-races/turkey-trot-2026?cmp=39-35-example",
       "homePageUrlAdr": "https://www.sammamishrunning.com/",
       "registrationUrlAdr": "http://www.active.com/sammamish-wa/running/distance-running-races/turkey-trot-2026",
-      "assetAttributes": [{ "attribute": { "tagId": 58705, "attributeValue": "5K", "attributeType": "Distance (running)" } }],
-      "assetTopics": [{ "sequence": 1, "topic": { "topicId": 27, "topicName": "Running" } }],
+      "assetAttributes": [
+        {
+          "attribute": {
+            "tagId": 58705,
+            "attributeValue": "5K",
+            "attributeType": "Distance (running)"
+          }
+        }
+      ],
+      "assetTopics": [
+        {
+          "sequence": 1,
+          "topic": {
+            "topicId": 27,
+            "topicName": "Running"
+          }
+        }
+      ],
       "assetComponents": [
-        { "assetGuid": "e7178174", "assetName": "Turkey Trot - 10k race", "activityStartDate": "2026-11-26T17:00:00" },
-        { "assetGuid": "c3b0f767", "assetName": "Turkey Trot - 5k dash", "activityStartDate": "2026-11-26T17:00:00" },
-        { "assetGuid": "63420c36", "assetName": "Turkey Trot - 2k Kids run", "activityStartDate": "2026-11-26T17:00:00" },
-        { "assetGuid": "b6846c95", "assetName": "Turkey Trot - 5 mile technical Trail Race", "activityStartDate": "2026-11-26T17:00:00" },
-        { "assetGuid": "6bb10657", "assetName": "Turkey Trot - 10 mile Technical Trail Race", "activityStartDate": "2026-11-26T17:00:00" }
+        {
+          "assetGuid": "e7178174",
+          "assetName": "Turkey Trot - 10k race",
+          "activityStartDate": "2026-11-26T17:00:00"
+        },
+        {
+          "assetGuid": "c3b0f767",
+          "assetName": "Turkey Trot - 5k dash",
+          "activityStartDate": "2026-11-26T17:00:00"
+        },
+        {
+          "assetGuid": "63420c36",
+          "assetName": "Turkey Trot - 2k Kids run",
+          "activityStartDate": "2026-11-26T17:00:00"
+        },
+        {
+          "assetGuid": "b6846c95",
+          "assetName": "Turkey Trot - 5 mile technical Trail Race",
+          "activityStartDate": "2026-11-26T17:00:00"
+        },
+        {
+          "assetGuid": "6bb10657",
+          "assetName": "Turkey Trot - 10 mile Technical Trail Race",
+          "activityStartDate": "2026-11-26T17:00:00"
+        }
       ],
       "salesStatus": "registration-open"
     },
     {
-      "assetGuid": "b51bd514-b844-4fdc-b33d-6c3080ef1b0b", "assetName": "Turkey Trot - Turkey Trot 2K",
-      "timezone": "UTC", "localTimeZoneId": "US/Central",
-      "activityStartDate": "2025-12-08T06:00:00", "activityEndDate": "2027-01-19T05:59:59",
-      "place": { "cityName": "McAllen", "stateProvinceCode": "TX" },
-      "urlAdr": "", "homePageUrlAdr": "http://mcallenmarathon.com", "registrationUrlAdr": "",
-      "assetAttributes": [{ "attribute": { "attributeValue": "10K", "attributeType": "Distance (running)" } }, { "attribute": { "attributeValue": "5K", "attributeType": "Distance (running)" } }],
-      "assetComponents": [], "assetParentAsset": { "assetGuid": "96d4c9b1-7d35-486f-9dc3-7d559fd6d1b4" }
+      "assetGuid": "b51bd514-b844-4fdc-b33d-6c3080ef1b0b",
+      "assetName": "Turkey Trot - Turkey Trot 2K",
+      "timezone": "UTC",
+      "localTimeZoneId": "US/Central",
+      "activityStartDate": "2025-12-08T06:00:00",
+      "activityEndDate": "2027-01-19T05:59:59",
+      "place": {
+        "cityName": "McAllen",
+        "stateProvinceCode": "TX"
+      },
+      "urlAdr": "",
+      "homePageUrlAdr": "http://mcallenmarathon.com",
+      "registrationUrlAdr": "",
+      "assetAttributes": [
+        {
+          "attribute": {
+            "attributeValue": "10K",
+            "attributeType": "Distance (running)"
+          }
+        },
+        {
+          "attribute": {
+            "attributeValue": "5K",
+            "attributeType": "Distance (running)"
+          }
+        }
+      ],
+      "assetComponents": [],
+      "assetParentAsset": {
+        "assetGuid": "96d4c9b1-7d35-486f-9dc3-7d559fd6d1b4"
+      }
+    },
+    {
+      "assetGuid": "c3964112-5a8e-4a6a-b34a-888a9fbf266a",
+      "assetName": "Turkey Trot - Fun Run / Walk",
+      "timezone": "UTC",
+      "localTimeZoneId": "America/New_York",
+      "activityStartDate": "2026-11-25T14:00:00",
+      "activityEndDate": "2026-11-25T15:00:00",
+      "place": {
+        "cityName": "Columbia",
+        "stateProvinceCode": "MD"
+      },
+      "registrationUrlAdr": "http://www.active.com/columbia-md/running/distance-running-classes/turkey-trot-fun-run-walk-2026",
+      "assetAttributes": [],
+      "assetCategories": [
+        {
+          "category": {
+            "categoryName": "Event"
+          }
+        },
+        {
+          "category": {
+            "categoryName": "Classes"
+          }
+        },
+        {
+          "category": {
+            "categoryName": "Races"
+          }
+        }
+      ],
+      "assetComponents": [
+        {
+          "assetName": "Turkey Trot - Fun Run / Walk"
+        }
+      ],
+      "salesStatus": "registration-open"
+    },
+    {
+      "assetGuid": "5a3001be-c6a0-47c1-b109-7bbf0434571e",
+      "assetName": "32nd Annual Turkey Trot 5K Run/Walk presented by CoxHealth",
+      "timezone": "UTC",
+      "localTimeZoneId": "US/Central",
+      "activityStartDate": "2026-11-26T06:00:00",
+      "activityEndDate": "2026-11-28T05:59:59",
+      "place": {
+        "cityName": "Springfield",
+        "stateProvinceCode": "MO"
+      },
+      "registrationUrlAdr": "http://www.active.com/springfield-mo/running/distance-running-races/32nd-annual-turkey-trot-5k-run-walk-presented-by-coxhealth-2026",
+      "assetAttributes": [
+        {
+          "attribute": {
+            "attributeValue": "5K",
+            "attributeType": "Distance (running)"
+          }
+        }
+      ],
+      "assetCategories": [
+        {
+          "category": {
+            "categoryName": "Event"
+          }
+        },
+        {
+          "category": {
+            "categoryName": "Races"
+          }
+        }
+      ],
+      "assetComponents": [
+        {
+          "assetName": "5K Run/Walk Adult - Adult  Entry Fee (13 years and up)"
+        },
+        {
+          "assetName": "5K Run/Walk Youth - Youth Entry Fee (kids 12 and younger)"
+        }
+      ],
+      "salesStatus": "registration-open"
+    },
+    {
+      "assetGuid": "38ec4bb2-9578-48fb-9171-9ef1129e1ce0",
+      "assetName": "2026 Thanksgiving Day Races",
+      "timezone": "UTC",
+      "localTimeZoneId": "US/Mountain",
+      "activityStartDate": "2026-11-26T07:00:00",
+      "activityEndDate": "2026-11-27T06:59:59",
+      "place": {
+        "cityName": "Bountiful",
+        "stateProvinceCode": "UT"
+      },
+      "registrationUrlAdr": "http://www.active.com/bountiful-ut/running/distance-running-races/thanksgiving-day-races-2026",
+      "assetAttributes": [
+        {
+          "attribute": {
+            "attributeValue": "5K",
+            "attributeType": "Distance (running)"
+          }
+        },
+        {
+          "attribute": {
+            "attributeValue": "10K",
+            "attributeType": "Distance (running)"
+          }
+        },
+        {
+          "attribute": {
+            "attributeValue": "1K",
+            "attributeType": "Distance (running)"
+          }
+        }
+      ],
+      "assetCategories": [
+        {
+          "category": {
+            "categoryName": "Event"
+          }
+        },
+        {
+          "category": {
+            "categoryName": "Races"
+          }
+        }
+      ],
+      "assetComponents": [
+        {
+          "assetName": "Turkey 10K - Individual"
+        },
+        {
+          "assetName": "Family 5K - Individual"
+        },
+        {
+          "assetName": "Gobbler 1K - Individual"
+        }
+      ],
+      "assetRegistrableStatus": "reg-closed",
+      "salesStatus": "registration-closed"
     }
   ]
 }

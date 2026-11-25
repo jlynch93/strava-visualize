@@ -249,9 +249,19 @@ test("a real ACTIVE reply: local race day, sub-event distances, kids' runs dropp
   const { normalizeActiveRaces } = await racesPromise;
   const reply = JSON.parse(fs.readFileSync(path.join(__dirname, "fixtures/active-search.json"), "utf8"));
   const races = normalizeActiveRaces(reply, { from: "2026-11-01", to: "2027-11-01" });
-  // The McAllen listing is a year-long registration window that started in 2025: not a race day.
-  assert.equal(races.length, 1);
-  const [trot] = races;
+  // McAllen is a year-long registration window that started in 2025 and Columbia MD is a
+  // recreation class: neither is a race day to train for.
+  assert.deepEqual(races.map((race) => race.city), ["Sammamish", "Springfield", "Bountiful"]);
+  const [trot, springfield, bountiful] = races;
+  // Springfield: the youth entry is dropped and the adult entry is the same 5K.
+  assert.equal(springfield.date, "2026-11-26");
+  assert.deepEqual(springfield.events.map((event) => event.distance), ["5K"]);
+  assert.equal(springfield.events[0].walk, false);
+  // Bountiful: registration has closed, but the race is still listed and says so.
+  assert.equal(bountiful.registrationClosed, true);
+  assert.equal(bountiful.date, "2026-11-26");
+  assert.deepEqual(bountiful.events.map((event) => event.distance), ["Other", "5K", "10K"]);
+  assert.equal(trot.registrationClosed, undefined);
   assert.equal(trot.name, "Turkey Trot");
   assert.equal(trot.date, "2026-11-26");
   assert.equal(trot.city, "Sammamish");

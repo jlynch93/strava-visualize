@@ -167,7 +167,9 @@ function activeEvents(item, name, date) {
     const km = parseDistanceKm(label, label);
     if (km !== null && km < 1) continue;
     const distance = distanceCategory(km);
-    if (events.some((event) => event.distance === distance && distance !== "Other")) continue;
+    // One entry per distance: "1K" and "Gobbler 1K - Individual" are the same race.
+    if (events.some((event) => (distance !== "Other" && event.distance === distance)
+      || (km !== null && event.km !== null && Math.abs(event.km - km) < 0.05))) continue;
     events.push({ id: `${events.length}`, name: label.slice(0, 80), date, km: km === null ? null : Math.round(km * 100) / 100, distance, walk: /\bwalk/i.test(label) && !/run/i.test(label) });
   }
   return events.sort((a, b) => (a.km ?? 0) - (b.km ?? 0)).slice(0, 8);
@@ -181,6 +183,9 @@ export function normalizeActiveRaces(data, { from, to }) {
     const name = String(item.assetName || "").trim().slice(0, 100);
     const date = activeDate(item.activityStartDate, item);
     if (!name || !date || date < from || date > to || /virtual/i.test(name)) continue;
+    // Recreation-department classes (ActiveNet) are listed as events too; they are not races.
+    const categories = (Array.isArray(item.assetCategories) ? item.assetCategories : []).map((entry) => String(entry?.category?.categoryName || ""));
+    if (categories.includes("Classes")) continue;
     const end = activeDate(item.activityEndDate, item) || date;
     if (dayDiff(date, end) > 2) continue;
     const events = activeEvents(item, name, date);
@@ -192,7 +197,8 @@ export function normalizeActiveRaces(data, { from, to }) {
       city: String(place.cityName || "").slice(0, 60),
       state: String(place.stateProvinceCode || "").slice(0, 20),
       url: activeUrl(item.registrationUrlAdr, item.urlAdr, item.homePageUrlAdr),
-      events
+      events,
+      ...(/closed/i.test(String(item.salesStatus || item.assetRegistrableStatus || "")) ? { registrationClosed: true } : {})
     });
   }
   return races;
