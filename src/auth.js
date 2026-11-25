@@ -188,6 +188,7 @@ async function revokeAtProvider(env, request, userId, providerId) {
     const accessToken = await providerAccessToken(env, request, userId, providerId);
     await provider.onDisconnect(provider.config(env, request), accessToken);
   } catch (error) {
+    // The message is enough to diagnose this; never add the token to it.
     console.warn(`${provider.name} deregistration failed: ${error.message}`);
   }
 }
