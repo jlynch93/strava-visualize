@@ -3,6 +3,7 @@ name: Validate dashboard
 on:
   push:
     branches: [main, codex/**]
+  pull_request:
 
 permissions:
   contents: read
@@ -15,7 +16,9 @@ jobs:
   test:
     # Self-hosted runner by default; set the RUNS_ON repository variable to
     # ubuntu-latest to fall back to GitHub's runners while it is offline.
-    runs-on: ${{ vars.RUNS_ON || 'self-hosted' }}
+    # Pull requests from forks always use GitHub's runners: their code must
+    # never run on the self-hosted machine.
+    runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) && 'ubuntu-latest' || vars.RUNS_ON || 'self-hosted' }}
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4

@@ -1,5 +1,11 @@
 const { defineConfig } = require("@playwright/test");
 
+// Several runners on one machine run browser tests at the same time, so CI
+// passes each job its own free port. Read here once per process; every worker
+// must see the same value, which is why it is not picked at random here.
+const port = Number(process.env.E2E_PORT) || 43174;
+const origin = `http://127.0.0.1:${port}`;
+
 module.exports = defineConfig({
   testDir: "./tests/e2e",
   timeout: 30_000,
@@ -9,7 +15,7 @@ module.exports = defineConfig({
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? [["github"], ["html", { open: "never" }]] : "list",
   use: {
-    baseURL: "http://127.0.0.1:43174",
+    baseURL: origin,
     browserName: "chromium",
     // The service worker would sit between tests and their mocked routes;
     // tests/e2e/app.spec.js turns it on to test it.
@@ -23,7 +29,8 @@ module.exports = defineConfig({
   ],
   webServer: {
     command: "node scripts/start-e2e-server.js",
-    url: "http://127.0.0.1:43174/api/status",
+    url: `${origin}/api/status`,
+    env: { PORT: String(port) },
     reuseExistingServer: !process.env.CI,
     timeout: 15_000
   }

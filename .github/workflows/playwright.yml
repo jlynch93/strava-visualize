@@ -44,6 +44,11 @@ jobs:
         if: runner.environment != 'github-hosted'
         run: npx playwright install chromium firefox
 
+      # Two runners on one machine can run this job at once: give each run
+      # its own free port for the test server.
+      - name: Pick a free port
+        run: echo "E2E_PORT=$(node -e 'const s=require("net").createServer().listen(0,"127.0.0.1",()=>{console.log(s.address().port);s.close()})')" >> "$GITHUB_ENV"
+
       - name: Run browser smoke test
         run: npm run test:e2e:all
 
