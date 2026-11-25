@@ -367,6 +367,97 @@ function renderDayEditor(date, focus) {
   if (focus) document.querySelector(`#dayEditorBody ${focus}`)?.focus();
 }
 
+/* ---------- Plan in your calendar ---------- */
+
+// A signed-in runner gets a secret link (src/calendar.js) that Apple Calendar,
+// Google Calendar and others subscribe to; it serves the saved weeks and races
+// and follows every change on their next refresh. Anyone can download a file.
+const planCalendar = { url: null, loaded: false, busy: false, error: "" };
+const CALENDAR_HISTORY_DAYS = 56;
+
+function calendarLinks(url) {
+  const webcal = url.replace(/^https?:/, "webcal:");
+  return { webcal, google: `https://calendar.google.com/calendar/r?cid=${encodeURIComponent(webcal)}` };
+}
+
+async function calendarRequest(method) {
+  planCalendar.busy = true; planCalendar.error = ""; renderPlanCalendar();
+  try {
+    const response = await fetch("/api/calendar", { method });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || `The calendar link could not be ${method === "DELETE" ? "removed" : "loaded"} (HTTP ${response.status}).`);
+    planCalendar.url = data.url || null; planCalendar.loaded = true;
+    if (data.unreadable) planCalendar.error = "Your existing link can't be shown any more. Make a new link and add it to your calendar again.";
+  } catch (error) {
+    planCalendar.error = error.message;
+  } finally {
+    planCalendar.busy = false; renderPlanCalendar();
+  }
+}
+
+function downloadPlanCalendar() {
+  const since = new Date(Date.now() - CALENDAR_HISTORY_DAYS * 86400000).toISOString().slice(0, 10);
+  const ics = CalendarCore.buildPlanCalendar({ plans: acceptedPlans, races: raceList(), units: preferences.units, since, domain: location.hostname || "runlore.app" });
+  const url = URL.createObjectURL(new Blob([ics], { type: "text/calendar" }));
+  const link = document.createElement("a"); link.href = url; link.download = "runlore-plan.ics"; link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  const saved = Object.keys(acceptedPlans).length;
+  setStatus(saved ? "Calendar file downloaded. It is a snapshot: download again after changing the plan, or sign in for a link that updates." : "Calendar file downloaded with your races. Save a week (edit a day or Keep this plan) to add its runs.");
+}
+
+function renderPlanCalendar() {
+  const card = document.querySelector("#planCalendarCard");
+  if (!card) return;
+  const signedIn = Boolean(state.account?.signedIn);
+  const download = '<button type="button" class="link-action" data-calendar="download">Download a calendar file (.ics)</button>';
+  if (!signedIn) {
+    // Forget the last account's link, so another sign-in never shows it.
+    Object.assign(planCalendar, { url: null, loaded: false, error: "" });
+    card.innerHTML = `<p>Sign in to get a calendar link that Apple Calendar or Google Calendar keeps up to date as you change your plan.</p><p>${download}</p><p class="context-muted">The file is a snapshot of your saved weeks and races on this device; it won't follow later changes.</p>`;
+    return;
+  }
+  if (!planCalendar.loaded && !planCalendar.busy && !planCalendar.error) { calendarRequest("GET"); return; }
+  const error = planCalendar.error ? `<p class="plan-calendar-error" role="alert">${escapeHtml(planCalendar.error)}</p>` : "";
+  if (planCalendar.busy) { card.innerHTML = '<p class="context-muted" role="status">Working on your calendar link…</p>'; return; }
+  if (!planCalendar.url) {
+    card.innerHTML = `<p>Show your saved weeks and races in your own calendar. Changes you make here appear there the next time it refreshes.</p>${error}<button type="button" class="context-save" data-calendar="create">Create calendar link</button><p>${download}</p><p class="context-muted">The file is a one-off snapshot; the link keeps up with your changes.</p>`;
+    return;
+  }
+  const { webcal, google } = calendarLinks(planCalendar.url);
+  card.innerHTML = `${error}<div class="plan-calendar-actions">
+      <a class="calendar-add" href="${escapeHtml(webcal)}">Add to Apple Calendar</a>
+      <a class="calendar-add" href="${escapeHtml(google)}" target="_blank" rel="noopener noreferrer">Add to Google Calendar<span class="visually-hidden"> (opens in a new tab)</span></a>
+    </div>
+    <label class="plan-calendar-url">Calendar link (Outlook and other apps: subscribe from a URL)<span><input id="planCalendarUrl" type="text" readonly value="${escapeHtml(planCalendar.url)}"><button type="button" data-calendar="copy">Copy</button></span></label>
+    <ul class="plan-calendar-notes">
+      <li>Saved weeks and races appear as all-day events; rest days are left out. A suggested week appears once you edit a day or choose <strong>Keep this plan</strong>.</li>
+      <li>Calendars refresh on their own schedule: Apple Calendar about hourly (you can change it in its settings), Google Calendar can take up to a day.</li>
+      <li>Anyone with this link can see your plan. If it gets shared by mistake, make a new link: the old one stops working.</li>
+    </ul>
+    <p class="plan-calendar-manage"><button type="button" class="link-action" data-calendar="rotate">Make a new link</button> · <button type="button" class="link-action danger" data-calendar="delete">Stop sharing</button> · ${download}</p>`;
+}
+
+function setupPlanCalendar() {
+  const grid = document.querySelector("#planning .coaching-grid");
+  if (!grid) return;
+  grid.insertAdjacentHTML("beforeend", '<details id="planCalendarDisclosure" class="context-disclosure"><summary>Calendar<span>Show your plan in Apple or Google Calendar</span></summary><div id="planCalendarCard" class="context-card plan-calendar"></div></details>');
+  const disclosure = document.querySelector("#planCalendarDisclosure");
+  disclosure.addEventListener("toggle", () => { if (disclosure.open) renderPlanCalendar(); });
+  disclosure.addEventListener("click", async (event) => {
+    const action = event.target.closest("[data-calendar]")?.dataset.calendar;
+    if (!action) return;
+    if (action === "download") downloadPlanCalendar();
+    if (action === "create") await calendarRequest("POST");
+    if (action === "rotate" && confirm("Make a new calendar link? The current link stops working, so calendars subscribed to it need the new one.")) await calendarRequest("POST");
+    if (action === "delete" && confirm("Stop sharing your plan as a calendar? Calendars subscribed to the link stop updating, and their copy of the plan may disappear.")) await calendarRequest("DELETE");
+    if (action === "copy") {
+      try { await navigator.clipboard.writeText(planCalendar.url); setStatus("Calendar link copied."); }
+      catch { document.querySelector("#planCalendarUrl")?.select(); setStatus("Copy isn't available here; the link is selected so you can copy it.", true); }
+    }
+    if (["create", "rotate", "delete"].includes(action)) document.querySelector("#planCalendarCard button, #planCalendarCard a")?.focus();
+  });
+}
+
 function setupWeekBoard() {
   const controls = document.querySelector(".plan-controls");
   // The week sits right under its controls, ahead of the goal, race and check-in setup.
@@ -427,6 +518,7 @@ function setupWeekBoard() {
 
 function finishExperienceRender() {
   renderSyncInfo(); renderAcceptedPlan();
+  if (document.querySelector("#planCalendarDisclosure")?.open) renderPlanCalendar();
   const checkin = activeCheckin();
   document.querySelector("#checkinAge").textContent = checkin.savedAt ? `Checked in ${new Date(checkin.savedAt).toLocaleDateString()} · valid for 7 days` : "A fresh weekly check-in is needed. Older responses do not influence this plan.";
   const newest = state.rawActivities.filter(isRun).map(parseActivityDate).sort((a, b) => b - a)[0];
@@ -570,6 +662,7 @@ function initializeExperience() {
   document.querySelector(".plan-controls").id = "planActions"; document.querySelector(".plan-controls").dataset.feedbackScope = "";
   document.querySelector(".plan-controls").append(els.copyPlanButton);
   setupWeekBoard();
+  setupPlanCalendar();
   const planningContext = document.createElement("details"); planningContext.id = "planningContext"; planningContext.className = "secondary-disclosure";
   planningContext.innerHTML = '<summary>Current training context<span>Recent history and the inputs behind your draft</span></summary>';
   planningContext.append(document.querySelector("#planningHistoryNote"), document.querySelector(".readiness-card"));

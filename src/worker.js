@@ -10,6 +10,7 @@ import {
 } from "./auth.js";
 import { handleActivities, handleActivity } from "./activities.js";
 import { handleRaceField, handleRaceSearch } from "./races.js";
+import { handleCalendarFeed, handleCalendarLink } from "./calendar.js";
 import { handleWeather } from "./weather.js";
 import { handleInsights } from "./insights.js";
 import { handleGarminWebhook } from "./webhooks.js";
@@ -37,6 +38,9 @@ async function handleRequest(request, env, ctx) {
   if (pathname === "/api/races/search" && method === "GET") return handleRaceSearch(request, ctx, env);
   if (pathname === "/api/races/field" && method === "GET") return handleRaceField(request, ctx, env);
   if (pathname === "/api/insights" && method === "POST") return handleInsights(env, request);
+  if (pathname === "/api/calendar" && ["GET", "POST", "DELETE"].includes(method)) return handleCalendarLink(env, request);
+  const calendarFeed = pathname.match(/^\/api\/calendar\/feed\/([^/]+)\.ics$/);
+  if (calendarFeed && ["GET", "HEAD"].includes(method)) return handleCalendarFeed(env, request, calendarFeed[1]);
   if (pathname === "/api/state" && method === "GET") return handleGetState(env, request);
   const stateRoute = pathname.match(/^\/api\/state\/([a-z0-9-]+)$/);
   if (stateRoute && method === "PUT") return handlePutState(env, request, stateRoute[1]);

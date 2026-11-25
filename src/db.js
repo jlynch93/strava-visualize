@@ -222,6 +222,8 @@ export async function getStoredActivity(env, userId, provider, activityId) {
 
 export async function deleteUser(env, userId) {
   const db = requireDb(env);
+  // Its own statement: the table may not exist yet where its migration is pending.
+  await ignoreMissingTable(() => db.prepare("DELETE FROM calendar_feeds WHERE user_id = ?").bind(userId).run());
   // Explicit deletes rather than relying on ON DELETE CASCADE, which needs
   // foreign keys enabled on the connection.
   await db.batch([

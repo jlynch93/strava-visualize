@@ -577,3 +577,52 @@ test("runs carry an effort-based type that the ledger can filter by", async ({ p
   expect(easy).toBeLessThanOrEqual(total);
   for (const chip of await page.locator("#activityRows .type-chip").allTextContents()) expect(["Easy", "Recovery"]).toContain(chip);
 });
+
+test("signed out, the plan downloads as a calendar file of saved weeks and races", async ({ page }) => {
+  await page.goto("/"); await importHistory(page); await view(page, "Plan");
+  await page.locator("#acceptPlanButton").click();
+  await page.locator("#planCalendarDisclosure > summary").click();
+  await expect(page.locator("#planCalendarCard")).toContainText("Sign in to get a calendar link");
+  const downloadEvent = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download a calendar file (.ics)" }).click();
+  const download = await downloadEvent;
+  expect(download.suggestedFilename()).toBe("runlore-plan.ics");
+  const ics = require("node:fs").readFileSync(await download.path(), "utf8");
+  expect(ics).toMatch(/^BEGIN:VCALENDAR\r\n/);
+  const runs = await page.evaluate(() => acceptedPlans[planKey()].sessions.filter((session) => session.kind === "run").length);
+  expect(ics.match(/BEGIN:VEVENT/g)).toHaveLength(runs);
+  expect(ics).not.toContain("Rest / mobility");
+});
+
+test("signed in, a calendar link is created, offered to Apple and Google, copied, replaced and stopped", async ({ page }) => {
+  let url = null; const calls = [];
+  await page.route("**/api/calendar", (route) => {
+    const method = route.request().method(); calls.push(method);
+    if (method === "POST") url = `https://runlore.test/api/calendar/feed/${"a".repeat(31)}${calls.length}.ics`;
+    if (method === "DELETE") url = null;
+    return route.fulfill({ status: method === "POST" ? 201 : 200, json: { url } });
+  });
+  await page.addInitScript(() => Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: async (value) => { window.copiedCalendar = value; } } }));
+  await page.goto("/"); await importHistory(page); await view(page, "Plan");
+  await page.evaluate(() => { state.account.signedIn = true; });
+  await page.locator("#planCalendarDisclosure > summary").click();
+  await page.getByRole("button", { name: "Create calendar link" }).click();
+  const apple = page.getByRole("link", { name: "Add to Apple Calendar" });
+  await expect(apple).toHaveAttribute("href", /^webcal:\/\/runlore\.test\/api\/calendar\/feed\/a{31}\d\.ics$/);
+  const first = await page.locator("#planCalendarUrl").inputValue();
+  await expect(page.getByRole("link", { name: /Add to Google Calendar/ })).toHaveAttribute("href", `https://calendar.google.com/calendar/r?cid=${encodeURIComponent(first.replace("https:", "webcal:"))}`);
+  const report = await new AxeBuilder({ page }).include("#planCalendarDisclosure").withTags(["wcag2a", "wcag2aa"]).analyze();
+  expect(report.violations).toEqual([]);
+  await page.getByRole("button", { name: "Copy", exact: true }).click();
+  expect(await page.evaluate(() => window.copiedCalendar)).toBe(first);
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.getByRole("button", { name: "Make a new link" }).click();
+  await expect(page.locator("#planCalendarUrl")).not.toHaveValue(first);
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.getByRole("button", { name: "Stop sharing" }).click();
+  await expect(page.getByRole("button", { name: "Create calendar link" })).toBeVisible();
+  expect(calls).toEqual(["GET", "POST", "POST", "DELETE"]);
+  // Signing out forgets the link on screen.
+  await page.evaluate(() => { state.account.signedIn = false; renderPlanCalendar(); });
+  await expect(page.locator("#planCalendarCard")).toContainText("Sign in to get a calendar link");
+});
