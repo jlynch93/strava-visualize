@@ -91,15 +91,12 @@ jobs:
 
       - uses: jdziat/open-nitpick@a32fa26e7231335da3179daf91a72b100e5e9bdb # v2.8.0
         if: env.HAS_KEY == 'true'
-        env:
-          # Runner-side model choice. These override .nitpick.yaml's model
-          # (the action's provider/model inputs only fill in what that file
-          # leaves unset); empty leaves the file's model in place.
-          NITPICK_REVIEW_PROVIDER: ${{ vars.NITPICK_PROVIDER }}
-          NITPICK_REVIEW_MODEL: ${{ vars.NITPICK_MODEL }}
-          NITPICK_TRIAGE_MODEL: ${{ vars.NITPICK_MODEL }}
         with:
           version: v2.8.0
+          # .nitpick.yaml names no model, so these decide it for every
+          # command (review here, respond in nitpick-respond.yml).
+          provider: ${{ vars.NITPICK_PROVIDER || 'openrouter' }}
+          model: ${{ vars.NITPICK_MODEL || 'z-ai/glm-5.3-flash' }}
           api-key: ${{ secrets.NITPICK_API_KEY }}
           fail-on: none
           skip-drafts: true

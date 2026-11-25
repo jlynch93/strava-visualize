@@ -8,13 +8,12 @@
 # "nitpick explain-config" to print what it resolves to without spending a
 # token.
 
-models:
-  default:
-    provider: openrouter
-    model: z-ai/glm-5.3-flash
-    # The credential is read from the provider's own conventional variable.
-    # Name a different one with api_key_env. Both it and base_url are ignored
-    # when this file is read out of a pull request that could have edited them.
+# No model here on purpose. The workflows set it from the NITPICK_PROVIDER and
+# NITPICK_MODEL repository variables (LLM_PROVIDER/LLM_MODEL), which nitpick
+# only uses when this file names none. Every command honours them that way,
+# review and respond alike, whereas a model named here would override the
+# runner's choice for some commands. Locally: LLM_PROVIDER=ollama
+# LLM_MODEL=<model> nitpick review
 
 review:
   # The lowest severity that makes the run exit non-zero. "none" reviews and
