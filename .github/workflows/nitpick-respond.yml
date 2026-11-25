@@ -19,14 +19,13 @@ permissions:
   issues: write
 
 concurrency:
-  # One run per pull request at a time, with replies kept apart from mentions
-  # so people talking to each other cannot cancel a pending question.
-  group: >-
-    nitpick-respond-${{
-      github.event.issue.number || github.event.pull_request.number
-    }}-${{
-      contains(github.event.comment.body, '@open-nitpick') && 'mention' || 'reply'
-    }}
+  # One group per comment, so no reply is ever dropped. A group per pull
+  # request let GitHub keep only one waiting run and cancel the rest: eight
+  # replies posted together got no answers at all. Replies still run one at a
+  # time for the single Ollama machine when AI_RUNS_ON points them at one
+  # runner (see nitpick.yml).
+  group: nitpick-respond-${{ github.event.comment.id }}
+  cancel-in-progress: false
 
 jobs:
   respond:
