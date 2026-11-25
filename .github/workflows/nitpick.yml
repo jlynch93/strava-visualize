@@ -57,19 +57,31 @@ jobs:
         with:
           fetch-depth: 0 # the reviewer diffs against the base branch or the pushed range
 
-      # Only when set: an empty value must not replace the localhost default.
+      # Ollama on another machine: nitpick refuses a private or plain-HTTP
+      # base_url from the repository's own .nitpick.yaml (a pull request could
+      # edit it), so the address goes in a runner-side config file instead,
+      # which nitpick trusts. Only when set: otherwise Ollama's default,
+      # localhost:11434, is used.
       - name: Ollama address
         if: env.HAS_KEY == 'true' && vars.OLLAMA_BASE_URL != ''
         env:
           OLLAMA_BASE_URL: ${{ vars.OLLAMA_BASE_URL }}
-        run: echo "LLM_BASE_URL=$OLLAMA_BASE_URL" >> "$GITHUB_ENV"
+        run: |
+          file="$RUNNER_TEMP/nitpick-runner.yaml"
+          printf 'models:\n  default:\n    base_url: "%s"\n    allow_private_endpoint: true\n' "$OLLAMA_BASE_URL" > "$file"
+          echo "NITPICK_USER_CONFIG=$file" >> "$GITHUB_ENV"
 
       - uses: jdziat/open-nitpick@a32fa26e7231335da3179daf91a72b100e5e9bdb # v2.8.0
         if: env.HAS_KEY == 'true'
+        env:
+          # Runner-side model choice. These override .nitpick.yaml's model
+          # (the action's provider/model inputs only fill in what that file
+          # leaves unset); empty leaves the file's model in place.
+          NITPICK_REVIEW_PROVIDER: ${{ vars.NITPICK_PROVIDER }}
+          NITPICK_REVIEW_MODEL: ${{ vars.NITPICK_MODEL }}
+          NITPICK_TRIAGE_MODEL: ${{ vars.NITPICK_MODEL }}
         with:
           version: v2.8.0
-          provider: ${{ vars.NITPICK_PROVIDER || 'openrouter' }}
-          model: ${{ vars.NITPICK_MODEL || 'z-ai/glm-5.3-flash' }}
           api-key: ${{ secrets.NITPICK_API_KEY }}
           fail-on: none
           skip-drafts: true
