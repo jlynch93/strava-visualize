@@ -165,6 +165,35 @@ test("rest days become runs, days swap, and statuses change from the board or th
   await page.reload(); await importHistory(page); await view(page, "Plan");
   await expect(page.locator(`.plan-day[data-date="${longDate}"] .plan-day-done`)).toHaveAttribute("aria-pressed", "true");
 });
+test("a plan saved before the board keeps a second session on one day through edits", async ({ page }) => {
+  // The old editor's date picker could put two sessions on one date.
+  await page.addInitScript(() => {
+    const monday = new Date(); monday.setHours(0, 0, 0, 0); monday.setDate(monday.getDate() - (monday.getDay() + 6) % 7);
+    const day = (offset) => { const date = new Date(monday); date.setDate(monday.getDate() + offset); return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`; };
+    const rest = (offset) => ({ date: day(offset), title: "Rest / mobility", detail: "", kind: "rest", miles: 0, status: "planned", matchedId: "" });
+    const sessions = [rest(0), { date: day(2), title: "Quality option", detail: "", kind: "run", miles: 5, status: "planned", matchedId: "" }, rest(2), { date: day(2), title: "Steady run", detail: "", kind: "run", miles: 4, status: "planned", matchedId: "" }, rest(3), rest(4), { date: day(5), title: "Long run", detail: "", kind: "run", miles: 9, status: "planned", matchedId: "" }, rest(6)];
+    if (!localStorage.getItem("run-trends-plans-v1")) localStorage.setItem("run-trends-plans-v1", JSON.stringify({ [day(0)]: { savedAt: new Date().toISOString(), sessions } }));
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: async (value) => { window.copiedPlan = value; } } });
+  });
+  await page.goto("/"); await importHistory(page); await view(page, "Plan");
+  await expect(page.locator(".plan-day")).toHaveCount(7);
+  await expect(page.locator("#planWeekTotals")).toContainText("also saved, not on the board");
+  await page.locator(".plan-day").first().locator(".plan-day-open").click();
+  await editor(page).getByRole("radio", { name: "Easy" }).check();
+  await page.keyboard.press("Escape");
+  const titles = await page.evaluate(() => acceptedPlans[planKey()].sessions.map((session) => session.title));
+  expect(titles.filter((title) => title === "Quality option")).toHaveLength(1);
+  expect(titles.filter((title) => title === "Steady run")).toHaveLength(1);
+  expect(titles).toHaveLength(9); // seven board days (Tuesday filled in) plus the two not on the board
+  // Copy carries each day's note.
+  await page.locator("#copyPlanButton").click();
+  expect(await page.evaluate(() => window.copiedPlan)).toContain("Easy run");
+  expect(await page.evaluate(() => window.copiedPlan)).toContain("Conversational effort");
+  // Reloading keeps every session (the saved plan still validates).
+  await page.reload(); await importHistory(page); await view(page, "Plan");
+  expect(await page.evaluate(() => acceptedPlans[planKey()]?.sessions.length)).toBe(9);
+});
+
 test("dragging one day onto another swaps them", async ({ page, browserName }) => {
   test.skip(browserName !== "chromium", "HTML drag and drop is simulated reliably in Chromium");
   await page.goto("/"); await importHistory(page); await view(page, "Plan");

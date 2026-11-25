@@ -3406,7 +3406,7 @@ els.checkinForm.addEventListener("submit", (event) => {
 });
 
 els.copyPlanButton.addEventListener("click", async () => {
-  const days = weekDates().map((date) => sessionOn(weekSessions(), date)).map((session) => `${dayLabel(session.date)}: ${session.title}${session.kind === "run" ? ` · ${displayDistance(session.miles)}` : ""}`);
+  const days = boardSessions(weekSessions()).map((session) => `${dayLabel(session.date)}: ${session.title}${session.kind === "run" ? ` · ${displayDistance(session.miles)}` : ""}${session.detail ? ` · ${session.detail}` : ""}`);
   try { await navigator.clipboard.writeText([els.planDraftCopy.textContent, els.planAdaptation.textContent, ...days].join("\n\n")); buttonFeedback(els.copyPlanButton, "Draft copied"); setStatus("Next-week draft and calendar copied. Review them before using them."); } catch { setStatus("Copy is unavailable in this browser.", true); }
 });
 

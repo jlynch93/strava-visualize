@@ -272,6 +272,9 @@ function weekDates() {
 function sessionOn(sessions, date) {
   return sessions.find((session) => session.date === date) || { date, ...TrainingCore.retypeSession({ date, kind: "rest", miles: 0, status: "planned", matchedId: "" }, "rest") };
 }
+// One session per day of the week, as the board shows it: the first saved on
+// each date, or a rest day.
+function boardSessions(sessions) { return weekDates().map((date) => sessionOn(sessions, date)); }
 function dayLabel(date, options = { weekday: "short", month: "short", day: "numeric" }) {
   return new Date(`${date}T12:00:00`).toLocaleDateString(undefined, options);
 }
@@ -281,9 +284,10 @@ function editWeek(change) {
   const key = planKey();
   const current = weekSessions();
   if (!current.length) return false;
-  const dates = weekDates();
-  const filled = dates.map((date) => sessionOn(current, date)).concat(current.filter((session) => !dates.includes(session.date)));
-  const sessions = change(structuredClone(filled));
+  const filled = boardSessions(current);
+  // Sessions the board cannot show (another week's date, or a second session on
+  // one day from plans saved before the board) are kept, never dropped.
+  const sessions = change(structuredClone(filled.concat(current.filter((session) => !filled.includes(session)))));
   acceptedPlans[key] = { savedAt: acceptedPlans[key]?.savedAt || new Date().toISOString(), editedAt: new Date().toISOString(), sessions };
   const saved = savePlans();
   if (!saved) setStatus("Updated in this tab. Browser storage failed; back up the plan before closing.", true);
@@ -325,9 +329,10 @@ function renderAcceptedPlan() {
       ${run ? `<button type="button" class="plan-day-done" data-action="toggle-done" aria-pressed="${session.status === "completed"}" aria-label="${escapeHtml(`${session.title} on ${dayLabel(date, { weekday: "long" })} done`)}">${session.status === "completed" ? "✓ Done" : session.status === "skipped" ? "Skipped" : "Mark done"}</button>` : ""}
     </li>`;
   }).join("")}</ol>`;
-  const outside = sessions.filter((session) => !dates.includes(session.date));
-  const sum = TrainingCore.weekTotals(sessions.filter((session) => dates.includes(session.date)));
-  totals.textContent = `${displayDistance(sum.miles)} across ${sum.runs} run${sum.runs === 1 ? "" : "s"}${sum.completedRuns ? ` · ${sum.completedRuns} done (${displayDistance(sum.completedMiles)})` : ""}${sum.skippedRuns ? ` · ${sum.skippedRuns} skipped` : ""}${outside.length ? ` · also planned outside this week: ${outside.map((session) => `${session.title} ${dayLabel(session.date)}`).join(", ")}` : ""}`;
+  const shown = boardSessions(sessions);
+  const outside = sessions.filter((session) => !shown.includes(session));
+  const sum = TrainingCore.weekTotals(shown);
+  totals.textContent = `${displayDistance(sum.miles)} across ${sum.runs} run${sum.runs === 1 ? "" : "s"}${sum.completedRuns ? ` · ${sum.completedRuns} done (${displayDistance(sum.completedMiles)})` : ""}${sum.skippedRuns ? ` · ${sum.skippedRuns} skipped` : ""}${outside.length ? ` · also saved, not on the board: ${outside.map((session) => `${session.title} ${dayLabel(session.date)}`).join(", ")}` : ""}`;
   if (document.querySelector("#dayEditor")?.open) renderDayEditor(dayEditorDate);
 }
 
@@ -622,7 +627,7 @@ function initializeExperience() {
   document.querySelector("#copyPlanButton").addEventListener("click", (event) => {
     const plan = acceptedPlans[planKey()]; if (!plan) return;
     event.stopImmediatePropagation();
-    navigator.clipboard.writeText(weekDates().map((date) => sessionOn(plan.sessions, date)).map((session) => `${dayLabel(session.date)}: ${session.title}${session.kind === "run" ? ` · ${displayDistance(session.miles)} · ${PLAN_STATUS_LABELS[session.status].toLowerCase()}` : ""}`).join("\n")).then(() => setStatus("Plan copied."), () => setStatus("Clipboard unavailable. Your plan remains visible.", true));
+    navigator.clipboard.writeText(boardSessions(plan.sessions).map((session) => `${dayLabel(session.date)}: ${session.title}${session.kind === "run" ? ` · ${displayDistance(session.miles)} · ${PLAN_STATUS_LABELS[session.status].toLowerCase()}` : ""}${session.detail ? ` · ${session.detail}` : ""}`).join("\n")).then(() => setStatus("Plan copied."), () => setStatus("Clipboard unavailable. Your plan remains visible.", true));
   }, true);
   document.querySelector("#backupContextButton").addEventListener("click", () => {
     const url = URL.createObjectURL(new Blob([JSON.stringify({ version: 1, coachingContext, acceptedPlans }, null, 2)], { type: "application/json" }));
@@ -655,7 +660,7 @@ function initializeExperience() {
   new MutationObserver(() => { if (unitQueued) return; unitQueued = true; queueMicrotask(() => { unitQueued = false; applyDisplayUnits(); applyDisplayUnits(els.workoutModalContent); }); }).observe(document.body, { childList: true, characterData: true, subtree: true });
 }
 function validPlans(plans) {
-  return plans && typeof plans === "object" && !Array.isArray(plans) && Object.entries(plans).every(([key, plan]) => /^\d{4}-\d{2}-\d{2}$/.test(key) && typeof plan?.savedAt === "string" && Number.isFinite(Date.parse(plan.savedAt)) && Array.isArray(plan.sessions) && plan.sessions.length <= 14 && plan.sessions.every((session) => session && typeof session.title === "string" && session.title.length <= 100 && /^\d{4}-\d{2}-\d{2}$/.test(session.date) && Number.isFinite(Date.parse(session.date)) && ["run", "rest"].includes(session.kind) && Number.isFinite(session.miles) && session.miles >= 0 && session.miles <= 500 && ["planned", "completed", "skipped"].includes(session.status) && (session.type === undefined || Object.hasOwn(TrainingCore.SESSION_TYPES, session.type))));
+  return plans && typeof plans === "object" && !Array.isArray(plans) && Object.entries(plans).every(([key, plan]) => /^\d{4}-\d{2}-\d{2}$/.test(key) && typeof plan?.savedAt === "string" && Number.isFinite(Date.parse(plan.savedAt)) && Array.isArray(plan.sessions) && plan.sessions.length <= 21 && plan.sessions.every((session) => session && typeof session.title === "string" && session.title.length <= 100 && /^\d{4}-\d{2}-\d{2}$/.test(session.date) && Number.isFinite(Date.parse(session.date)) && ["run", "rest"].includes(session.kind) && Number.isFinite(session.miles) && session.miles >= 0 && session.miles <= 500 && ["planned", "completed", "skipped"].includes(session.status) && (session.type === undefined || Object.hasOwn(TrainingCore.SESSION_TYPES, session.type))));
 }
 
 /* ---------- Installed app ---------- */
