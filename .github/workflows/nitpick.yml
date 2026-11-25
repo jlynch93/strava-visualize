@@ -24,7 +24,12 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  # contents: write is only for resolving review threads: GitHub refuses the
+  # resolve call ("Resource not accessible by integration") with contents:
+  # read, so outdated findings stayed open. The job runs the pinned nitpick
+  # release and never executes code from the pull request, and forked pull
+  # requests are not reviewed at all (see the job's if).
+  contents: write
   pull-requests: write
 
 concurrency:
