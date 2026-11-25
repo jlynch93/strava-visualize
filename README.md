@@ -314,6 +314,23 @@ date it was run. Rest days never complete automatically. Returning to Plan opens
 the current week's plan when one exists, previous/next week controls reopen saved
 plans, and Copy copies the week shown.
 
+**Calendar** (in Plan) puts the plan in Apple Calendar, Google Calendar,
+Outlook or any app that subscribes to a URL. Signed in, **Create calendar
+link** makes a secret link (`/api/calendar/feed/<token>.ics`) that serves the
+saved weeks from the last eight weeks onward and the races as all-day events,
+in the runner's units; rest days are left out, and a plan's race day gives way
+to the race itself. The calendar picks up changes when it next refreshes:
+Apple Calendar about hourly (the feed asks for an hour; the app's setting
+decides), Google Calendar on its own schedule, often several hours and up to a
+day. A suggested week appears once it is saved (edit a day or **Keep this
+plan**). **Make a new link** retires the old one, **Stop sharing** ends it,
+and deleting the account removes it. The token is stored as a SHA-256 hash for
+lookups and encrypted with `TOKEN_ENCRYPTION_KEY` so the link can be shown
+again; it needs migration `0005_calendar_feeds.sql` applied
+(`npx wrangler d1 migrations apply strava-visualize --remote`). Without an
+account, **Download a calendar file** saves a one-off `.ics` snapshot built in
+the browser. Both use `public/calendar-core.js`.
+
 **Runs** searches the entire selected history, with sorting and 15-row pages.
 On mobile, each row emphasizes the run name, date, distance, and pace; open the
 run for the remaining metrics. **Export CSV** downloads the entire selected

@@ -483,3 +483,18 @@ body.is-loading .onboarding { display: none; }
   .day-editor form { padding: 18px 16px calc(20px + env(safe-area-inset-bottom)); }
   .day-editor-done { justify-self: stretch; }
 }
+
+/* ---------- Plan: calendar subscription ---------- */
+.plan-calendar { display: grid; gap: 12px; font-size: .88rem; }
+.plan-calendar p { margin: 0; }
+.plan-calendar-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.calendar-add { display: inline-flex; align-items: center; min-height: 44px; padding: 0 16px; border: 1px solid var(--ink); border-radius: 6px; background: var(--ink); color: var(--surface); font-weight: 700; text-decoration: none; }
+.calendar-add + .calendar-add { background: transparent; color: var(--ink); }
+.calendar-add:hover { background: var(--teal); border-color: var(--teal); color: var(--surface); }
+.plan-calendar-url { display: grid; gap: 6px; color: var(--ink-soft); font-size: .8rem; }
+.plan-calendar-url span { display: flex; gap: 8px; }
+.plan-calendar-url input { flex: 1; min-width: 0; min-height: 44px; font-family: ui-monospace, monospace; font-size: .78rem; color: var(--ink); }
+.plan-calendar-url button { min-height: 44px; }
+.plan-calendar-notes { margin: 0; padding-left: 18px; color: var(--ink-soft); font-size: .8rem; line-height: 1.5; }
+.plan-calendar-manage { font-size: .82rem; }
+.plan-calendar-error { color: var(--red); }
