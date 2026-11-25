@@ -37,7 +37,8 @@ jobs:
     # ubuntu-latest to fall back to GitHub's runners while it is offline.
     # (Forked pull requests are not reviewed at all, see the if below.)
     runs-on: ${{ vars.RUNS_ON || 'self-hosted' }}
-    timeout-minutes: 20
+    # Local models on small hardware are slow; hosted ones finish in minutes.
+    timeout-minutes: ${{ vars.NITPICK_PROVIDER == 'ollama' && 60 || 20 }}
     # Forked pull requests and Dependabot runs get no secrets, so they would
     # only fail with "API key is required".
     if: >-
@@ -57,19 +58,43 @@ jobs:
         with:
           fetch-depth: 0 # the reviewer diffs against the base branch or the pushed range
 
-      # Only when set: an empty value must not replace the localhost default.
-      - name: Ollama address
-        if: env.HAS_KEY == 'true' && vars.OLLAMA_BASE_URL != ''
+      # Runner-side config for Ollama, in a file outside the checkout that
+      # nitpick trusts (NITPICK_USER_CONFIG). Two reasons it lives here:
+      # - nitpick refuses a private or plain-HTTP base_url from the repository's
+      #   own .nitpick.yaml, since a pull request could edit it;
+      # - small local hardware needs small requests: only the changed lines
+      #   (not whole files, which for public/script.js is ~55k tokens), no
+      #   imported definitions, and one file per call within ~6k tokens, one
+      #   call at a time (a small machine only queues parallel ones), so a
+      #   request fits an 8k context and answers in minutes.
+      - name: Ollama settings
+        if: env.HAS_KEY == 'true' && vars.NITPICK_PROVIDER == 'ollama'
         env:
           OLLAMA_BASE_URL: ${{ vars.OLLAMA_BASE_URL }}
-        run: echo "LLM_BASE_URL=$OLLAMA_BASE_URL" >> "$GITHUB_ENV"
+        run: |
+          file="$RUNNER_TEMP/nitpick-runner.yaml"
+          {
+            if [ -n "$OLLAMA_BASE_URL" ]; then
+              printf 'models:\n  default:\n    base_url: "%s"\n    allow_private_endpoint: true\n    timeout: 15m\n' "$OLLAMA_BASE_URL"
+            else
+              printf 'models:\n  default:\n    timeout: 15m\n'
+            fi
+            printf 'review:\n  include_full_files: false\n  related_context: false\n  max_files_per_request: 1\n  token_budget_per_request: 6000\n  concurrency: 1\n'
+          } > "$file"
+          cat "$file"
+          echo "NITPICK_USER_CONFIG=$file" >> "$GITHUB_ENV"
 
       - uses: jdziat/open-nitpick@a32fa26e7231335da3179daf91a72b100e5e9bdb # v2.8.0
         if: env.HAS_KEY == 'true'
+        env:
+          # Runner-side model choice. These override .nitpick.yaml's model
+          # (the action's provider/model inputs only fill in what that file
+          # leaves unset); empty leaves the file's model in place.
+          NITPICK_REVIEW_PROVIDER: ${{ vars.NITPICK_PROVIDER }}
+          NITPICK_REVIEW_MODEL: ${{ vars.NITPICK_MODEL }}
+          NITPICK_TRIAGE_MODEL: ${{ vars.NITPICK_MODEL }}
         with:
           version: v2.8.0
-          provider: ${{ vars.NITPICK_PROVIDER || 'openrouter' }}
-          model: ${{ vars.NITPICK_MODEL || 'z-ai/glm-5.3-flash' }}
           api-key: ${{ secrets.NITPICK_API_KEY }}
           fail-on: none
           skip-drafts: true

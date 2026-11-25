@@ -452,9 +452,17 @@ never fails a build for its findings. Choose the model with repository
 variables (Settings → Secrets and variables → Actions → Variables):
 
 - Ollama on the self-hosted runner: `NITPICK_PROVIDER` = `ollama`,
-  `NITPICK_MODEL` = a model from `ollama list` (a coding model of 14B or more
-  reviews noticeably better). No key. If Ollama runs on a different machine
-  from the runner, set `OLLAMA_BASE_URL` too, e.g. `http://192.168.1.20:11434/v1`.
+  `NITPICK_MODEL` = a model from `ollama list`. No key. If Ollama runs on a
+  different machine from the runner, set `OLLAMA_BASE_URL` too, e.g.
+  `http://192.168.1.20:11434/v1`. For small hardware the workflow sends only
+  the changed lines, one file and one request at a time (about 6k tokens), and
+  allows up to an hour. (Not `fast-review`: in v2.8.0 it ignores the runner's
+  model choice and falls back to `.nitpick.yaml`'s OpenRouter model.) Pick the model by the
+  Ollama machine's free memory: `qwen2.5-coder:1.5b` (~2 GB), `qwen2.5-coder:3b`
+  (~3 GB, the best fit for small machines), `qwen2.5-coder:7b` (~6 GB). Smaller
+  models miss more and flag more that isn't wrong. Give Ollama an 8k context
+  (`OLLAMA_CONTEXT_LENGTH=8192` where Ollama runs); a smaller default cuts the
+  request short.
 - A hosted provider: the `NITPICK_API_KEY` secret (OpenRouter by default,
   roughly two cents a review).
 
