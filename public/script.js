@@ -1350,7 +1350,13 @@ function renderRecommendedCalendar(intent, summary, targetMiles, race) {
   const hasLong = raceIndex < 0 && planned.has(longIndex);
   const totalTarget = adjustedPlanMiles(intent, targetMiles);
   const longMiles = hasLong ? Math.min(longRun, totalTarget) : 0;
-  state.draftSessions = schedule.map(([title, detail], index) => ({ date: localDateValue(dates[index]), type: TrainingCore.sessionType({ title, kind: planned.has(index) ? "run" : "rest" }), title, detail, kind: planned.has(index) ? "run" : "rest", miles: planned.has(index) ? (hasLong && index === longIndex ? longMiles : Math.max(0, totalTarget - longMiles) / Math.max(1, planned.size - (hasLong ? 1 : 0))) : 0, status: "planned", matchedId: "" }));
+  // The long run and a race of known distance are fixed; the other runs share what is left.
+  const fixed = new Map();
+  if (hasLong) fixed.set(longIndex, longMiles);
+  const racing = raceIndex >= 0 ? TrainingCore.raceMiles(race) : null;
+  if (racing !== null) fixed.set(raceIndex, racing);
+  const shared = Math.max(0, totalTarget - [...fixed.values()].reduce((sum, value) => sum + value, 0)) / Math.max(1, planned.size - fixed.size);
+  state.draftSessions = schedule.map(([title, detail], index) => ({ date: localDateValue(dates[index]), type: TrainingCore.sessionType({ title, kind: planned.has(index) ? "run" : "rest" }), title, detail, kind: planned.has(index) ? "run" : "rest", miles: planned.has(index) ? (fixed.has(index) ? fixed.get(index) : shared) : 0, status: "planned", matchedId: "" }));
   state.draftSessions.forEach((session) => session.miles = Number(session.miles.toFixed(1)));
   // The week board (experience.js) draws these sessions, or the saved plan for this week.
   renderAcceptedPlan();
@@ -1380,7 +1386,7 @@ function raceContext() {
   const days = Math.ceil((new Date(`${race.date}T00:00:00`) - new Date()) / 86400000);
   const weeks = Math.max(0, Math.ceil(days / 7));
   const phase = weeks <= 2 ? "taper / race" : weeks <= 5 ? "peak" : weeks <= 12 ? "build" : "base";
-  return { weeks, phase, label: raceLabel(race), date: race.date, priority: race.priority };
+  return { weeks, phase, label: raceLabel(race), date: race.date, priority: race.priority, distance: race.distance };
 }
 
 // The most important race inside the planned week, so the calendar can mark it.
@@ -1389,7 +1395,7 @@ function raceInPlanWeek() {
   const end = new Date(start); end.setDate(end.getDate() + 6);
   const [from, to] = [localDateValue(start), localDateValue(end)];
   const race = raceList().filter((candidate) => candidate.date >= from && candidate.date <= to).sort((a, b) => a.priority.localeCompare(b.priority))[0];
-  return race ? { label: `${raceLabel(race)}${race.priority === "A" ? "" : ` (${race.priority} race)`}`, date: race.date, priority: race.priority } : null;
+  return race ? { label: `${raceLabel(race)}${race.priority === "A" ? "" : ` (${race.priority} race)`}`, date: race.date, priority: race.priority, distance: race.distance } : null;
 }
 
 function renderRaceList() {

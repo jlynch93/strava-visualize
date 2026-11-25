@@ -92,6 +92,9 @@ test("a tune-up race in the planned week takes its day on the calendar", async (
   await expect(raceDay).toHaveCount(1);
   await expect(raceDay).toContainText("Turkey Trot · 10K (B race)");
   await expect(raceDay).toHaveAttribute("data-date", saturday);
+  // Race day plans the race's own distance, not a share of the week.
+  await expect(raceDay.locator(".plan-day-distance")).toHaveText("6.2 mi");
+  expect(await page.evaluate((date) => weekSessions().find((session) => session.date === date).miles, saturday)).toBe(6.2);
 });
 
 test("without races nothing about readiness changes", async ({ page }) => {

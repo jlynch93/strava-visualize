@@ -43,6 +43,13 @@
     long: { label: "Long", title: "Long run", detail: "Easy pace, time on your feet", kind: "run" },
     race: { label: "Race", title: "Race day", detail: "Race effort", kind: "run" }
   };
+  // A race's own distance, for its day on the plan. "Other" has no known
+  // distance, so the day keeps whatever the plan gave it.
+  const RACE_MILES = { "5K": 5 / 1.609344, "10K": 10 / 1.609344, "Half marathon": 21.0975 / 1.609344, "Marathon": 42.195 / 1.609344 };
+  function raceMiles(race) {
+    const value = RACE_MILES[race?.distance];
+    return value ? Number(value.toFixed(1)) : null;
+  }
   function sessionType(session) {
     if (session && Object.hasOwn(SESSION_TYPES, session.type)) return session.type;
     if (!session || session.kind !== "run") return "rest";
@@ -61,11 +68,14 @@
   }
   // Changing the type keeps the distance and status of a run that stays a run.
   // A rest day has no distance, status or matched activity.
-  function retypeSession(session, type, sessions = []) {
+  // A known race on that day (options.race) sets a race session's distance.
+  function retypeSession(session, type, sessions = [], options = {}) {
     const spec = SESSION_TYPES[type];
     if (!spec) throw new Error(`Unknown session type: ${type}`);
     const next = { ...session, type, title: spec.title, detail: spec.detail, kind: spec.kind };
+    const racing = type === "race" ? raceMiles(options.race) : null;
     if (spec.kind === "rest") Object.assign(next, { miles: 0, status: "planned", matchedId: "" });
+    else if (racing !== null) next.miles = racing;
     else if (session.kind !== "run" || !(session.miles > 0)) next.miles = typicalRunMiles(sessions, session);
     return next;
   }
@@ -94,7 +104,7 @@
     return { miles: sum(runs), runs: runs.length, completedMiles: sum(done), completedRuns: done.length, skippedRuns: runs.filter((session) => session.status === "skipped").length };
   }
 
-  const api = { dayKey, weekStart, rampRate, freshCheckin, mergeActivities, SESSION_TYPES, sessionType, retypeSession, moveSession, setSessionMiles, weekTotals };
+  const api = { dayKey, weekStart, rampRate, freshCheckin, mergeActivities, SESSION_TYPES, raceMiles, sessionType, retypeSession, moveSession, setSessionMiles, weekTotals };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.TrainingCore = api;
 })(typeof globalThis !== "undefined" ? globalThis : this);

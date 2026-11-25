@@ -89,3 +89,17 @@ test("week totals count runs, what is done, and what was skipped", () => {
   assert.deepEqual(core.weekTotals(sessions), { miles: 23.1, runs: 4, completedMiles: 6, completedRuns: 1, skippedRuns: 1 });
   assert.deepEqual(core.weekTotals([]), { miles: 0, runs: 0, completedMiles: 0, completedRuns: 0, skippedRuns: 0 });
 });
+
+test("a race day takes the race's own distance when it is known", () => {
+  assert.equal(core.raceMiles({ distance: "5K" }), 3.1);
+  assert.equal(core.raceMiles({ distance: "10K" }), 6.2);
+  assert.equal(core.raceMiles({ distance: "Half marathon" }), 13.1);
+  assert.equal(core.raceMiles({ distance: "Marathon" }), 26.2);
+  assert.equal(core.raceMiles({ distance: "Other" }), null);
+  assert.equal(core.raceMiles(undefined), null);
+  const sessions = week();
+  const easy = sessions[3]; // a 4 mi steady run
+  assert.equal(core.retypeSession(easy, "race", sessions, { race: { distance: "10K" } }).miles, 6.2);
+  assert.equal(core.retypeSession(easy, "race", sessions, { race: { distance: "Other" } }).miles, 4, "an unknown distance keeps the run's own");
+  assert.equal(core.retypeSession(sessions[0], "race", sessions).miles, 6.7, "no race that day: the week's typical run");
+});

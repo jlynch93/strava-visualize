@@ -374,7 +374,7 @@ function setupWeekBoard() {
   const saved = (ok) => { document.querySelector("#dayEditorSaved").textContent = ok ? "Saved" : "Saved in this tab only: browser storage failed"; };
   dialog.addEventListener("change", (event) => {
     const target = event.target;
-    if (target.name === "dayType") { saved(replaceSession(dayEditorDate, (session, sessions) => TrainingCore.retypeSession(session, target.value, sessions))); renderDayEditor(dayEditorDate, `input[name=dayType][value="${target.value}"]`); }
+    if (target.name === "dayType") { saved(replaceSession(dayEditorDate, (session, sessions) => TrainingCore.retypeSession(session, target.value, sessions, { race: raceList().find((race) => race.date === dayEditorDate) }))); renderDayEditor(dayEditorDate, `input[name=dayType][value="${target.value}"]`); }
     else if (target.name === "dayStatus") { saved(replaceSession(dayEditorDate, (session) => ({ ...session, status: target.value, matchedId: target.value === "completed" ? session.matchedId : "" }))); renderDayEditor(dayEditorDate, `input[name=dayStatus][value="${target.value}"]`); }
     else if (target.id === "dayMiles") { saved(replaceSession(dayEditorDate, (session) => TrainingCore.setSessionMiles(session, Number(target.value) / (preferences.units === "metric" ? 1.609344 : 1)))); }
     else if (target.id === "dayMatch") { saved(replaceSession(dayEditorDate, (session) => ({ ...session, matchedId: target.value, status: target.value ? "completed" : session.status }))); renderDayEditor(dayEditorDate, "#dayMatch"); }
