@@ -6,3 +6,8 @@ test-results/
 .impeccable/review/
 .data/
 .build/
+
+# Wrangler: local dev state (including a local D1 copy) and local secrets
+.wrangler/
+.dev.vars*
+!.dev.vars.example
