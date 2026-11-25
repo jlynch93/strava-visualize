@@ -1,0 +1,62 @@
+# AI code review with open-nitpick (https://github.com/jdziat/open-nitpick).
+#
+# Needs one repository secret: NITPICK_API_KEY, an API key for the model
+# provider (OpenRouter by default). Without it the job is skipped, not failed.
+# Optional repository variables NITPICK_PROVIDER and NITPICK_MODEL choose a
+# different provider/model (run "nitpick providers" for the list).
+#
+# - Pull requests: findings are posted as inline review comments.
+# - Pushes to main: there is no pull request to comment on, so the review of
+#   the pushed commits is written to the run's job summary in the Actions tab.
+#
+# Advisory only (fail-on: none): it never blocks a merge or marks a push red
+# for its findings.
+name: AI review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: nitpick-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Forked pull requests and Dependabot runs get no secrets, so they would
+    # only fail with "API key is required".
+    if: >-
+      (github.event_name != 'pull_request' ||
+       github.event.pull_request.head.repo.full_name == github.repository) &&
+      github.actor != 'dependabot[bot]'
+    env:
+      # A step's if cannot read secrets; it can read env.
+      HAS_KEY: ${{ secrets.NITPICK_API_KEY != '' }}
+    steps:
+      - name: No model key
+        if: env.HAS_KEY != 'true'
+        run: echo "::notice::AI review skipped. Add the NITPICK_API_KEY repository secret to turn it on."
+
+      - uses: actions/checkout@v4
+        if: env.HAS_KEY == 'true'
+        with:
+          fetch-depth: 0 # the reviewer diffs against the base branch or the pushed range
+
+      - uses: jdziat/open-nitpick@a32fa26e7231335da3179daf91a72b100e5e9bdb # v2.8.0
+        if: env.HAS_KEY == 'true'
+        with:
+          version: v2.8.0
+          provider: ${{ vars.NITPICK_PROVIDER || 'openrouter' }}
+          model: ${{ vars.NITPICK_MODEL || 'z-ai/glm-5.3-flash' }}
+          api-key: ${{ secrets.NITPICK_API_KEY }}
+          fail-on: none
+          skip-drafts: true

@@ -1,0 +1,129 @@
+# open-nitpick configuration (AI review, see .github/workflows/nitpick.yml).
+# Written by "nitpick init", then given this project's own review instructions.
+#
+# Every value here is already the shipped default, except the model and
+# linters.enabled, so deleting a key changes nothing and this file can be
+# trimmed to taste. linters.enabled is matched to this checkout's files, and
+# under "mode: strict" it is the list whose absence fails a run. Run
+# "nitpick explain-config" to print what it resolves to without spending a
+# token.
+
+models:
+  default:
+    provider: openrouter
+    model: z-ai/glm-5.3-flash
+    # The credential is read from the provider's own conventional variable.
+    # Name a different one with api_key_env. Both it and base_url are ignored
+    # when this file is read out of a pull request that could have edited them.
+
+review:
+  # The lowest severity that makes the run exit non-zero. "none" reviews and
+  # comments without ever failing a build, which is where a reviewer starts:
+  # one that blocks a merge on its first false positive is one the team
+  # switches off. Raise it to warning or error once you have watched it work.
+  fail_on: none
+
+  # Findings below this level are dropped before they are published.
+  min_severity: info
+
+  # How much one run reads. max_files bounds the whole change; the other two
+  # bound a single model call, and lowering them costs more calls, not fewer
+  # files.
+  max_files: 60
+  max_files_per_request: 6
+  token_budget_per_request: 60000
+
+  # Paths never reviewed. Setting this REPLACES the built-in list rather than
+  # adding to it, and that list already covers vendored and generated code,
+  # lockfiles, and binaries. Print it with "nitpick explain-config" and paste
+  # it back before you narrow it.
+  # ignore:
+  #   - "**/vendor/**"
+
+  # A spending ceiling that changes what the run does rather than stopping it
+  # partway: over the ceiling, files are ranked and the plan keeps what fits.
+  # The rates are yours to state, in dollars per million tokens, because a
+  # ceiling computed from a price nobody checked is worse than no ceiling.
+  # budget:
+  #   max_spend: 1.00
+  #   prices: {input: 0.20, output: 0.80}
+
+# What matters in this codebase, so the reviewer looks for it. Path-scoped
+# entries compose with the general one.
+instructions:
+  - path: "**/*"
+    prompt: >-
+      This is a running dashboard: a Cloudflare Worker (src/, ES modules, D1)
+      serves an API for a vanilla-JS front end (public/, classic scripts that
+      share globals). Users' training data, profile (age, gender, heart rate)
+      and OAuth tokens are private. Flag anything that logs, returns or sends
+      tokens, API keys or personal details to a third party. Ignore formatting
+      and naming style.
+  - path: "src/**/*.js"
+    prompt: >-
+      Flag SQL built by string concatenation instead of bound D1 parameters,
+      routes that read or write data without checking the session's user,
+      secrets placed in URLs or logs, outbound fetches without a timeout, and
+      error responses that leak internals. Strava and Garmin ids can exceed
+      2^53: they must stay strings, never Number.
+  - path: "public/**/*.js"
+    prompt: >-
+      Flag HTML built from data (activity names, race names, notes, API
+      replies) without escapeHtml, links taken from data without checking the
+      host, and Strava ids parsed as numbers. These files are classic scripts
+      sharing globals, and extras.js deliberately reassigns earlier global
+      functions to wrap them: a top-level name clash between files is a bug,
+      the reassignment is not.
+  - path: "public/fitness-core.js"
+    prompt: >-
+      Pure training calculations with unit tests. Check units (metres vs km,
+      seconds vs minutes, pace vs speed), divide-by-zero on empty weeks and
+      runs without heart rate, and date handling across time zones and weeks.
+
+persona:
+  # How far past outright defects the reviewer ranges: off, minimal, normal,
+  # pedantic.
+  nitpick: normal
+
+  # How much prose each finding carries: terse, normal, detailed.
+  verbosity: normal
+
+linters:
+  # Deterministic analyzers, run beside the model. "auto" runs what is
+  # installed and has something to read, "strict" fails the run when one named
+  # below is missing, "off" runs none.
+  mode: auto
+
+  # Nothing in this checkout is Go or Python, the two analyzers that ship
+  # enabled, so the list is empty rather than naming a tool with nothing to
+  # read.
+  enabled: []
+
+  # Also matched here. These run on their own when installed
+  # (linters.auto_detect), configured from outside the tree, so they need no
+  # entry above. Move one into enabled to make its absence an error under
+  # mode: strict.
+  #   actionlint     GitHub Actions workflows
+  #   biome          JavaScript, TypeScript, JSX, TSX, JSON, CSS
+  #   dotenv-linter  .env files
+  #   gitleaks       secrets in any file
+  #   htmlhint       HTML
+  #   oxlint         JavaScript, TypeScript, JSX, TSX
+  #   sqlfluff       SQL
+  #   yamllint       YAML
+  #   zizmor         GitHub Actions workflows (security)
+
+  # Also matched here, and each runs only when it is named. Auto-detection
+  # does not reach these, so leaving one a comment means it never runs. Move
+  # it into enabled above to turn it on, and its absence then fails a run
+  # under mode: strict.
+  #   markdownlint   Markdown
+  #   osv-scanner    dependency lockfiles (vulnerabilities; queries osv.dev)
+
+  # Matched here, and each needs something only you can supply: a
+  # configuration that resolves OUTSIDE this repository, or your word that its
+  # code may run. A change under review may not supply the policy it is
+  # reviewed under, which is why neither can be turned on from this file
+  # alone.
+  #   eslint         linters.eslint_config required
+  #   stylelint      linters.configs.stylelint required

@@ -444,6 +444,18 @@ public production URL after deployment; it checks the status endpoint, dashboard
 HTML, cache headers, stylesheets, and client script. It does not deploy changes.
 `Playwright smoke test` runs the browser suite on pushes and pull requests.
 
+`AI review` runs [open-nitpick](https://github.com/jdziat/open-nitpick) (pinned
+to v2.8.0) on pull requests, pushes to `main`, and on demand. On a pull request
+it posts inline review comments; on a push to `main` it writes its review of the
+pushed commits to the run's job summary. It is advisory (`fail-on: none`) and
+never fails a build for its findings. It needs the `NITPICK_API_KEY` repository
+secret (an OpenRouter key by default, roughly two cents a review); without it
+the job is skipped with a notice. Set the `NITPICK_PROVIDER` and `NITPICK_MODEL`
+repository variables to use another provider, e.g. `anthropic`. What it checks
+for in this codebase (private data, escaping, D1 parameters, 64-bit ids, units)
+is in `.nitpick.yaml` under `instructions`; preview the exact prompt without
+spending anything with `nitpick explain-config -path src/races.js`.
+
 ## Definition of done
 
 The dashboard is ready to ship when the selected training block, race goal,
