@@ -355,3 +355,4 @@
 .goal-race-place-goal, .goal-race-place-hint { margin: 8px 0 0; color: var(--ink-soft); font-size: .8rem; }
 .place-profile { margin: 10px 0 0; font-size: .82rem; color: var(--ink-soft); }
 .profile-edit { margin: 0; color: var(--ink-soft); font-size: .88rem; }
+.race-source { font-weight: 700; color: var(--ink-soft); }

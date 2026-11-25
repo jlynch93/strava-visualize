@@ -426,7 +426,7 @@ const ordinal = (n) => `${n}${n % 100 > 10 && n % 100 < 14 ? "th" : ["th", "st",
 
 // Where the predicted time would have finished in the race's last edition.
 function goalRacePlace(race, meters, predicted) {
-  if (!race.sourceId) return '<p class="goal-race-place-hint">Add this race with Find a race (Plan → Races) to see where you would place.</p>';
+  if (!race.sourceId) return /active\.com/.test(race.url || "") ? '<p class="goal-race-place-hint">Projected places use past results from RunSignup, which ACTIVE.com races do not have here.</p>' : '<p class="goal-race-place-hint">Add this race with Find a race (Plan → Races) to see where you would place.</p>';
   const entry = loadRaceField(race, meters);
   if (entry.status === "loading") return '<p class="goal-race-place-hint">Looking up past results…</p>';
   if (entry.status === "error") return '<p class="goal-race-place-hint">Past results could not be loaded right now.</p>';

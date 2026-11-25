@@ -26,6 +26,7 @@ export function runsignupRequest(url, env = {}) {
 }
 const CACHE_SECONDS = 6 * 60 * 60;
 const MAX_RESULTS = 12;
+const MERGED_RESULTS = 16; // Room for a second source.
 
 // Kept: in-person running and walking events. Dropped: virtual races,
 // memberships, volunteer and donation entries.
@@ -103,12 +104,114 @@ export function normalizeRaces(data, { from, to }) {
       date: events[0].date,
       city: String(race.address?.city || "").slice(0, 60),
       state: String(race.address?.state || "").slice(0, 20),
+      source: "RunSignup",
       // Only RunSignup's own race pages are linked.
       url: /^https:\/\/runsignup\.com\//.test(url) ? url : "",
       events: events.slice(0, 8)
     });
   }
   return races.sort((a, b) => a.date.localeCompare(b.date)).slice(0, MAX_RESULTS);
+}
+
+/* ---------- ACTIVE.com (Activity Search API v2) ---------- */
+
+const ACTIVE_SEARCH = "https://api.amp.active.com/v2/search";
+
+// "2026-11-26T08:00:00" -> "2026-11-26".
+function activeDate(value) {
+  const match = String(value || "").match(/^(\d{4}-\d{2}-\d{2})/);
+  return match && Number.isFinite(Date.parse(match[1])) ? match[1] : null;
+}
+
+// Only ACTIVE's own pages are linked, always over https.
+function activeUrl(...candidates) {
+  for (const candidate of candidates) {
+    const text = String(candidate || "").trim().replace(/^http:\/\//i, "https://");
+    if (/^https:\/\/(www\.)?active\.com\//i.test(text)) return text.slice(0, 300);
+  }
+  return "";
+}
+
+// Distances an ACTIVE listing offers: its distance attributes and the names of
+// its sub-events, falling back to the listing's own name.
+function activeEvents(item, name, date) {
+  const attributes = (Array.isArray(item.assetAttributes) ? item.assetAttributes : [])
+    .map((entry) => entry?.attribute || entry).filter((attribute) => /distance/i.test(String(attribute?.attributeType || "")))
+    .map((attribute) => String(attribute.attributeValue || ""));
+  const components = (Array.isArray(item.assetComponents) ? item.assetComponents : []).map((component) => String(component?.assetName || ""));
+  const labels = [...new Set([...attributes, ...components].map((label) => label.trim()).filter(Boolean))];
+  const events = [];
+  for (const label of labels.length ? labels : [name]) {
+    // Virtual entries and kids' dashes are not races to train for.
+    if (/virtual|\bkids?\b|\byouth\b|\btot\b|\bdash\b/i.test(label)) continue;
+    const km = parseDistanceKm(label, label);
+    if (km !== null && km < 1) continue;
+    const distance = distanceCategory(km);
+    if (events.some((event) => event.distance === distance && distance !== "Other")) continue;
+    events.push({ id: `${events.length}`, name: label.slice(0, 80), date, km: km === null ? null : Math.round(km * 100) / 100, distance, walk: /\bwalk/i.test(label) && !/run/i.test(label) });
+  }
+  return events.sort((a, b) => (a.km ?? 0) - (b.km ?? 0)).slice(0, 8);
+}
+
+// Trims ACTIVE's search response to in-person running races between `from` and `to`.
+export function normalizeActiveRaces(data, { from, to }) {
+  const races = [];
+  for (const item of Array.isArray(data?.results) ? data.results : []) {
+    if (!item || typeof item !== "object") continue;
+    const name = String(item.assetName || "").trim().slice(0, 100);
+    const date = activeDate(item.activityStartDate);
+    if (!name || !date || date < from || date > to || /virtual/i.test(name)) continue;
+    const end = activeDate(item.activityEndDate) || date;
+    if (dayDiff(date, end) > 2) continue;
+    const events = activeEvents(item, name, date);
+    if (!events.length) continue;
+    const place = item.place && typeof item.place === "object" ? item.place : {};
+    races.push({
+      id: `active-${String(item.assetGuid || item.assetId || name).slice(0, 60)}`,
+      name, date, source: "ACTIVE",
+      city: String(place.cityName || "").slice(0, 60),
+      state: String(place.stateProvinceCode || "").slice(0, 20),
+      url: activeUrl(item.registrationUrlAdr, item.urlAdr, item.homePageUrlAdr),
+      events
+    });
+  }
+  return races;
+}
+
+async function searchActive(env, { query, state, from, to }) {
+  const upstream = new URL(ACTIVE_SEARCH);
+  upstream.search = new URLSearchParams({
+    query, category: "event", topic: "running", start_date: `${from}..${to}`, sort: "date_asc",
+    per_page: "25", current_page: "1", exclude_children: "true", ...(state ? { state } : {}), api_key: String(env.ACTIVE_SEARCH_API_KEY).trim()
+  }).toString();
+  let response;
+  try {
+    response = await fetch(upstream, { headers: { accept: "application/json" }, signal: AbortSignal.timeout(8_000) });
+  } catch (error) {
+    // ACTIVE documents the API over plain http; use it if https does not connect.
+    if (error?.name === "TimeoutError") throw error;
+    upstream.protocol = "http:";
+    response = await fetch(upstream, { headers: { accept: "application/json" }, signal: AbortSignal.timeout(8_000) });
+  }
+  if (!response.ok) throw new Error(`ACTIVE returned HTTP ${response.status}`);
+  return normalizeActiveRaces(await response.json(), { from, to });
+}
+
+/* ---------- One list from several sources ---------- */
+
+// "The 12th Annual Turkey Trot 2026!" -> "turkey trot".
+const raceKey = (name) => String(name).toLowerCase().replace(/\b(19|20)\d{2}\b/g, " ").replace(/\b\d+(st|nd|rd|th)\b/g, " ").replace(/\b(the|annual)\b/g, " ").replace(/[^a-z0-9]+/g, " ").trim();
+
+// A race listed on several sites appears once: same date and one name
+// containing the other. Earlier sources win (RunSignup first).
+export function mergeRaces(lists) {
+  const merged = [];
+  for (const race of lists.flat()) {
+    const key = raceKey(race.name);
+    const duplicate = merged.some((other) => other.date === race.date && key && raceKey(other.name) && (raceKey(other.name).includes(key) || key.includes(raceKey(other.name))));
+    if (!duplicate) merged.push(race);
+  }
+  return merged.sort((a, b) => a.date.localeCompare(b.date)).slice(0, MERGED_RESULTS);
 }
 
 function todayIso() {
@@ -131,25 +234,41 @@ export async function handleRaceSearch(request, ctx, env = {}) {
     results_per_page: "40", page: "1", sort: "date ASC", ...(state ? { state } : {})
   }).toString();
 
-  // Same query, same day -> one upstream call (Cloudflare edge cache).
+  const withActive = Boolean(String(env.ACTIVE_SEARCH_API_KEY || "").trim());
+  // Same query, same day -> one upstream call per source (Cloudflare edge cache).
   const cache = globalThis.caches?.default;
-  const cacheKey = new Request(`https://race-search.runlore.internal/?${new URLSearchParams({ q: query.toLowerCase(), state, from })}`);
+  const cacheKey = new Request(`https://race-search.runlore.internal/?${new URLSearchParams({ q: query.toLowerCase(), state, from, sources: withActive ? "runsignup,active" : "runsignup" })}`);
   const cached = cache ? await cache.match(cacheKey) : null;
   if (cached) return cached;
 
-  let response;
-  try {
-    const call = runsignupRequest(upstream, env);
-    response = await fetch(call.url, { headers: call.headers, signal: AbortSignal.timeout(8_000) });
-  } catch {
-    throw appError("Race search is not responding right now. Enter the race by hand.", 504);
-  }
-  if (!response.ok) throw appError("Race search is unavailable right now. Enter the race by hand.", 502);
-  let data;
-  try { data = await response.json(); } catch { throw appError("Race search returned an unreadable answer.", 502); }
-  const result = json({ races: normalizeRaces(data, { from, to }), source: "RunSignup" });
-  result.headers.set("cache-control", `public, max-age=${CACHE_SECONDS}`);
-  if (cache) {
+  const runsignup = (async () => {
+    let response;
+    try {
+      const call = runsignupRequest(upstream, env);
+      response = await fetch(call.url, { headers: call.headers, signal: AbortSignal.timeout(8_000) });
+    } catch {
+      throw appError("Race search is not responding right now. Enter the race by hand.", 504);
+    }
+    if (!response.ok) throw appError("Race search is unavailable right now. Enter the race by hand.", 502);
+    let data;
+    try { data = await response.json(); } catch { throw appError("Race search returned an unreadable answer.", 502); }
+    return normalizeRaces(data, { from, to });
+  })();
+  const active = withActive ? searchActive(env, { query, state, from, to }) : null;
+  const [fromRunsignup, fromActive] = await Promise.allSettled([runsignup, active || Promise.resolve([])]);
+  if (fromActive.status === "rejected" && withActive) console.warn(JSON.stringify({ event: "active_search_failed", message: String(fromActive.reason?.message || fromActive.reason) }));
+  // One source down still returns the other; both down is an error.
+  if (fromRunsignup.status === "rejected" && (!withActive || fromActive.status === "rejected")) throw fromRunsignup.reason;
+  const sources = ["RunSignup", ...(withActive ? ["ACTIVE"] : [])];
+  const unavailable = [
+    ...(fromRunsignup.status === "rejected" ? ["RunSignup"] : []),
+    ...(withActive && fromActive.status === "rejected" ? ["ACTIVE"] : [])
+  ];
+  const races = mergeRaces([fromRunsignup.status === "fulfilled" ? fromRunsignup.value : [], fromActive.status === "fulfilled" ? fromActive.value : []]);
+  const result = json({ races, source: sources.join(" and "), sources, ...(unavailable.length ? { unavailable } : {}) });
+  // A partial answer is not cached, so the missing source is tried again next time.
+  result.headers.set("cache-control", unavailable.length ? "no-store" : `public, max-age=${CACHE_SECONDS}`);
+  if (cache && !unavailable.length) {
     const store = cache.put(cacheKey, result.clone());
     if (ctx?.waitUntil) ctx.waitUntil(store); else await store;
   }

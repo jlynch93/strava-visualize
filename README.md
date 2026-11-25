@@ -117,6 +117,22 @@ token as `rsu_api_reg` and the secret in the `X-RSU-API-REG-SECRET` header.
 Until they are set, calls go out unregistered and the Worker logs a
 `runsignup_unregistered` warning once.
 
+**ACTIVE.com as a second source (optional).** With an ACTIVE.com Activity
+Search API v2 key set as a Worker secret, race search also asks ACTIVE.com:
+
+```bash
+npx wrangler secret put ACTIVE_SEARCH_API_KEY
+```
+
+Only the **Search API** key is needed (ACTIVE issues several keys; the others
+are for registration and campground systems). Both sources are asked at once;
+a race listed on both appears once, from RunSignup, whose past results power
+the projected place. ACTIVE listings are trimmed to in-person running races
+within a year (virtual events, memberships and kids' dashes are dropped), each
+links only to its active.com page, and results show where they came from. If
+one source does not answer, the other's races still come back, flagged, and
+that answer is not cached. Without the key nothing calls ACTIVE.
+
 Readiness weighs fatigue against what the phase calls for. In a build, some
 fatigue is expected and costs little. In a taper or race week, fatigue counts
 for more, because the aim is to arrive fresh. Early in recovery, readiness never

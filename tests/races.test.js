@@ -163,3 +163,84 @@ test("RunSignup calls carry the API caller registration when it is configured", 
     assert.equal(seen.headers["X-RSU-API-REG-SECRET"], "sec456");
   } finally { globalThis.fetch = realFetch; }
 });
+
+// A response in the shape ACTIVE's Activity Search API v2 documents.
+const activeSample = (from) => ({
+  total_results: 4, items_per_page: 25, start_index: 0,
+  results: [
+    { assetGuid: "a1", assetName: "Columbus Turkey Trot 2026", activityStartDate: `${from.slice(0, 4)}-11-26T08:00:00`, activityEndDate: `${from.slice(0, 4)}-11-26T11:00:00`,
+      place: { cityName: "Columbus", stateProvinceCode: "OH" }, registrationUrlAdr: "http://www.active.com/columbus-oh/running/turkey-trot-2026",
+      assetAttributes: [{ attribute: { attributeType: "Distance (running)", attributeValue: "5K" } }, { attribute: { attributeType: "Distance (running)", attributeValue: "10K" } }] },
+    { assetGuid: "a2", assetName: "Lakefront Half Marathon", activityStartDate: `${from.slice(0, 4)}-12-06T07:30:00`, place: { cityName: "Cleveland", stateProvinceCode: "OH" },
+      urlAdr: "https://www.active.com/cleveland-oh/running/lakefront-half", assetComponents: [{ assetName: "Half Marathon" }, { assetName: "Kids Dash 100m" }] },
+    { assetGuid: "a3", assetName: "Virtual Turkey Trot", activityStartDate: `${from.slice(0, 4)}-11-26T08:00:00` },
+    { assetGuid: "a4", assetName: "Winter Running Club Membership", activityStartDate: `${from.slice(0, 4)}-12-01T00:00:00`, activityEndDate: `${Number(from.slice(0, 4)) + 1}-03-01T00:00:00` },
+    { assetGuid: "a5", assetName: "Spam link race", activityStartDate: `${from.slice(0, 4)}-12-10T08:00:00`, registrationUrlAdr: "https://evil.example/register" }
+  ]
+});
+
+test("ACTIVE listings become races with distances, place and an active.com link", async () => {
+  const { normalizeActiveRaces } = await racesPromise;
+  const year = new Date().getFullYear();
+  const window = { from: `${year}-01-01`, to: `${year}-12-31` };
+  const races = normalizeActiveRaces(activeSample(window.from), window);
+  assert.deepEqual(races.map((race) => race.name), ["Columbus Turkey Trot 2026", "Lakefront Half Marathon", "Spam link race"]);
+  const trot = races[0];
+  assert.equal(trot.source, "ACTIVE");
+  assert.equal(trot.date, `${year}-11-26`);
+  assert.equal(trot.city, "Columbus");
+  assert.deepEqual(trot.events.map((event) => event.distance), ["5K", "10K"]);
+  // http is upgraded; other domains are not linked.
+  assert.equal(trot.url, "https://www.active.com/columbus-oh/running/turkey-trot-2026");
+  assert.equal(races[2].url, "");
+  // The kids' dash is dropped; the half is kept.
+  assert.deepEqual(races[1].events.map((event) => event.distance), ["Half marathon"]);
+  assert.deepEqual(normalizeActiveRaces({}, window), []);
+});
+
+test("a race on both sites appears once, from RunSignup", async () => {
+  const { mergeRaces } = await racesPromise;
+  const runsignup = [{ name: "Columbus Turkey Trot", date: "2026-11-26", source: "RunSignup" }];
+  const active = [{ name: "The 12th Annual Columbus Turkey Trot 2026", date: "2026-11-26", source: "ACTIVE" }, { name: "Columbus Turkey Trot", date: "2026-11-27", source: "ACTIVE" }, { name: "Lakefront Half", date: "2026-11-20", source: "ACTIVE" }];
+  const merged = mergeRaces([runsignup, active]);
+  assert.deepEqual(merged.map((race) => `${race.date} ${race.source}`), ["2026-11-20 ACTIVE", "2026-11-26 RunSignup", "2026-11-27 ACTIVE"]);
+});
+
+test("race search adds ACTIVE when its key is set, and survives one source failing", async () => {
+  const worker = await workerPromise;
+  const realFetch = globalThis.fetch;
+  const calls = [];
+  let activeStatus = 200;
+  globalThis.fetch = async (input) => {
+    const url = new URL(String(input)); calls.push(url);
+    if (url.hostname === "api.amp.active.com") return activeStatus === 200 ? Response.json(activeSample(new Date().toISOString().slice(0, 10))) : new Response("nope", { status: activeStatus });
+    return new Response(JSON.stringify(fixture), { headers: { "content-type": "application/json" } });
+  };
+  try {
+    // No key: RunSignup only, and ACTIVE is never called.
+    let response = await worker.fetch(new Request("https://runlore.app/api/races/search?q=turkey+trot"), {}, {});
+    let body = await response.json();
+    assert.deepEqual(body.sources, ["RunSignup"]);
+    assert.ok(calls.every((url) => url.hostname !== "api.amp.active.com"));
+    // With the key: both, the key only in the call to ACTIVE, never in the answer.
+    const env = { ACTIVE_SEARCH_API_KEY: "active-key-123" };
+    response = await worker.fetch(new Request("https://runlore.app/api/races/search?q=turkey+trot&state=oh"), env, {});
+    body = await response.json();
+    assert.deepEqual(body.sources, ["RunSignup", "ACTIVE"]);
+    const activeCall = calls.find((url) => url.hostname === "api.amp.active.com");
+    assert.equal(activeCall.searchParams.get("api_key"), "active-key-123");
+    assert.equal(activeCall.searchParams.get("query"), "turkey trot");
+    assert.equal(activeCall.searchParams.get("state"), "OH");
+    assert.equal(activeCall.searchParams.get("category"), "event");
+    assert.ok(body.races.some((race) => race.source === "ACTIVE"));
+    assert.ok(body.races.some((race) => race.source === "RunSignup"));
+    assert.doesNotMatch(JSON.stringify(body), /active-key-123/);
+    // ACTIVE down: RunSignup's races still come back, flagged, and not cached.
+    activeStatus = 503;
+    response = await worker.fetch(new Request("https://runlore.app/api/races/search?q=lakefront+half"), env, {});
+    body = await response.json();
+    assert.equal(response.status, 200);
+    assert.deepEqual(body.unavailable, ["ACTIVE"]);
+    assert.equal(response.headers.get("cache-control"), "no-store");
+  } finally { globalThis.fetch = realFetch; }
+});

@@ -305,3 +305,26 @@ test("birth year and gender saved with the race calendar move to the runner's pr
   expect(saved.athlete).toEqual({ maxHr: 190, restHr: 50, birthYear: 1990, gender: "F" });
   expect(saved.legacy).toBeUndefined();
 });
+
+test("races from ACTIVE.com show their source, keep their link and skip the place projection", async ({ page }) => {
+  await page.route("**/api/races/search?*", (route) => route.fulfill({ json: { source: "RunSignup and ACTIVE", sources: ["RunSignup", "ACTIVE"], races: [
+    { id: "active-a1", source: "ACTIVE", name: "Lakefront Half Marathon", date: iso(30), city: "Cleveland", state: "OH", url: "https://www.active.com/cleveland-oh/running/lakefront-half", events: [{ id: "0", name: "Half Marathon", date: iso(30), km: 21.1, distance: "Half marathon", walk: false }] },
+    { id: "77", source: "RunSignup", name: "Lakefront 5K", date: iso(31), city: "Cleveland", state: "OH", url: "https://runsignup.com/Race/OH/Cleveland/Lakefront5K", events: [{ id: "a", name: "5K", date: iso(31), km: 5, distance: "5K", walk: false }] }
+  ] } }));
+  await loadDemo(page);
+  await nav(page, "Plan");
+  await page.locator("#racesDisclosure > summary").click();
+  await page.fill("#raceSearch", "lakefront");
+  await expect(page.locator(".race-result")).toHaveCount(2);
+  await expect(page.locator(".race-result").first().locator(".race-source")).toHaveText("ACTIVE.com");
+  await expect(page.locator("#raceSearchStatus")).toContainText("found on RunSignup and ACTIVE.com");
+  await expect(page.locator("#raceSearchNote")).toContainText("RunSignup and ACTIVE.com");
+  await page.locator(".race-result").first().locator(".race-event").click();
+  await page.selectOption("#racePriority", "A");
+  await page.locator("#raceForm button[type=submit]").click();
+  const saved = page.locator("#raceList .race-item");
+  await expect(saved.getByRole("link", { name: /ACTIVE\.com/ })).toHaveAttribute("href", "https://www.active.com/cleveland-oh/running/lakefront-half");
+  expect(await page.evaluate(() => coachingContext.races[0].sourceId)).toBeUndefined();
+  await nav(page, "Fitness");
+  await expect(page.locator(".goal-race").first()).toContainText("ACTIVE.com races do not have here");
+});
