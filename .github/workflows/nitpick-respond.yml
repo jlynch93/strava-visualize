@@ -30,7 +30,8 @@ concurrency:
 
 jobs:
   respond:
-    runs-on: ${{ vars.RUNS_ON || 'self-hosted' }}
+    # Same runner lane as the review (AI_RUNS_ON), so replies queue behind it.
+    runs-on: ${{ vars.AI_RUNS_ON || vars.RUNS_ON || 'self-hosted' }}
     timeout-minutes: ${{ vars.NITPICK_PROVIDER == 'ollama' && 30 || 10 }}
     # Comment events run here with this repository's secrets and on the
     # self-hosted machine whoever wrote the comment, so only the owner and

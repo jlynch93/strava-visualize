@@ -486,6 +486,17 @@ anything with `LLM_PROVIDER=ollama LLM_MODEL=<model> nitpick explain-config -pat
 and review uncommitted changes locally with
 `LLM_PROVIDER=ollama LLM_MODEL=<model> nitpick review`.
 
+To keep the local model from repeating work, the review skips changes that touch
+only docs or images, a push to `main` whose commit is already an open pull
+request's head (that pull request's review covers it), and "Merge pull request"
+pushes (already reviewed in the pull request). Add `[skip review]` to a commit
+message or pull request title to skip it by hand. A new push cancels the review
+still running for the same pull request or branch. Ollama answers one request at
+a time, so with two runners it helps to give reviews one lane: add a label such
+as `ollama` to one runner (Settings → Actions → Runners → the runner → Labels),
+then set the repository variable `AI_RUNS_ON` to `ollama`. Reviews and replies
+then queue on that runner, and the other stays free for tests.
+
 `AI review replies` lets you talk to the reviewer on a pull request. Reply under
 one of its findings to explain or disagree, and it resolves the thread if the
 reason holds. `@open-nitpick <question>` asks about the change,

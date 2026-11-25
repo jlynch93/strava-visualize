@@ -14,13 +14,24 @@
 #
 # Advisory only (fail-on: none): it never blocks a merge or marks a push red
 # for its findings.
+#
+# What is NOT reviewed, so the local model is not kept busy repeating itself:
+# - changes that touch only docs or images (paths-ignore below);
+# - a push to main whose commit is the head of an open pull request: that pull
+#   request's review covers it, with inline comments;
+# - "Merge pull request #N" pushes: the pull request was reviewed already;
+# - anything with "[skip review]" in its commit message or pull request title
+#   ("[skip ci]" skips every workflow).
+# A new push to a pull request or to main cancels its review still running.
 name: AI review
 
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
+    paths-ignore: ["**/*.md", "docs/**", "**/*.png", "**/*.jpg", "**/*.jpeg", "**/*.gif", "**/*.svg", "**/*.ico", "**/*.webp", "LICENSE", ".gitignore"]
   push:
     branches: [main]
+    paths-ignore: ["**/*.md", "docs/**", "**/*.png", "**/*.jpg", "**/*.jpeg", "**/*.gif", "**/*.svg", "**/*.ico", "**/*.webp", "LICENSE", ".gitignore"]
   workflow_dispatch:
 
 permissions:
@@ -40,8 +51,11 @@ jobs:
   review:
     # Self-hosted runner by default; set the RUNS_ON repository variable to
     # ubuntu-latest to fall back to GitHub's runners while it is offline.
+    # AI_RUNS_ON sends reviews to one runner only (give it a label such as
+    # "ollama"), so they queue one at a time for the single Ollama machine
+    # and the other runner stays free for tests.
     # (Forked pull requests are not reviewed at all, see the if below.)
-    runs-on: ${{ vars.RUNS_ON || 'self-hosted' }}
+    runs-on: ${{ vars.AI_RUNS_ON || vars.RUNS_ON || 'self-hosted' }}
     # Local models on small hardware are slow; hosted ones finish in minutes.
     timeout-minutes: ${{ vars.NITPICK_PROVIDER == 'ollama' && 60 || 20 }}
     # Forked pull requests and Dependabot runs get no secrets, so they would
@@ -49,7 +63,10 @@ jobs:
     if: >-
       (github.event_name != 'pull_request' ||
        github.event.pull_request.head.repo.full_name == github.repository) &&
-      github.actor != 'dependabot[bot]'
+      github.actor != 'dependabot[bot]' &&
+      !contains(github.event.head_commit.message, '[skip review]') &&
+      !contains(github.event.pull_request.title, '[skip review]') &&
+      !startsWith(github.event.head_commit.message, 'Merge pull request #')
     env:
       # A step's if cannot read secrets; it can read env.
       HAS_KEY: ${{ secrets.NITPICK_API_KEY != '' || vars.NITPICK_PROVIDER == 'ollama' }}
@@ -58,8 +75,24 @@ jobs:
         if: env.HAS_KEY != 'true'
         run: echo "::notice::AI review skipped. Set NITPICK_PROVIDER=ollama (and NITPICK_MODEL) or add the NITPICK_API_KEY secret to turn it on."
 
+      # A push to main that is also an open pull request's head is reviewed by
+      # that pull request's run (inline comments); reviewing it here too only
+      # repeats the same review into a job summary.
+      - name: Already reviewed in a pull request?
+        if: env.HAS_KEY == 'true' && github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          prs="$(curl -fsSL -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/pulls?state=open&per_page=100" \
+            | python3 -c 'import json, os, sys; print(" ".join("#%d" % pr["number"] for pr in json.load(sys.stdin) if pr["head"]["sha"] == os.environ["GITHUB_SHA"]))')" || prs=""
+          if [ -n "$prs" ]; then
+            echo "::notice::AI review skipped: this commit is the head of pull request $prs, whose review covers it."
+            echo "SKIP_REVIEW=true" >> "$GITHUB_ENV"
+          fi
+
       - uses: actions/checkout@v4
-        if: env.HAS_KEY == 'true'
+        if: env.HAS_KEY == 'true' && env.SKIP_REVIEW != 'true'
         with:
           fetch-depth: 0 # the reviewer diffs against the base branch or the pushed range
 
@@ -73,7 +106,7 @@ jobs:
       #   call at a time (a small machine only queues parallel ones), so a
       #   request fits an 8k context and answers in minutes.
       - name: Ollama settings
-        if: env.HAS_KEY == 'true' && vars.NITPICK_PROVIDER == 'ollama'
+        if: env.HAS_KEY == 'true' && env.SKIP_REVIEW != 'true' && vars.NITPICK_PROVIDER == 'ollama'
         env:
           OLLAMA_BASE_URL: ${{ vars.OLLAMA_BASE_URL }}
         run: |
@@ -90,7 +123,7 @@ jobs:
           echo "NITPICK_USER_CONFIG=$file" >> "$GITHUB_ENV"
 
       - uses: jdziat/open-nitpick@a32fa26e7231335da3179daf91a72b100e5e9bdb # v2.8.0
-        if: env.HAS_KEY == 'true'
+        if: env.HAS_KEY == 'true' && env.SKIP_REVIEW != 'true'
         with:
           version: v2.8.0
           # .nitpick.yaml names no model, so these decide it for every
