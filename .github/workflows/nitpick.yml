@@ -98,6 +98,3 @@ jobs:
           api-key: ${{ secrets.NITPICK_API_KEY }}
           fail-on: none
           skip-drafts: true
-          # A small local model gets the lighter pass (fewer model calls,
-          # at most ten findings).
-          command: ${{ vars.NITPICK_PROVIDER == 'ollama' && 'fast-review' || 'review' }}
