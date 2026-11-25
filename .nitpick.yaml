@@ -26,12 +26,12 @@ review:
   # Findings below this level are dropped before they are published.
   min_severity: info
 
-  # How much one run reads. max_files bounds the whole change; the other two
-  # bound a single model call, and lowering them costs more calls, not fewer
-  # files.
+  # How much one run reads. max_files bounds the whole change. The size of a
+  # single model call (max_files_per_request, token_budget_per_request,
+  # include_full_files) is left at the defaults here on purpose: keys this
+  # file sets would override the runner's own config, and the Ollama setup in
+  # .github/workflows/nitpick.yml shrinks them for small hardware.
   max_files: 60
-  max_files_per_request: 6
-  token_budget_per_request: 60000
 
   # Paths never reviewed. Setting this REPLACES the built-in list rather than
   # adding to it, and that list already covers vendored and generated code,
