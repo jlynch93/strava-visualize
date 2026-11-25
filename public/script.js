@@ -1350,24 +1350,12 @@ function renderRecommendedCalendar(intent, summary, targetMiles, race) {
   const hasLong = raceIndex < 0 && planned.has(longIndex);
   const totalTarget = adjustedPlanMiles(intent, targetMiles);
   const longMiles = hasLong ? Math.min(longRun, totalTarget) : 0;
-  state.draftSessions = schedule.map(([title, detail], index) => ({ date: localDateValue(dates[index]), title, detail, kind: planned.has(index) ? "run" : "rest", miles: planned.has(index) ? (hasLong && index === longIndex ? longMiles : Math.max(0, totalTarget - longMiles) / Math.max(1, planned.size - (hasLong ? 1 : 0))) : 0, status: "planned", matchedId: "" }));
+  state.draftSessions = schedule.map(([title, detail], index) => ({ date: localDateValue(dates[index]), type: TrainingCore.sessionType({ title, kind: planned.has(index) ? "run" : "rest" }), title, detail, kind: planned.has(index) ? "run" : "rest", miles: planned.has(index) ? (hasLong && index === longIndex ? longMiles : Math.max(0, totalTarget - longMiles) / Math.max(1, planned.size - (hasLong ? 1 : 0))) : 0, status: "planned", matchedId: "" }));
   state.draftSessions.forEach((session) => session.miles = Number(session.miles.toFixed(1)));
-  els.recommendedCalendar.innerHTML = schedule.map(([title, detail], index) => {
-    const date = dates[index];
-    const isRace = index === raceIndex;
-    const dateKey = localDateValue(date);
-    const distance = state.draftSessions[index].miles;
-    return `<button type="button" class="recommended-day${isRace ? " race-day" : ""}" data-action="cycle-plan-status" data-plan-date="${dateKey}" data-plan-kind="${planned.has(index) ? "run" : "rest"}"><span>${date.toLocaleDateString(undefined, { weekday: "short" })}</span><time>${date.toLocaleDateString(undefined, { month: "short", day: "numeric" })}</time><strong>${escapeHtml(title)}</strong><small>${escapeHtml(detail)}</small><em>${distance ? `${displayDistance(distance)} · draft` : "Rest day"}</em></button>`;
-  }).join("");
+  // The week board (experience.js) draws these sessions, or the saved plan for this week.
+  renderAcceptedPlan();
   const hasLongRun = raceIndex < 0 && planned.has(longIndex);
   return { plannedRuns: planned.size, maxRuns, totalMiles: state.draftSessions.reduce((sum, session) => sum + session.miles, 0), longRunMiles: hasLongRun ? longRun : 0, longRunDay: hasLongRun ? dayNames[longIndex] : null, hasRace: raceIndex >= 0, availabilityLimited: planned.size < sessionLimit };
-}
-
-function cyclePlanStatus(date) {
-  if (!acceptedPlans[planKey()]) document.querySelector("#acceptPlanButton").click();
-  const row = [...document.querySelectorAll("#acceptedPlan .saved-session")].find((element) => element.querySelector('input[type="date"]').value === date);
-  if (row) { row.open = true; row.scrollIntoView({ block: "center", behavior: "instant" }); row.querySelector("select").focus({ preventScroll: true }); }
-  setStatus("Use the saved session's status, date, and activity matching controls to update this plan.");
 }
 
 function recommendIntent(summary, race) {
@@ -3412,7 +3400,7 @@ els.checkinForm.addEventListener("submit", (event) => {
 });
 
 els.copyPlanButton.addEventListener("click", async () => {
-  const days = [...els.recommendedCalendar.querySelectorAll("button")].map((day) => day.innerText.replace(/\n/g, " · "));
+  const days = weekDates().map((date) => sessionOn(weekSessions(), date)).map((session) => `${dayLabel(session.date)}: ${session.title}${session.kind === "run" ? ` · ${displayDistance(session.miles)}` : ""}`);
   try { await navigator.clipboard.writeText([els.planDraftCopy.textContent, els.planAdaptation.textContent, ...days].join("\n\n")); buttonFeedback(els.copyPlanButton, "Draft copied"); setStatus("Next-week draft and calendar copied. Review them before using them."); } catch { setStatus("Copy is unavailable in this browser.", true); }
 });
 
@@ -3506,11 +3494,6 @@ els.accountDialog.addEventListener("click", (event) => {
 els.keyRuns.addEventListener("click", (event) => {
   const card = event.target.closest(".key-run-card");
   if (card?.dataset.activityId) showWorkoutModal(card.dataset.activityId, card);
-});
-
-els.recommendedCalendar.addEventListener("click", (event) => {
-  const day = event.target.closest("[data-action='cycle-plan-status']");
-  if (day?.dataset.planDate) cyclePlanStatus(day.dataset.planDate);
 });
 
 els.aiInsightContent.addEventListener("click", (event) => {

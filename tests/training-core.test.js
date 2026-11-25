@@ -22,3 +22,70 @@ test("undated, expired and future check-ins do not influence current training", 
 test("merging replaces duplicate IDs, preserves distinct records, and handles numeric IDs", () => {
   assert.deepEqual(core.mergeActivities([{ id: 1, distance: 2 }, { id: 2, distance: 3 }], [{ id: "1", distance: 5 }]), [{ id: "1", distance: 5 }, { id: 2, distance: 3 }]);
 });
+
+/* ---------- Editing a planned week ---------- */
+
+const week = () => [
+  { date: "2026-11-30", title: "Rest / mobility", detail: "", kind: "rest", miles: 0, status: "planned", matchedId: "" },
+  { date: "2026-12-01", title: "Quality option", detail: "", kind: "run", miles: 6, status: "completed", matchedId: "55" },
+  { date: "2026-12-02", title: "Rest / mobility", detail: "", kind: "rest", miles: 0, status: "planned", matchedId: "" },
+  { date: "2026-12-03", title: "Steady run", detail: "", kind: "run", miles: 4, status: "planned", matchedId: "" },
+  { date: "2026-12-05", title: "Long run", detail: "", kind: "run", miles: 10, status: "planned", matchedId: "" },
+  { date: "2026-12-06", title: "Race day", detail: "", kind: "run", miles: 3.1, status: "planned", matchedId: "" }
+];
+
+test("a session's type is read from its saved type, else from the title of older plans", () => {
+  assert.deepEqual(week().map(core.sessionType), ["rest", "quality", "rest", "steady", "long", "race"]);
+  assert.equal(core.sessionType({ kind: "run", title: "Easy long run" }), "long");
+  assert.equal(core.sessionType({ kind: "run", title: "Easy run" }), "easy");
+  assert.equal(core.sessionType({ kind: "run", title: "Whatever", type: "steady" }), "steady");
+  assert.equal(core.sessionType({ kind: "run", title: "Easy run", type: "bogus" }), "easy");
+});
+
+test("turning a rest day into a run gives it the week's typical distance, races left out", () => {
+  const sessions = week();
+  const run = core.retypeSession(sessions[0], "easy", sessions);
+  assert.equal(run.kind, "run");
+  assert.equal(run.title, "Easy run");
+  assert.equal(run.type, "easy");
+  assert.equal(run.miles, 6.7); // (6 + 4 + 10) / 3
+  assert.equal(core.retypeSession({ date: "2026-12-01", kind: "rest", miles: 0, title: "Rest / mobility" }, "long", []).miles, 3);
+});
+
+test("retyping a run keeps its distance and status, and a rest day drops both", () => {
+  const sessions = week();
+  const easier = core.retypeSession(sessions[1], "easy", sessions);
+  assert.deepEqual([easier.miles, easier.status, easier.matchedId, easier.title], [6, "completed", "55", "Easy run"]);
+  const rest = core.retypeSession(sessions[1], "rest", sessions);
+  assert.deepEqual([rest.kind, rest.miles, rest.status, rest.matchedId], ["rest", 0, "planned", ""]);
+  assert.equal(sessions[1].kind, "run", "the original session is not changed");
+  assert.throws(() => core.retypeSession(sessions[1], "nap", sessions));
+});
+
+test("moving a day onto another swaps them and clears what belongs to the old date", () => {
+  const moved = core.moveSession(week(), "2026-12-01", "2026-12-02");
+  assert.deepEqual(moved.map((session) => [session.date, session.title]).slice(0, 3), [["2026-11-30", "Rest / mobility"], ["2026-12-01", "Rest / mobility"], ["2026-12-02", "Quality option"]]);
+  const quality = moved.find((session) => session.title === "Quality option");
+  assert.deepEqual([quality.status, quality.matchedId], ["planned", ""]);
+  assert.equal(moved.length, 6);
+  assert.equal(new Set(moved.map((session) => session.date)).size, 6, "still one session per day");
+  // A day with no session yet (Friday) just receives the moved one.
+  const onto = core.moveSession(week(), "2026-12-03", "2026-12-04");
+  assert.deepEqual(onto.filter((session) => session.title === "Steady run").map((session) => session.date), ["2026-12-04"]);
+  assert.deepEqual(core.moveSession(week(), "2026-12-01", "2026-12-01"), week());
+});
+
+test("distances are clamped, and a rest day's stays zero", () => {
+  const sessions = week();
+  assert.equal(core.setSessionMiles(sessions[3], 4.567).miles, 4.57);
+  assert.equal(core.setSessionMiles(sessions[3], -2).miles, 0);
+  assert.equal(core.setSessionMiles(sessions[3], 900).miles, 100);
+  assert.equal(core.setSessionMiles(sessions[3], "abc").miles, 0);
+  assert.equal(core.setSessionMiles(sessions[0], 5).miles, 0);
+});
+
+test("week totals count runs, what is done, and what was skipped", () => {
+  const sessions = week(); sessions[3].status = "skipped";
+  assert.deepEqual(core.weekTotals(sessions), { miles: 23.1, runs: 4, completedMiles: 6, completedRuns: 1, skippedRuns: 1 });
+  assert.deepEqual(core.weekTotals([]), { miles: 0, runs: 0, completedMiles: 0, completedRuns: 0, skippedRuns: 0 });
+});

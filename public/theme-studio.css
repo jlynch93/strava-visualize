@@ -78,7 +78,6 @@
 :root[data-palette="studio"] .fitness-notes { border-left: 0; border-radius: 14px; box-shadow: inset 4px 0 0 var(--blue); }
 :root[data-palette="studio"] .plan-start { border-left: 0; border-radius: 14px; box-shadow: inset 4px 0 0 var(--teal); }
 :root[data-palette="studio"] .plan-draft { border-radius: var(--studio-radius); }
-:root[data-palette="studio"] .recommended-day { border-radius: 12px; }
 
 /* The readiness tile: dark, with a large score. */
 :root[data-palette="studio"] .today-strip {

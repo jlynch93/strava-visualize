@@ -291,12 +291,12 @@ test("the plan summary matches a three-run calendar and its Sunday long-run cap"
   for (const day of ["Mon", "Wed", "Sun"]) await page.locator(`.day-toggles input[value="${day}"]`).check();
   await page.getByRole("button", { name: "Save goal", exact: true }).click();
 
-  const plannedRuns = page.locator("#recommendedCalendar [data-plan-kind='run']");
+  const plannedRuns = page.locator("#recommendedCalendar [data-kind='run']");
   await expect(plannedRuns).toHaveCount(3);
-  await expect(plannedRuns.locator("span")).toHaveText(["Mon", "Wed", "Sun"]);
+  await expect(plannedRuns.locator(".plan-day-name")).toHaveText(["Mon", "Wed", "Sun"]);
   const longRun = plannedRuns.filter({ has: page.locator("strong").getByText("Long run", { exact: true }) });
   await expect(longRun).toHaveCount(1);
-  await expect(longRun.locator("span")).toHaveText("Sun");
+  await expect(longRun.locator(".plan-day-name")).toHaveText("Sun");
   await expect(longRun.locator("small")).toHaveText("At or below 7.0 mi");
   await expect(page.locator("#planDraftCopy")).toContainText("18–20 mi across 3 planned runs.");
   await expect(page.locator("#planDraftCopy")).toContainText("Sun long run: up to 7.0 mi.");

@@ -25,9 +25,6 @@ body[data-view="planning"] .toolbar { display: none; }
 .day-toggles label { display: inline-flex; align-items: center; gap: 6px; }
 .day-toggles legend { font-size: .85rem; }
 #planningHistoryNote, #checkinAge { padding: 12px; background: var(--surface-muted); color: var(--ink-soft); font-size: .9rem; }
-#acceptedPlan:not(:empty) { border: 1px solid var(--rule); padding: 16px; margin: 16px 0 24px; }
-.saved-session { display: grid; grid-template-columns: 1fr 145px 85px 30px 130px minmax(180px, 1.5fr); gap: 8px; padding: 12px 0; align-items: center; border-top: 1px solid var(--rule); }
-.saved-session input, .saved-session select { min-width: 0; width: 100%; }
 .analysis-progress { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; font-size: .85rem; margin-top: 12px; }
 dialog { max-width: min(560px, calc(100vw - 32px)); max-height: 85vh; overflow: auto; padding: 24px; color: var(--ink); background: var(--surface); border: 1px solid var(--rule-strong); border-radius: 8px; }
 dialog::backdrop { background: rgb(15 30 35 / .55); }
@@ -39,9 +36,7 @@ dialog button { margin: 12px 8px 0 0; }
 .workout-toolbar label { display: grid; gap: 5px; }
 body:not(.has-history) .exploration { display: none; }
 .metric-help { cursor: help; }
-#planDraftReview > summary { padding: 16px 0; font-weight: 700; font-size: .9rem; }
 .plan-controls .context-save { margin: 0; }
-@media (max-width: 1100px) { .saved-session { grid-template-columns: 1fr 145px 85px 30px; } .saved-session select { grid-column: span 2; } }
 @media (max-width: 700px) {
   .app-nav { width: 100%; justify-content: space-between; }
   .app-nav a { flex: 1; text-align: center; min-height: 44px; }
@@ -49,9 +44,6 @@ body:not(.has-history) .exploration { display: none; }
   .toolbar { padding: 10px 0; }
   .toolbar-intro { display: none; }
   .toolbar-controls { width: 100%; }
-  .saved-session { grid-template-columns: minmax(0, 1fr) 80px 30px; }
-  .saved-session strong { grid-column: 1 / -1; }
-  .saved-session select { grid-column: 1 / -1; }
   .plan-controls strong { order: -1; width: 100%; }
   .plan-controls button { flex: 1; }
 }
@@ -145,17 +137,13 @@ body:not(.has-history) .header-actions #demoButton { display: none; }
 .context-save { font-size: .8rem; border-radius: 5px; min-height: 40px; }
 .context-save:hover { background: var(--ink); color: var(--surface); }
 .plan-draft { display: grid; grid-template-columns: minmax(0, 1fr); border: 0; padding: 24px; margin-top: 12px; }
-.plan-draft h3 { color: var(--surface); font-size: 1.1rem; }
+.plan-draft h3 { font-size: 1.1rem; }
+/* By id, so no theme's heading colour can darken it on the always-dark panel. */
+#planDraftTitle { color: var(--board-ink); }
 .plan-draft p { font-size: .84rem; }
 .plan-draft > .context-save { justify-self: start; }
 .plan-draft .context-save:hover { background: var(--accent-hover); color: var(--accent-ink); }
 .recommended-calendar { gap: 0; }
-.recommended-day { border: 0; border-left: 1px solid oklch(38% .02 210); min-height: 160px; padding: 12px; background: transparent; }
-.recommended-day:first-child { border-left: 0; }
-.recommended-day:hover { background: oklch(26% .025 219); }
-.recommended-day strong { font-size: .83rem; }
-.recommended-day time, .recommended-day small, .recommended-day em { color: oklch(81% .015 198); font-size: .72rem; }
-.recommended-day.skipped { opacity: .8; }
 .training-texture-heading h2 { font-size: 1.1rem; }
 .texture-stat > span { font-size: .7rem; letter-spacing: .02em; }
 .texture-stat small { font-size: .72rem; }
@@ -233,12 +221,6 @@ body.has-history .onboarding { display: none; }
   .coaching-grid { grid-template-columns: 1fr; gap: 0; }
   .plan-draft { padding: 18px; }
   .recommended-calendar { grid-template-columns: 1fr; gap: 0; }
-  .recommended-day { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 3px 14px; border-left: 0; border-top: 1px solid oklch(38% .02 210); min-height: 0; padding: 14px 0; }
-  .recommended-day > span { grid-column: 1; grid-row: 1; }
-  .recommended-day time { grid-column: 1; grid-row: 2; margin: 0; }
-  .recommended-day strong { grid-column: 2; grid-row: 1; margin: 0; }
-  .recommended-day small { grid-column: 2; grid-row: 2; }
-  .recommended-day em { grid-column: 2; margin: 3px 0 0; }
   .ledger-controls { gap: 10px; }
   .ledger-controls .run-search { flex-basis: 100%; }
   .ledger-controls > .control:not(.run-search) { flex: 1; }
@@ -308,7 +290,6 @@ body.has-history .onboarding { display: none; }
 .account-actions a.ghost-action { text-decoration: none; }
 .link-action.danger { color: var(--red); }
 .account-button { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.recommended-day, .recommended-day small, .recommended-day strong, .recommended-day em { white-space: normal; overflow-wrap: anywhere; min-width: 0; }
 .key-runs-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); }
 #signals .intel-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 @media (max-width: 700px) { #signals .intel-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
@@ -348,19 +329,6 @@ body.has-history .onboarding { display: none; }
 #planningContext { margin-top: 24px; }
 #planningContext .readiness-card { padding: 20px; }
 #planningContext #planningHistoryNote { margin: 0; }
-#acceptedPlan { margin-bottom: 20px; }
-.saved-session { display: block; padding: 0; }
-.saved-session > summary { display: grid; grid-template-columns: 135px minmax(120px, 1fr) 100px 95px 40px; align-items: center; gap: 12px; min-height: 65px; padding: 12px 0; list-style: none; font-size: .9rem; }
-.saved-session > summary::-webkit-details-marker { display: none; }
-.saved-session > summary time { color: var(--ink-soft); font-size: .85rem; }
-.saved-session > summary strong { grid-column: auto; }
-.session-status { font-size: .78rem; color: var(--ink-soft); }
-.session-status.completed { color: var(--teal); }
-.session-edit-label { color: var(--teal); text-decoration: underline; font-size: .8rem; }
-.session-editor { display: grid; grid-template-columns: 145px 110px 125px minmax(180px, 1fr); gap: 12px; padding: 8px 0 20px; }
-.session-editor > label { display: grid; gap: 6px; font-size: .8rem; color: var(--ink-soft); }
-.session-editor select { grid-column: auto; }
-.session-editor > button { justify-self: start; }
 .workout-lead { display: block; }
 .workout-lead-metrics { width: 100%; }
 .workout-more { margin-top: 20px; display: grid; gap: 10px; }
@@ -369,7 +337,6 @@ body.has-history .onboarding { display: none; }
 .workout-disclosure > .workout-section, .workout-disclosure > .workout-read { margin: 0; padding: 18px; border: 0; border-top: 1px solid var(--rule); }
 .workout-disclosure > label { display: grid; gap: 6px; margin: 0 18px 18px; font-size: .85rem; }
 #enrichedRun:not(:empty) { margin: 20px 0 0; }
-@media (max-width: 1100px) { .session-editor { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 700px) {
   .header-actions { justify-items: start; width: 100%; }
   .header-actions > .action-feedback { text-align: left; }
@@ -377,15 +344,6 @@ body.has-history .onboarding { display: none; }
   .secondary-disclosure > summary { padding: 16px; flex-wrap: wrap; gap: 8px; }
   .secondary-disclosure > summary span { display: none; }
   .coaching-grid { grid-template-columns: 1fr; }
-  .saved-session > summary { grid-template-columns: minmax(0, 1fr) auto auto; gap: 5px 12px; }
-  .saved-session > summary time { grid-column: 1; grid-row: 2; }
-  .saved-session > summary strong { grid-column: 1; grid-row: 1; }
-  .saved-session .session-distance { grid-column: 2; grid-row: 1; }
-  .saved-session .session-status { grid-column: 2; grid-row: 2; }
-  .saved-session .session-edit-label { grid-column: 3; grid-row: 1 / 3; }
-  .session-editor { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .session-editor > label:last-of-type { grid-column: 1 / -1; }
-  .session-editor select { grid-column: auto; }
 }
 
 /* Welcome panel: what the product does, beside the sign-in actions. */
@@ -427,4 +385,101 @@ body.is-loading .onboarding { display: none; }
     flex: none; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%;
     background: var(--ink-strong); color: var(--surface); content: attr(data-initials); font-size: .68rem; font-weight: 760; letter-spacing: .02em;
   }
+}
+
+/* ---------- Plan: the week board ---------- */
+/* The panel stays dark in every theme, so its text is a fixed light colour, not the theme's surface. */
+:root { --board-ink: oklch(96% .008 135); }
+/* The calendar element only holds the board now; the board is the grid. */
+.recommended-calendar { display: block; margin-top: 16px; }
+.week-board { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); margin: 0; padding: 0; list-style: none; }
+.plan-day { position: relative; display: flex; flex-direction: column; min-width: 0; border-left: 1px solid oklch(38% .02 210); }
+.plan-day:first-child { border-left: 0; }
+/* A strip in the session type's colour, so the week's shape reads at a glance. */
+.plan-day::before { content: ""; height: 3px; margin: 0 10px; background: oklch(46% .02 210); }
+.plan-day.type-easy::before { background: var(--teal); }
+.plan-day.type-steady::before { background: var(--blue); }
+.plan-day.type-quality::before { background: var(--orange); }
+.plan-day.type-long::before { background: var(--accent); }
+.plan-day.type-race::before { height: 5px; background: var(--accent); }
+.plan-day-open { display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; gap: 3px; white-space: normal; flex: 1; width: 100%; min-height: 150px; padding: 12px; border: 0; border-radius: 0; background: transparent; color: var(--board-ink); text-align: left; font: inherit; cursor: pointer; }
+.plan-day-open:hover { background: oklch(26% .025 219); }
+.plan-day-open:focus-visible { outline: 3px solid var(--accent); outline-offset: -3px; }
+.plan-day-name { color: var(--accent); font-size: .68rem; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; }
+.plan-day time, .plan-day small { color: oklch(81% .015 198); font-size: .72rem; line-height: 1.35; }
+.plan-day strong { margin-top: 8px; color: var(--board-ink); font-size: .88rem; line-height: 1.25; overflow-wrap: anywhere; }
+.plan-day-distance { font-size: 1.05rem; font-weight: 750; font-variant-numeric: tabular-nums; }
+/* "Rest / mobility" already says it; the card's label still reads the full day aloud. */
+.plan-day.type-rest .plan-day-distance { display: none; }
+.plan-day small { margin-top: 4px; overflow-wrap: anywhere; }
+.plan-day.is-today .plan-day-name::after { content: " · today"; color: oklch(81% .015 198); text-transform: none; letter-spacing: 0; font-weight: 600; }
+.plan-day.status-completed { background: oklch(23% .05 188); }
+.plan-day.status-skipped .plan-day-open strong, .plan-day.status-skipped .plan-day-distance { text-decoration: line-through; opacity: .65; }
+.plan-day-done { margin: 0 10px 12px; min-height: 36px; padding: 0 10px; border: 1px solid oklch(46% .02 210); border-radius: 5px; background: transparent; color: var(--board-ink); font-size: .75rem; font-weight: 650; }
+.plan-day-done:hover { border-color: var(--accent); }
+.plan-day-done[aria-pressed="true"] { border-color: var(--teal); background: var(--teal); color: var(--board-ink); }
+.plan-day[draggable="true"] .plan-day-open { cursor: grab; }
+.plan-day.is-dragging { opacity: .45; }
+.plan-day.drop-target { outline: 2px dashed var(--accent); outline-offset: -4px; }
+.plan-draft .plan-week-totals { max-width: none; }
+.plan-week-totals { margin: 12px 0 0; padding-top: 12px; border-top: 1px solid oklch(38% .02 210); color: oklch(92% .03 106); font-size: .84rem; font-variant-numeric: tabular-nums; }
+.plan-week-totals:empty { display: none; }
+#planWeekLabel { font-variant-numeric: tabular-nums; }
+
+/* The day editor: a dialog on wide screens, a sheet from the bottom on phones. */
+.day-editor { width: min(520px, calc(100vw - 32px)); max-height: calc(100dvh - 48px); padding: 0; border: 1px solid var(--rule); border-radius: 10px; background: var(--surface); color: var(--ink); }
+.day-editor::backdrop { background: oklch(14% .03 226 / .55); }
+.day-editor form { display: grid; gap: 18px; padding: 20px 22px 22px; }
+.day-editor header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.day-editor h2 { margin: 0; font-size: 1.1rem; }
+.day-editor-close { width: 40px; height: 40px; padding: 0; border: 1px solid var(--rule); border-radius: 50%; background: transparent; color: var(--ink); font-size: 1.3rem; line-height: 1; }
+#dayEditorBody { display: grid; gap: 18px; }
+.day-editor fieldset { margin: 0; padding: 0; border: 0; min-width: 0; }
+.day-editor legend, .day-editor-distance > label, .day-editor-match, .day-editor-move { margin-bottom: 8px; color: var(--ink-soft); font-size: .8rem; font-weight: 650; }
+.day-editor-match, .day-editor-move { display: grid; gap: 8px; margin: 0; }
+.day-editor-match select, .day-editor-move select { width: 100%; min-height: 44px; color: var(--ink); font-weight: 400; font-size: .9rem; }
+/* Radio choices drawn as chips; the input stays in place for keyboards and screen readers. */
+.day-editor-types, .day-editor-status { display: flex; flex-wrap: wrap; gap: 8px; }
+.day-editor-types legend, .day-editor-status legend { width: 100%; float: left; }
+.day-editor fieldset label { position: relative; }
+.day-editor fieldset input[type="radio"] { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.day-editor fieldset label span { display: inline-flex; align-items: center; min-height: 40px; padding: 0 14px; border: 1px solid var(--rule); border-radius: 999px; background: var(--surface); font-size: .88rem; font-weight: 600; }
+.day-editor fieldset input:checked + span { border-color: var(--ink); background: var(--ink); color: var(--surface); }
+.day-editor fieldset input:focus-visible + span { outline: 3px solid var(--teal); outline-offset: 2px; }
+.type-chip-option.type-easy input:checked + span { border-color: var(--teal); background: var(--teal); }
+.type-chip-option.type-steady input:checked + span { border-color: var(--blue); background: var(--blue); }
+.type-chip-option.type-quality input:checked + span { border-color: var(--orange); background: var(--orange); }
+.type-chip-option:is(.type-long, .type-race) input:checked + span { border-color: var(--ink); background: var(--accent); color: var(--accent-ink); }
+.day-editor-distance { display: grid; }
+.stepper { display: grid; grid-template-columns: 48px minmax(0, 120px) 48px; gap: 8px; align-items: stretch; }
+.stepper button { min-height: 48px; padding: 0; border: 1px solid var(--rule); border-radius: 6px; background: var(--surface); color: var(--ink); font-size: 1.3rem; }
+.stepper input { min-height: 48px; text-align: center; font-size: 1.1rem; font-variant-numeric: tabular-nums; }
+.day-editor-saved { min-height: 1.2em; margin: 0; color: var(--teal); font-size: .82rem; }
+.day-editor-done { justify-self: end; min-width: 120px; min-height: 44px; border-radius: 6px; background: var(--ink); color: var(--surface); font-weight: 700; }
+
+@media (max-width: 1100px) and (min-width: 701px) {
+  .week-board { grid-template-columns: repeat(4, minmax(0, 1fr)); row-gap: 1px; }
+  .plan-day:nth-child(5) { border-left: 0; }
+  .plan-day-open { min-height: 128px; }
+}
+@media (max-width: 700px) {
+  /* A list down the screen: day on the left, session and distance on the right, Done at the end. */
+  .week-board { grid-template-columns: 1fr; }
+  .plan-day { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; border-left: 0; border-top: 1px solid oklch(38% .02 210); }
+  .plan-day:first-child { border-top: 0; }
+  .plan-day::before { position: absolute; left: 0; top: 10px; bottom: 10px; width: 3px; height: auto; margin: 0; }
+  .plan-day.type-race::before { width: 5px; height: auto; }
+  .plan-day-open { grid-template-columns: 56px minmax(0, 1fr) minmax(max-content, auto); grid-template-rows: auto auto; gap: 2px 12px; min-height: 64px; padding: 12px 8px 12px 14px; }
+  .plan-day-name { grid-column: 1; grid-row: 1; }
+  .plan-day time { grid-column: 1; grid-row: 2; }
+  .plan-day strong { grid-column: 2; grid-row: 1 / 3; align-self: center; margin: 0; }
+  /* The type and distance are what matter at a glance on a phone; the editor has the rest. */
+  .plan-day small { display: none; }
+  .plan-day-distance { grid-column: 3; grid-row: 1 / 3; align-self: center; text-align: right; font-size: .95rem; }
+  .plan-day.is-today .plan-day-name::after { content: ""; }
+  .plan-day.is-today .plan-day-name { text-decoration: underline; text-underline-offset: 3px; }
+  .plan-day-done { margin: 0 8px 0 0; min-width: 44px; min-height: 44px; padding: 0 8px; font-size: .72rem; }
+  .day-editor { width: 100vw; max-width: 100vw; max-height: 92dvh; margin: auto 0 0; border-radius: 14px 14px 0 0; border-bottom: 0; }
+  .day-editor form { padding: 18px 16px calc(20px + env(safe-area-inset-bottom)); }
+  .day-editor-done { justify-self: stretch; }
 }

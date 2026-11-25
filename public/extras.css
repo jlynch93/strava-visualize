@@ -195,8 +195,7 @@ body:not(.has-history) .palette-button { display: none; }
   #planning:has(#planStart[hidden]) > #planProgress { order: 1; }
   #planning:has(#planStart[hidden]) > #planHistoryWarning { order: 2; }
   #planning:has(#planStart[hidden]) > #planActions { order: 3; }
-  #planning:has(#planStart[hidden]) > #acceptedPlan { order: 4; }
-  #planning:has(#planStart[hidden]) > #planDraftReview { order: 5; }
+  #planning:has(#planStart[hidden]) > .plan-draft { order: 4; }
   #planning:has(#planStart[hidden]) > .coaching-grid { order: 7; margin-top: 18px; }
   #planning:has(#planStart[hidden]) > #planningContext { order: 8; }
 }

@@ -155,8 +155,7 @@
   #planProgress { order: 1; }
   #planHistoryWarning { order: 2; }
   #planActions { order: 3; }
-  #acceptedPlan { order: 4; }
-  #planDraftReview { order: 5; }
+  #planning > .plan-draft { order: 4; }
   #planStart { order: 6; margin-top: 16px; }
   #planning .coaching-grid { order: 7; }
   #planningContext { order: 8; }

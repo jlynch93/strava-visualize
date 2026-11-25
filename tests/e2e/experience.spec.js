@@ -44,28 +44,37 @@ test("secondary controls stay collapsed and the data menu supports keyboard dism
   await expect(page.locator("#dataMenu > summary")).toBeFocused();
 });
 
-test("session edits are explicit, cancellable, and confirmed beside the saved session", async ({ page }) => {
+const dayCard = (page, title) => page.locator(".plan-day").filter({ has: page.getByText(title, { exact: true }) }).first();
+const editor = (page) => page.locator("#dayEditor");
+
+test("the suggested week is edited in place, and the first edit saves it", async ({ page }) => {
   await page.goto("/"); await importHistory(page); await view(page, "Plan");
   await page.locator("#setupPlanButton").click(); await expect(page.locator("#goalMiles")).toBeFocused();
-  await page.locator("#previousPlanWeek").click(); await page.locator("#acceptPlanButton").click();
-  await expect(page.locator("#planStart")).toBeHidden();
-  await expect(page.locator("#planProgress")).toContainText("Your saved week");
-  const row = page.locator(".saved-session").filter({ has: page.getByText("Long run", { exact: true }) });
-  await expect(row.locator("input[type=number]")).toBeHidden();
-  const saved = await page.evaluate(() => JSON.stringify(acceptedPlans));
-  await row.locator("summary").click(); await row.locator("input[type=number]").fill("4");
-  await row.getByRole("button", { name: "Cancel", exact: true }).click();
-  expect(await page.evaluate(() => JSON.stringify(acceptedPlans))).toBe(saved);
-  await row.locator("summary").click(); await row.locator("input[type=number]").fill("4");
-  await row.getByRole("button", { name: "Save session" }).click();
-  await expect(row.locator("summary")).toContainText("4.0 mi");
-  await expect(page.locator("#acceptedPlan .action-feedback").filter({ hasText: "Session saved." })).toBeVisible();
-  await expect(page.locator("#status")).toBeHidden();
+  await page.locator("#previousPlanWeek").click();
+  await expect(page.locator(".plan-day")).toHaveCount(7);
+  await expect(page.locator("#planWeekLabel")).toContainText("Suggested");
+  expect(await page.evaluate(() => Boolean(acceptedPlans[planKey()]))).toBe(false);
+  const longRun = dayCard(page, "Long run");
+  const date = await longRun.getAttribute("data-date");
+  const before = await page.evaluate((day) => weekSessions().find((session) => session.date === day).miles, date);
+  await longRun.locator(".plan-day-open").click();
+  await expect(editor(page)).toBeVisible();
+  await expect(editor(page).getByRole("radio", { name: "Long" })).toBeChecked();
+  await editor(page).getByRole("button", { name: /more/ }).click();
+  await expect(editor(page).locator("#dayEditorSaved")).toHaveText("Saved");
+  expect(await page.evaluate((day) => acceptedPlans[planKey()].sessions.find((session) => session.date === day).miles, date)).toBeCloseTo(before + 0.5, 1);
+  await editor(page).getByRole("radio", { name: "Easy" }).check();
+  await expect(page.locator(`.plan-day[data-date="${date}"] strong`)).toHaveText("Easy run");
+  expect(await page.evaluate((day) => acceptedPlans[planKey()].sessions.find((session) => session.date === day).miles, date)).toBeCloseTo(before + 0.5, 1);
+  await page.keyboard.press("Escape");
+  await expect(editor(page)).toBeHidden();
+  await expect(page.locator(`.plan-day[data-date="${date}"] .plan-day-open`)).toBeFocused();
+  await expect(page.locator("#planWeekLabel")).toContainText("Your plan");
+  await expect(page.locator("#acceptPlanButton")).toBeHidden();
+  // After a reload the plan opens on the week that has a saved plan.
   await page.reload(); await importHistory(page); await view(page, "Plan");
-  await expect(page.locator("#planWeekLabel")).toContainText("Saved plan");
-  await expect(row.locator("summary")).toContainText("4.0 mi");
+  await expect(page.locator(`.plan-day[data-date="${date}"] strong`)).toHaveText("Easy run");
 });
-
 test("import preview supports cancel, deduplicated merge, and explicit replacement", async ({ page }) => {
   await page.goto("/"); await importHistory(page);
   const updated = { ...history()[0], name: "Updated run", distance: 6000 };
@@ -117,39 +126,77 @@ test("stale and undated check-ins have no effect while scheduling misses preserv
   await expect(page.locator("#planAdaptation")).toContainText("scheduling");
   expect(await page.evaluate(() => recommendIntent(currentTrainingSummary(), null).intent)).toBe("maintain");
 });
-test("accepted plans retain editable distances and explicit statuses across reloads and filters", async ({ page }) => {
+test("rest days become runs, days swap, and statuses change from the board or the editor", async ({ page }) => {
   await page.goto("/"); await importHistory(page); await view(page, "Plan");
-  await page.locator("#acceptPlanButton").click(); await expect(page.locator("#acceptedPlan .saved-session")).toHaveCount(7);
-  const row = page.locator("#acceptedPlan .saved-session").filter({ has: page.getByText("Long run", { exact: true }) });
-  await row.locator("summary").click();
-  await row.locator('input[type="number"]').fill("4"); await row.locator('input[type="number"]').press("Tab");
-  await row.locator("select").first().selectOption("skipped");
-  await row.getByRole("button", { name: "Save session" }).click();
+  await page.locator("#acceptPlanButton").click();
+  expect(await page.evaluate(() => acceptedPlans[planKey()].sessions.every((session) => session.status === "planned"))).toBe(true);
+  const rest = dayCard(page, "Rest / mobility");
+  const restDate = await rest.getAttribute("data-date");
+  await expect(rest.locator(".plan-day-done")).toHaveCount(0);
+  await rest.locator(".plan-day-open").click();
+  await editor(page).getByRole("radio", { name: "Easy" }).check();
+  await expect(editor(page).locator("#dayMiles")).not.toHaveValue("0.0");
+  await page.keyboard.press("Escape");
+  const turned = page.locator(`.plan-day[data-date="${restDate}"]`);
+  await expect(turned.locator("strong")).toHaveText("Easy run");
+  // Swap it with the long run, from the editor.
+  const longDate = await dayCard(page, "Long run").getAttribute("data-date");
+  await turned.locator(".plan-day-open").click();
+  await editor(page).locator("#dayMove").selectOption(longDate);
+  await expect(editor(page).locator("#dayEditorTitle")).toContainText(new Date(`${longDate}T12:00:00`).toLocaleDateString(undefined, { weekday: "long" }));
+  await page.keyboard.press("Escape");
+  await expect(page.locator(`.plan-day[data-date="${longDate}"] strong`)).toHaveText("Easy run");
+  await expect(page.locator(`.plan-day[data-date="${restDate}"] strong`)).toHaveText("Long run");
+  expect(await page.evaluate(() => new Set(acceptedPlans[planKey()].sessions.map((session) => session.date)).size)).toBe(7);
+  // Done straight from the board, skipped from the editor.
+  const done = page.locator(`.plan-day[data-date="${longDate}"] .plan-day-done`);
+  await done.click();
+  await expect(done).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator("#planWeekTotals")).toContainText("1 done");
+  await page.locator(`.plan-day[data-date="${restDate}"] .plan-day-open`).click();
+  await editor(page).getByRole("radio", { name: "Skipped" }).check();
+  await page.keyboard.press("Escape");
+  await expect(page.locator(`.plan-day[data-date="${restDate}"]`)).toHaveClass(/status-skipped/);
+  await expect(page.locator("#planWeekTotals")).toContainText("1 skipped");
+  // Statuses survive a change of view and a reload.
   const saved = await page.evaluate(() => JSON.stringify(acceptedPlans));
   await view(page, "Overview"); await page.locator("#bucketSelect").selectOption("month");
   expect(await page.evaluate(() => JSON.stringify(acceptedPlans))).toBe(saved);
   await page.reload(); await importHistory(page); await view(page, "Plan");
-  const restored = page.locator("#acceptedPlan .saved-session").filter({ has: page.getByText("Long run", { exact: true }) });
-  await restored.locator("summary").click();
-  await expect(restored.locator('input[type="number"]')).toHaveValue("4.0");
-  await expect(restored.locator("select").first()).toHaveValue("skipped");
-  await page.locator("#previousPlanWeek").click(); await expect(page.locator("#acceptedPlan .saved-session")).toHaveCount(0);
-  await page.locator("#nextPlanWeek").click(); await expect(page.locator("#acceptedPlan .saved-session")).toHaveCount(7);
+  await expect(page.locator(`.plan-day[data-date="${longDate}"] .plan-day-done`)).toHaveAttribute("aria-pressed", "true");
 });
-test("saved sessions can be rescheduled and explicitly matched, never completing rest days automatically", async ({ page }) => {
+test("dragging one day onto another swaps them", async ({ page, browserName }) => {
+  test.skip(browserName !== "chromium", "HTML drag and drop is simulated reliably in Chromium");
   await page.goto("/"); await importHistory(page); await view(page, "Plan");
-  await page.locator("#previousPlanWeek").click(); await page.locator("#acceptPlanButton").click();
-  const rows = page.locator("#acceptedPlan .saved-session");
-  expect(await page.evaluate(() => acceptedPlans[planKey()].sessions.every((session) => session.status === "planned"))).toBe(true);
-  // Readiness may swap the quality session for an easy run; any run session works here.
-  const firstRun = rows.filter({ has: page.getByText(/^(Quality option|Easy run)$/) }).first();
-  await firstRun.locator("summary").click();
-  const date = history()[0].start_date_local.slice(0, 10);
-  await firstRun.locator('input[type="date"]').fill(date); await firstRun.locator('input[type="date"]').press("Tab");
-  await firstRun.locator("select").last().selectOption("100");
-  await expect(firstRun.locator("select").first()).toHaveValue("completed");
-  await firstRun.getByRole("button", { name: "Save session" }).click();
+  const long = dayCard(page, "Long run"); const longDate = await long.getAttribute("data-date");
+  const rest = dayCard(page, "Rest / mobility"); const restDate = await rest.getAttribute("data-date");
+  await long.dragTo(rest);
+  await expect(page.locator(`.plan-day[data-date="${restDate}"] strong`)).toHaveText("Long run");
+  await expect(page.locator(`.plan-day[data-date="${longDate}"] strong`)).toHaveText("Rest / mobility");
+  expect(await page.evaluate(() => Boolean(acceptedPlans[planKey()]))).toBe(true);
+});
+test("a recorded run can be matched to a day, and reset returns the suggested week", async ({ page }) => {
+  await page.goto("/"); await importHistory(page); await view(page, "Plan");
+  await page.locator("#previousPlanWeek").click();
+  // Run 100 was recorded today, which is in this week.
+  const today = history()[0].start_date_local.slice(0, 10);
+  await page.locator(`.plan-day[data-date="${today}"] .plan-day-open`).click();
+  if (await editor(page).getByRole("radio", { name: "Rest" }).isChecked()) await editor(page).getByRole("radio", { name: "Easy" }).check();
+  await editor(page).locator("#dayMatch").selectOption("100");
+  await expect(editor(page).getByRole("radio", { name: "Done" })).toBeChecked();
+  await page.keyboard.press("Escape");
   expect(await page.evaluate(() => acceptedPlans[planKey()].sessions.filter((session) => session.matchedId === "100").length)).toBe(1);
+  // Turning the day into rest drops its status and match.
+  await page.locator(`.plan-day[data-date="${today}"] .plan-day-open`).click();
+  await editor(page).getByRole("radio", { name: "Rest" }).check();
+  await expect(editor(page).locator("#dayMatch")).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  expect(await page.evaluate(() => acceptedPlans[planKey()].sessions.some((session) => session.matchedId === "100"))).toBe(false);
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.locator("#resetPlanButton").click();
+  expect(await page.evaluate(() => Boolean(acceptedPlans[planKey()]))).toBe(false);
+  await expect(page.locator("#planWeekLabel")).toContainText("Suggested");
+  await expect(page.locator("#acceptPlanButton")).toBeVisible();
 });
 test("unknown comparison coverage is not reported as improvement", async ({ page }) => {
   await page.goto("/"); await importHistory(page, history().slice(0, 3));
@@ -241,7 +288,14 @@ test("goals and saved plans export, reject malformed restores, and restore expli
 test("mobile saved plans and preferences remain within the viewport", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/"); await importHistory(page); await view(page, "Plan"); await page.locator("#acceptPlanButton").click();
-  await page.locator(".saved-session summary").first().click();
+  await page.locator(".plan-day .plan-day-open").first().click();
+  await expect(page.locator("#dayEditor")).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  const sheet = await page.locator("#dayEditor").boundingBox();
+  expect(sheet.width).toBeLessThanOrEqual(390);
+  const editorReport = await new AxeBuilder({ page }).include("#dayEditor").withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
+  expect(editorReport.violations, JSON.stringify(editorReport.violations)).toEqual([]);
+  await page.keyboard.press("Escape");
   await preferences(page);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   const report = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
@@ -270,8 +324,12 @@ test("failed browser storage reports that accepted plans are only available in t
   await page.goto("/"); await importHistory(page); await view(page, "Plan");
   await page.evaluate(() => { Storage.prototype.setItem = () => { throw new Error("quota"); }; });
   await page.locator("#acceptPlanButton").click();
-  await expect(page.locator("#acceptedPlan .saved-session")).toHaveCount(7);
+  await expect(page.locator("#planWeekLabel")).toContainText("Your plan");
   await expect(page.locator("#status")).toContainText("browser storage failed");
+  // An edit after that says so in the editor too.
+  await dayCard(page, "Rest / mobility").locator(".plan-day-open").click();
+  await page.locator("#dayEditor").getByRole("radio", { name: "Easy" }).check();
+  await expect(page.locator("#dayEditorSaved")).toContainText("browser storage failed");
 });
 
 test("fitness view shows readiness, VO2 max, load and accepts a heart-rate profile", async ({ page }) => {

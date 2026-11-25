@@ -88,10 +88,10 @@ test("a tune-up race in the planned week takes its day on the calendar", async (
   const saturday = await page.evaluate(() => { const start = selectedPlanStart(); start.setDate(start.getDate() + 5); return localDateValue(start); });
   await page.evaluate((date) => { coachingContext.races = [{ id: "b", name: "Turkey Trot", date, distance: "10K", priority: "B" }]; saveCoachingContext(); render(); }, saturday);
   await nav(page, "Plan");
-  const raceDay = page.locator("#recommendedCalendar .race-day");
+  const raceDay = page.locator("#recommendedCalendar .plan-day.type-race");
   await expect(raceDay).toHaveCount(1);
   await expect(raceDay).toContainText("Turkey Trot · 10K (B race)");
-  await expect(raceDay).toHaveAttribute("data-plan-date", saturday);
+  await expect(raceDay).toHaveAttribute("data-date", saturday);
 });
 
 test("without races nothing about readiness changes", async ({ page }) => {

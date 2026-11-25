@@ -259,15 +259,15 @@ test("the structure leads with today: overview opens on readiness, fitness group
   await expect(page.locator(".fitness-profile #fitnessNotes")).toHaveCount(1);
 });
 
-test("plan shows the draft before the setup once a goal is set", async ({ page }) => {
+test("plan shows the editable week before the goal and race setup, with or without a goal", async ({ page }) => {
   await loadDemo(page);
   await nav(page, "Plan");
   const top = (selector) => page.locator(selector).evaluate((node) => node.getBoundingClientRect().top + scrollY);
   await expect(page.locator("#planning .panel-heading")).toContainText("Saved to your account when you are signed in");
-  expect(await top(".coaching-grid")).toBeLessThan(await top("#planDraftReview"));
+  expect(await top(".plan-draft")).toBeLessThan(await top(".coaching-grid"));
   await page.evaluate(() => { coachingContext.goal = { miles: "30" }; saveCoachingContext(); render(); });
   await expect(page.locator("#planStart")).toBeHidden();
-  expect(await top("#planDraftReview")).toBeLessThan(await top(".coaching-grid"));
+  expect(await top(".plan-draft")).toBeLessThan(await top(".coaching-grid"));
 });
 
 test("pages end at the footer, with no blank scroll below", async ({ page }) => {

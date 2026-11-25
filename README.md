@@ -299,12 +299,20 @@ days; an undated legacy check-in must be refreshed. Scheduling misses preserve
 the baseline, while recovery-related misses adapt the draft. The draft reserves
 an available long-run day, respects the weekly run limit, and gives a race
 priority during race week. Session distances reconcile to the draft total.
-Save a draft to preserve that week's sessions, then edit distances, reschedule,
-choose explicit statuses, and match recorded runs. Rest days never complete
-automatically. Select a saved session to open its editor, then **Save session**
-or **Cancel**. Returning to Plan opens the current week's saved plan when one exists.
-Previous/next week controls reopen saved plans. Copy uses the
-saved plan when present. Replacing a saved week requires confirmation.
+The week is a board of seven days you can edit directly. Select a day to change
+its session (rest, easy, steady, quality, long or race), adjust the distance with
+the −/+ buttons, set it planned, done or skipped, match a recorded run, or move it
+to another day, which swaps the two. Run days have a **Mark done** button on the
+board itself, and on a computer you can drag one day onto another to swap them.
+Changes save as you make them: the first edit turns the suggested draft into your
+plan for that week (**Keep this plan** saves it unchanged), and later goal changes
+do not rewrite it. **Reset to suggestion** returns the week to the current draft
+after confirmation. A day turned from rest into a run starts at the week's
+typical run distance; a run turned into rest drops its distance, status and
+match; a moved day loses a completed status and match, since those belong to the
+date it was run. Rest days never complete automatically. Returning to Plan opens
+the current week's plan when one exists, previous/next week controls reopen saved
+plans, and Copy copies the week shown.
 
 **Runs** searches the entire selected history, with sorting and 15-row pages.
 On mobile, each row emphasizes the run name, date, distance, and pace; open the

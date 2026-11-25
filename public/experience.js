@@ -258,79 +258,168 @@ function renderSyncInfo() {
   const connectParent = state.dataSource === "import" ? document.querySelector("#dataMenuActions") : document.querySelector(".header-actions .actions");
   if (els.connectButton.parentElement !== connectParent) connectParent.prepend(els.connectButton);
 }
+/* ---------- The week board: one editable week, saved as you edit ---------- */
+
+const PLAN_STATUS_LABELS = { planned: "Planned", completed: "Done", skipped: "Skipped" };
+let dayEditorDate = "";
+
+// The week on screen: the saved plan, or the suggested draft until the first edit.
+function weekSessions() { return acceptedPlans[planKey()]?.sessions || state.draftSessions || []; }
+function weekDates() {
+  const start = selectedPlanStart();
+  return Array.from({ length: 7 }, (_, index) => { const date = new Date(start); date.setDate(start.getDate() + index); return localDateValue(date); });
+}
+function sessionOn(sessions, date) {
+  return sessions.find((session) => session.date === date) || { date, ...TrainingCore.retypeSession({ date, kind: "rest", miles: 0, status: "planned", matchedId: "" }, "rest") };
+}
+function dayLabel(date, options = { weekday: "short", month: "short", day: "numeric" }) {
+  return new Date(`${date}T12:00:00`).toLocaleDateString(undefined, options);
+}
+// Every edit goes through here: the draft becomes the saved plan on the first
+// change, and each change is stored straight away.
+function editWeek(change) {
+  const key = planKey();
+  const current = weekSessions();
+  if (!current.length) return false;
+  const dates = weekDates();
+  const filled = dates.map((date) => sessionOn(current, date)).concat(current.filter((session) => !dates.includes(session.date)));
+  const sessions = change(structuredClone(filled));
+  acceptedPlans[key] = { savedAt: acceptedPlans[key]?.savedAt || new Date().toISOString(), editedAt: new Date().toISOString(), sessions };
+  const saved = savePlans();
+  if (!saved) setStatus("Updated in this tab. Browser storage failed; back up the plan before closing.", true);
+  renderAcceptedPlan();
+  return saved;
+}
+function replaceSession(date, update) {
+  return editWeek((sessions) => sessions.map((session) => (session.date === date ? update(session, sessions) : session)));
+}
+
 function renderAcceptedPlan() {
   const plan = acceptedPlans[planKey()];
+  const sessions = weekSessions();
   document.querySelector("#planStart").hidden = Boolean(Object.keys(coachingContext.goal).length || plan);
-  document.querySelector("#planProgress").textContent = plan ? "Your saved week. Select a session to edit it." : Object.keys(coachingContext.goal).length ? "Review the draft, then save the week when it fits your schedule." : "Start with availability and a weekly goal, then review your draft.";
-  const root = document.querySelector("#acceptedPlan"); root.replaceChildren();
-  document.querySelector("#acceptPlanButton").disabled = !state.draftSessions?.length || Boolean(plan);
-  document.querySelector("#acceptPlanButton").textContent = plan ? "Draft saved" : "Save this draft";
-  document.querySelector("#replacePlanButton").hidden = !plan;
-  els.copyPlanButton.disabled = !plan && !state.draftSessions?.length;
-  els.copyPlanButton.textContent = plan ? "Copy saved plan" : "Copy draft";
-  document.querySelector("#planWeekLabel").textContent = `Week of ${selectedPlanStart().toLocaleDateString()} · ${plan ? "Saved plan" : "Draft"}`;
-  const draftReview = document.querySelector("#planDraftReview");
-  if (draftReview) {
-    draftReview.querySelector("summary").hidden = !plan;
-    if (draftReview.dataset.week !== `${planKey()}:${Boolean(plan)}`) draftReview.open = !plan;
-    draftReview.dataset.week = `${planKey()}:${Boolean(plan)}`;
-    document.querySelector("#planDraftTitle").textContent = selectedPlanOffset === 1 ? "Next-week draft" : selectedPlanOffset === 0 ? "This week's draft" : `Draft for ${selectedPlanStart().toLocaleDateString()}`;
-  }
-  if (!plan?.sessions) return;
-  const total = plan.sessions.reduce((sum, session) => sum + (session.kind === "run" ? Number(session.miles) || 0 : 0), 0);
-  const summary = document.createElement("p"); summary.textContent = `Saved ${new Date(plan.savedAt).toLocaleDateString()} · ${displayDistance(total)} across ${plan.sessions.filter((session) => session.kind === "run").length} sessions. Edits stay with this week.`;
-  root.append(summary);
-  for (const [index, session] of plan.sessions.entries()) {
-    const row = document.createElement("details"); row.className = "saved-session"; row.dataset.sessionIndex = index;
-    const summary = document.createElement("summary"); summary.setAttribute("aria-label", `Edit ${session.title} on ${session.date}`);
-    const label = document.createElement("strong"); label.textContent = session.title;
-    const day = document.createElement("time"); day.dateTime = session.date; day.textContent = new Date(`${session.date}T12:00:00`).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
-    const plannedDistance = document.createElement("span"); plannedDistance.className = "session-distance"; plannedDistance.textContent = session.kind === "run" ? displayDistance(session.miles) : "Rest day";
-    const badge = document.createElement("span"); badge.className = `session-status ${session.status}`; badge.textContent = session.status[0].toUpperCase() + session.status.slice(1);
-    const editLabel = document.createElement("span"); editLabel.className = "session-edit-label"; editLabel.textContent = "Edit";
-    summary.append(day, label, plannedDistance, badge, editLabel); row.append(summary);
-    const editor = document.createElement("form"); editor.className = "session-editor"; editor.id = `sessionEditor-${index}`; editor.dataset.feedbackScope = "";
-    const date = document.createElement("input"); date.type = "date"; date.value = session.date; date.setAttribute("aria-label", `Reschedule ${session.title}`);
-    date.required = true;
-    const distance = document.createElement("input"); distance.type = "number"; distance.min = "0"; distance.max = "500"; distance.step = ".1"; distance.value = (session.miles * (preferences.units === "metric" ? 1.609344 : 1)).toFixed(1); distance.disabled = session.kind !== "run";
-    distance.setAttribute("aria-label", `${session.title} distance in ${preferences.units === "metric" ? "kilometers" : "miles"}`);
-    distance.required = true;
-    const unit = document.createElement("span"); unit.textContent = preferences.units === "metric" ? "km" : "mi";
-    const status = document.createElement("select"); status.setAttribute("aria-label", `${session.title} status`);
-    for (const value of ["planned", "completed", "skipped"]) status.add(new Option(value[0].toUpperCase() + value.slice(1), value));
-    status.value = session.status;
-    const match = document.createElement("select"); match.setAttribute("aria-label", `Match activity to ${session.title}`); match.disabled = session.kind !== "run";
-    match.add(new Option("Match a run (optional)", ""));
-    const used = new Set(plan.sessions.filter((other) => other !== session).map((other) => other.matchedId).filter(Boolean));
-    const populateMatches = (selectedId = "") => {
-      match.replaceChildren(new Option("Match a run (optional)", ""));
-      state.rawActivities.filter(isRun).filter((run) => !used.has(String(run.id)) && Math.abs(parseActivityDate(run) - new Date(`${date.value}T12:00:00`)) < 2 * 86400000).forEach((run) => match.add(new Option(`${localDateValue(parseActivityDate(run))} · ${run.name} · ${displayDistance(miles(run.distance))}`, String(run.id))));
-      match.value = selectedId;
-    };
-    populateMatches(session.matchedId);
-    match.value = session.matchedId || "";
-    date.addEventListener("change", () => populateMatches());
-    match.addEventListener("change", () => { if (match.value) status.value = "completed"; });
-    status.addEventListener("change", () => { if (status.value !== "completed") match.value = ""; });
-    const field = (title, control) => { const wrap = document.createElement("label"); wrap.textContent = title; wrap.append(control); return wrap; };
-    const distanceField = field(`Distance (${unit.textContent})`, distance);
-    const save = document.createElement("button"); save.type = "submit"; save.textContent = "Save session";
-    const cancel = document.createElement("button"); cancel.type = "button"; cancel.textContent = "Cancel";
-    cancel.addEventListener("click", () => { renderAcceptedPlan(); root.querySelector(`[data-session-index="${index}"] > summary`)?.focus(); });
-    editor.append(field("Date", date), distanceField, field("Status", status), field("Recorded activity", match), save, cancel);
-    editor.addEventListener("submit", (event) => {
-      event.preventDefault();
-      session.date = date.value; session.miles = session.kind === "run" ? Number(distance.value) / (preferences.units === "metric" ? 1.609344 : 1) : 0;
-      session.status = status.value; session.matchedId = match.value || "";
-      const saved = savePlans(); renderAcceptedPlan();
-      const updatedRow = root.querySelector(`[data-session-index="${index}"]`);
-      setStatus(saved ? "Session saved." : "Updated in this tab. Browser storage failed; back up the plan before closing.", !saved, `sessionFeedback-${index}`);
-      updatedRow.querySelector("summary").focus({ preventScroll: true });
-    });
-    const feedback = document.createElement("p"); feedback.id = `sessionFeedback-${index}`; feedback.className = "action-feedback"; feedback.hidden = true;
-    row.append(editor); root.append(row, feedback);
-  }
+  document.querySelector("#planProgress").textContent = plan
+    ? "Your plan for this week. Select a day to change it; changes save as you make them."
+    : Object.keys(coachingContext.goal).length ? "A suggested week from your goal and recent training. Select any day to change it." : "Start with availability and a weekly goal, or select any day to change the suggested week.";
+  const keep = document.querySelector("#acceptPlanButton");
+  keep.hidden = Boolean(plan); keep.disabled = !sessions.length;
+  document.querySelector("#resetPlanButton").hidden = !plan;
+  els.copyPlanButton.disabled = !sessions.length;
+  els.copyPlanButton.textContent = plan ? "Copy plan" : "Copy draft";
+  document.querySelector("#planWeekLabel").textContent = `Week of ${selectedPlanStart().toLocaleDateString(undefined, { month: "short", day: "numeric" })} · ${plan ? "Your plan" : "Suggested"}`;
+  document.querySelector("#planDraftTitle").textContent = selectedPlanOffset === 1 ? "Next week" : selectedPlanOffset === 0 ? "This week" : `Week of ${selectedPlanStart().toLocaleDateString()}`;
+  const board = els.recommendedCalendar;
+  const totals = document.querySelector("#planWeekTotals");
+  if (!sessions.length) { board.replaceChildren(); totals.textContent = ""; return; }
+  const today = localDateValue(new Date());
+  const dates = weekDates();
+  board.innerHTML = `<ol class="week-board" aria-label="${plan ? "Your plan" : "Suggested plan"}, week of ${escapeHtml(dayLabel(dates[0], { month: "long", day: "numeric" }))}">${dates.map((date) => {
+    const session = sessionOn(sessions, date);
+    const type = TrainingCore.sessionType(session);
+    const run = session.kind === "run";
+    const status = PLAN_STATUS_LABELS[session.status] || "Planned";
+    const distance = run ? displayDistance(session.miles) : "Rest";
+    const label = `${dayLabel(date, { weekday: "long", month: "short", day: "numeric" })}: ${session.title}, ${distance}${run ? `, ${status.toLowerCase()}` : ""}. Edit`;
+    return `<li class="plan-day type-${type} status-${escapeHtml(session.status)}${date === today ? " is-today" : ""}" data-date="${date}" data-kind="${run ? "run" : "rest"}" draggable="true">
+      <button type="button" class="plan-day-open" data-action="edit-day" aria-label="${escapeHtml(label)}"><span class="plan-day-name">${escapeHtml(dayLabel(date, { weekday: "short" }))}</span><time datetime="${date}">${escapeHtml(dayLabel(date, { month: "short", day: "numeric" }))}</time><strong>${escapeHtml(session.title)}</strong><span class="plan-day-distance">${escapeHtml(distance)}</span><small>${escapeHtml(session.detail || "")}</small></button>
+      ${run ? `<button type="button" class="plan-day-done" data-action="toggle-done" aria-pressed="${session.status === "completed"}" aria-label="${escapeHtml(`${session.title} on ${dayLabel(date, { weekday: "long" })} done`)}">${session.status === "completed" ? "✓ Done" : session.status === "skipped" ? "Skipped" : "Mark done"}</button>` : ""}
+    </li>`;
+  }).join("")}</ol>`;
+  const outside = sessions.filter((session) => !dates.includes(session.date));
+  const sum = TrainingCore.weekTotals(sessions.filter((session) => dates.includes(session.date)));
+  totals.textContent = `${displayDistance(sum.miles)} across ${sum.runs} run${sum.runs === 1 ? "" : "s"}${sum.completedRuns ? ` · ${sum.completedRuns} done (${displayDistance(sum.completedMiles)})` : ""}${sum.skippedRuns ? ` · ${sum.skippedRuns} skipped` : ""}${outside.length ? ` · also planned outside this week: ${outside.map((session) => `${session.title} ${dayLabel(session.date)}`).join(", ")}` : ""}`;
+  if (document.querySelector("#dayEditor")?.open) renderDayEditor(dayEditorDate);
 }
+
+function openDayEditor(date) {
+  dayEditorDate = date;
+  renderDayEditor(date);
+  const dialog = document.querySelector("#dayEditor");
+  if (!dialog.open) dialog.showModal();
+  dialog.querySelector("input[name=dayType]:checked")?.focus();
+}
+
+function renderDayEditor(date, focus) {
+  const sessions = weekSessions();
+  const session = sessionOn(sessions, date);
+  const type = TrainingCore.sessionType(session);
+  const run = session.kind === "run";
+  const metric = preferences.units === "metric";
+  const unit = metric ? "km" : "mi";
+  const shown = (Number(session.miles) * (metric ? 1.609344 : 1)).toFixed(1);
+  document.querySelector("#dayEditorTitle").textContent = dayLabel(date, { weekday: "long", month: "long", day: "numeric" });
+  const used = new Set(sessions.filter((other) => other.date !== date).map((other) => other.matchedId).filter(Boolean));
+  const nearby = state.rawActivities.filter(isRun).filter((activity) => !used.has(String(activity.id)) && Math.abs(parseActivityDate(activity) - new Date(`${date}T12:00:00`)) < 1.5 * 86400000);
+  const types = Object.entries(TrainingCore.SESSION_TYPES).map(([value, spec]) => `<label class="type-chip-option type-${value}"><input type="radio" name="dayType" value="${value}"${value === type ? " checked" : ""}><span>${spec.label}</span></label>`).join("");
+  const statuses = Object.entries(PLAN_STATUS_LABELS).map(([value, label]) => `<label><input type="radio" name="dayStatus" value="${value}"${value === session.status ? " checked" : ""}><span>${label}</span></label>`).join("");
+  const moves = weekDates().filter((other) => other !== date).map((other) => `<option value="${other}">${escapeHtml(dayLabel(other))} · swap with ${escapeHtml(sessionOn(sessions, other).title)}</option>`).join("");
+  document.querySelector("#dayEditorBody").innerHTML = `
+    <fieldset class="day-editor-types"><legend>Session</legend>${types}</fieldset>
+    ${run ? `<div class="day-editor-distance"><label for="dayMiles">Distance (${unit})</label><div class="stepper"><button type="button" data-step="-0.5" aria-label="0.5 ${unit} less">−</button><input id="dayMiles" type="number" inputmode="decimal" min="0" max="160" step="0.1" value="${shown}"><button type="button" data-step="0.5" aria-label="0.5 ${unit} more">+</button></div></div>
+    <fieldset class="day-editor-status"><legend>Status</legend>${statuses}</fieldset>
+    <label class="day-editor-match">Recorded run<select id="dayMatch"><option value="">${nearby.length ? "Match a run (optional)" : "No runs recorded near this day"}</option>${nearby.map((activity) => `<option value="${escapeHtml(String(activity.id))}"${String(activity.id) === session.matchedId ? " selected" : ""}>${escapeHtml(`${dayLabel(localDateValue(parseActivityDate(activity)))} · ${activity.name || "Run"} · ${displayDistance(miles(activity.distance))}`)}</option>`).join("")}</select></label>` : ""}
+    <label class="day-editor-move">Move to another day<select id="dayMove"><option value="">Keep on ${escapeHtml(dayLabel(date, { weekday: "long" }))}</option>${moves}</select></label>`;
+  if (focus) document.querySelector(`#dayEditorBody ${focus}`)?.focus();
+}
+
+function setupWeekBoard() {
+  const controls = document.querySelector(".plan-controls");
+  // The week sits right under its controls, ahead of the goal, race and check-in setup.
+  controls.after(document.querySelector(".plan-draft"));
+  document.querySelector("#acceptPlanButton").textContent = "Keep this plan";
+  controls.insertAdjacentHTML("beforeend", '<button id="resetPlanButton" type="button" hidden>Reset to suggestion</button>');
+  els.recommendedCalendar.insertAdjacentHTML("afterend", '<p id="planWeekTotals" class="plan-week-totals" role="status"></p>');
+  document.body.insertAdjacentHTML("beforeend", `<dialog id="dayEditor" class="day-editor" aria-labelledby="dayEditorTitle"><form method="dialog"><header><h2 id="dayEditorTitle"></h2><button type="submit" class="day-editor-close" aria-label="Close">×</button></header><div id="dayEditorBody"></div><p id="dayEditorSaved" class="day-editor-saved" role="status"></p><button type="submit" class="day-editor-done">Done</button></form></dialog>`);
+  const dialog = document.querySelector("#dayEditor");
+  const saved = (ok) => { document.querySelector("#dayEditorSaved").textContent = ok ? "Saved" : "Saved in this tab only: browser storage failed"; };
+  dialog.addEventListener("change", (event) => {
+    const target = event.target;
+    if (target.name === "dayType") { saved(replaceSession(dayEditorDate, (session, sessions) => TrainingCore.retypeSession(session, target.value, sessions))); renderDayEditor(dayEditorDate, `input[name=dayType][value="${target.value}"]`); }
+    else if (target.name === "dayStatus") { saved(replaceSession(dayEditorDate, (session) => ({ ...session, status: target.value, matchedId: target.value === "completed" ? session.matchedId : "" }))); renderDayEditor(dayEditorDate, `input[name=dayStatus][value="${target.value}"]`); }
+    else if (target.id === "dayMiles") { saved(replaceSession(dayEditorDate, (session) => TrainingCore.setSessionMiles(session, Number(target.value) / (preferences.units === "metric" ? 1.609344 : 1)))); }
+    else if (target.id === "dayMatch") { saved(replaceSession(dayEditorDate, (session) => ({ ...session, matchedId: target.value, status: target.value ? "completed" : session.status }))); renderDayEditor(dayEditorDate, "#dayMatch"); }
+    else if (target.id === "dayMove" && target.value) {
+      const to = target.value;
+      saved(editWeek((sessions) => TrainingCore.moveSession(sessions, dayEditorDate, to)));
+      dayEditorDate = to; renderDayEditor(to, "#dayMove");
+    }
+  });
+  dialog.addEventListener("click", (event) => {
+    const step = event.target.closest("[data-step]");
+    if (!step) return;
+    const input = dialog.querySelector("#dayMiles");
+    input.value = Math.max(0, Number(input.value || 0) + Number(step.dataset.step)).toFixed(1);
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+    dialog.querySelector(`[data-step="${step.dataset.step}"]`)?.focus();
+  });
+  dialog.addEventListener("close", () => {
+    document.querySelector("#dayEditorSaved").textContent = "";
+    els.recommendedCalendar.querySelector(`[data-date="${dayEditorDate}"] .plan-day-open`)?.focus();
+  });
+  els.recommendedCalendar.addEventListener("click", (event) => {
+    const day = event.target.closest(".plan-day");
+    if (!day) return;
+    const action = event.target.closest("[data-action]")?.dataset.action;
+    if (action === "edit-day") openDayEditor(day.dataset.date);
+    if (action === "toggle-done") {
+      replaceSession(day.dataset.date, (session) => ({ ...session, status: session.status === "completed" ? "planned" : "completed" }));
+      els.recommendedCalendar.querySelector(`[data-date="${day.dataset.date}"] .plan-day-done`)?.focus();
+    }
+  });
+  // Drag a day onto another to swap them (the editor's "Move to" does the same without a mouse).
+  let dragging = "";
+  els.recommendedCalendar.addEventListener("dragstart", (event) => { const day = event.target.closest(".plan-day"); if (!day) return; dragging = day.dataset.date; event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("text/plain", dragging); day.classList.add("is-dragging"); });
+  els.recommendedCalendar.addEventListener("dragover", (event) => { const day = event.target.closest(".plan-day"); if (!day || !dragging) return; event.preventDefault(); els.recommendedCalendar.querySelectorAll(".drop-target").forEach((node) => node.classList.remove("drop-target")); if (day.dataset.date !== dragging) day.classList.add("drop-target"); });
+  els.recommendedCalendar.addEventListener("drop", (event) => { const day = event.target.closest(".plan-day"); if (!day || !dragging) return; event.preventDefault(); const from = dragging; dragging = ""; if (day.dataset.date !== from) editWeek((sessions) => TrainingCore.moveSession(sessions, from, day.dataset.date)); });
+  els.recommendedCalendar.addEventListener("dragend", () => { dragging = ""; els.recommendedCalendar.querySelectorAll(".drop-target, .is-dragging").forEach((node) => node.classList.remove("drop-target", "is-dragging")); });
+  document.querySelector("#resetPlanButton").addEventListener("click", () => {
+    if (!acceptedPlans[planKey()] || !confirm("Reset this week to the suggested plan? Your changes and statuses for this week are removed.")) return;
+    delete acceptedPlans[planKey()];
+    const ok = savePlans(); render();
+    setStatus(ok ? "This week is back to the suggested plan." : "Reset in this tab. Browser storage failed; back up the plan before closing.", !ok);
+  });
+}
+
 function finishExperienceRender() {
   renderSyncInfo(); renderAcceptedPlan();
   const checkin = activeCheckin();
@@ -468,16 +557,14 @@ function initializeExperience() {
   document.querySelectorAll(".app-nav a").forEach((link) => link.addEventListener("click", (event) => { event.preventDefault(); history.replaceState(null, "", `${location.pathname}${location.search}${link.hash}`); setView(link.hash.slice(1), true); }));
   activeView = ["fitness", "planning", "runs"].includes(location.hash.slice(1)) ? location.hash.slice(1) : "overview";
   window.addEventListener("hashchange", () => setView(location.hash.slice(1), true));
-  document.querySelector("#planning .panel-heading").insertAdjacentHTML("afterend", `<p id="planningHistoryNote" role="status"></p><div class="plan-controls"><button id="previousPlanWeek" type="button">Previous week</button><strong id="planWeekLabel"></strong><button id="nextPlanWeek" type="button">Next week</button><button id="acceptPlanButton" type="button">Save this draft</button><button id="replacePlanButton" type="button">Replace saved plan with draft</button></div><section id="acceptedPlan" data-native-units aria-label="Saved weekly plan"></section>`);
+  document.querySelector("#planning .panel-heading").insertAdjacentHTML("afterend", `<p id="planningHistoryNote" role="status"></p><div class="plan-controls"><button id="previousPlanWeek" type="button">Previous week</button><strong id="planWeekLabel"></strong><button id="nextPlanWeek" type="button">Next week</button><button id="acceptPlanButton" type="button">Keep this plan</button></div>`);
   document.querySelector("#coachingWorkspaceTitle").textContent = "Your training plan";
   document.querySelector("#planning .panel-heading").insertAdjacentHTML("afterend", '<p id="planProgress" class="plan-progress"></p><div id="planStart" class="plan-start"><strong>Make this week yours</strong><p>Choose your running days and a weekly goal to shape the draft.</p><button id="setupPlanButton" type="button">Set availability and goal</button></div>');
   document.querySelector("#setupPlanButton").addEventListener("click", () => { els.goalForm.closest("details").open = true; els.goalMiles.focus(); });
   els.goalForm.dataset.feedbackScope = ""; els.checkinForm.dataset.feedbackScope = "";
   document.querySelector(".plan-controls").id = "planActions"; document.querySelector(".plan-controls").dataset.feedbackScope = "";
   document.querySelector(".plan-controls").append(els.copyPlanButton);
-  const draftReview = document.createElement("details"); draftReview.id = "planDraftReview"; draftReview.open = true;
-  draftReview.innerHTML = "<summary>Review a replacement draft</summary>";
-  const draft = document.querySelector(".plan-draft"); draft.before(draftReview); draftReview.append(draft);
+  setupWeekBoard();
   const planningContext = document.createElement("details"); planningContext.id = "planningContext"; planningContext.className = "secondary-disclosure";
   planningContext.innerHTML = '<summary>Current training context<span>Recent history and the inputs behind your draft</span></summary>';
   planningContext.append(document.querySelector("#planningHistoryNote"), document.querySelector(".readiness-card"));
@@ -519,15 +606,12 @@ function initializeExperience() {
   document.querySelector("#fullSyncButton").addEventListener("click", () => fetchActivities("full").catch((error) => setStatus(error.message, true)));
   document.querySelector("#previousPlanWeek").addEventListener("click", () => { selectedPlanOffset -= 1; render(); });
   document.querySelector("#nextPlanWeek").addEventListener("click", () => { selectedPlanOffset += 1; render(); });
-  const accept = (replace) => {
-    if (acceptedPlans[planKey()] && !replace) { setStatus("This week already has a saved plan. Use Replace saved plan with draft to replace it."); return; }
-    if (!state.draftSessions?.length) return;
-    acceptedPlans[planKey()] = { savedAt: new Date().toISOString(), sessions: structuredClone(state.draftSessions) };
-    const saved = savePlans(); renderAcceptedPlan();
-    setStatus(saved ? "Weekly plan saved. Changes to filters and goals will not rewrite it." : "This plan is available in this tab, but browser storage failed. Back up your goals and plans before closing the tab.", !saved);
-  };
-  document.querySelector("#acceptPlanButton").addEventListener("click", () => accept(false));
-  document.querySelector("#replacePlanButton").addEventListener("click", () => { if (acceptedPlans[planKey()] && confirm("Replace this week's saved sessions and statuses with the current draft?")) accept(true); });
+  // Keeps the suggested week as it is. Any edit to a day does the same.
+  document.querySelector("#acceptPlanButton").addEventListener("click", () => {
+    if (acceptedPlans[planKey()] || !state.draftSessions?.length) return;
+    const saved = editWeek((sessions) => sessions);
+    setStatus(saved ? "This week's plan is saved. Changes to your goal will not rewrite it; Reset to suggestion does." : "This plan is available in this tab, but browser storage failed. Back up your goals and plans before closing the tab.", !saved);
+  });
   els.workoutModal.addEventListener("click", (event) => {
     const action = event.target.closest("[data-action]")?.dataset.action;
     if (!["previous-run", "next-run"].includes(action)) return;
@@ -538,7 +622,7 @@ function initializeExperience() {
   document.querySelector("#copyPlanButton").addEventListener("click", (event) => {
     const plan = acceptedPlans[planKey()]; if (!plan) return;
     event.stopImmediatePropagation();
-    navigator.clipboard.writeText(plan.sessions.map((session) => `${session.date}: ${session.title} · ${displayDistance(session.miles)} · ${session.status}`).join("\n")).then(() => setStatus("Saved plan copied."), () => setStatus("Clipboard unavailable. Your saved plan remains visible.", true));
+    navigator.clipboard.writeText(weekDates().map((date) => sessionOn(plan.sessions, date)).map((session) => `${dayLabel(session.date)}: ${session.title}${session.kind === "run" ? ` · ${displayDistance(session.miles)} · ${PLAN_STATUS_LABELS[session.status].toLowerCase()}` : ""}`).join("\n")).then(() => setStatus("Plan copied."), () => setStatus("Clipboard unavailable. Your plan remains visible.", true));
   }, true);
   document.querySelector("#backupContextButton").addEventListener("click", () => {
     const url = URL.createObjectURL(new Blob([JSON.stringify({ version: 1, coachingContext, acceptedPlans }, null, 2)], { type: "application/json" }));
@@ -571,7 +655,7 @@ function initializeExperience() {
   new MutationObserver(() => { if (unitQueued) return; unitQueued = true; queueMicrotask(() => { unitQueued = false; applyDisplayUnits(); applyDisplayUnits(els.workoutModalContent); }); }).observe(document.body, { childList: true, characterData: true, subtree: true });
 }
 function validPlans(plans) {
-  return plans && typeof plans === "object" && !Array.isArray(plans) && Object.entries(plans).every(([key, plan]) => /^\d{4}-\d{2}-\d{2}$/.test(key) && typeof plan?.savedAt === "string" && Number.isFinite(Date.parse(plan.savedAt)) && Array.isArray(plan.sessions) && plan.sessions.length <= 14 && plan.sessions.every((session) => session && typeof session.title === "string" && session.title.length <= 100 && /^\d{4}-\d{2}-\d{2}$/.test(session.date) && Number.isFinite(Date.parse(session.date)) && ["run", "rest"].includes(session.kind) && Number.isFinite(session.miles) && session.miles >= 0 && session.miles <= 500 && ["planned", "completed", "skipped"].includes(session.status)));
+  return plans && typeof plans === "object" && !Array.isArray(plans) && Object.entries(plans).every(([key, plan]) => /^\d{4}-\d{2}-\d{2}$/.test(key) && typeof plan?.savedAt === "string" && Number.isFinite(Date.parse(plan.savedAt)) && Array.isArray(plan.sessions) && plan.sessions.length <= 14 && plan.sessions.every((session) => session && typeof session.title === "string" && session.title.length <= 100 && /^\d{4}-\d{2}-\d{2}$/.test(session.date) && Number.isFinite(Date.parse(session.date)) && ["run", "rest"].includes(session.kind) && Number.isFinite(session.miles) && session.miles >= 0 && session.miles <= 500 && ["planned", "completed", "skipped"].includes(session.status) && (session.type === undefined || Object.hasOwn(TrainingCore.SESSION_TYPES, session.type))));
 }
 
 /* ---------- Installed app ---------- */

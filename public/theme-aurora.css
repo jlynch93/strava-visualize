@@ -226,8 +226,11 @@
   box-shadow: var(--shadow-sheet), 0 0 60px -20px rgba(167, 139, 250, 0.5);
 }
 :root[data-palette="aurora"] dialog::backdrop { background: rgba(5, 4, 15, 0.55); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+:root[data-palette="aurora"] .plan-day-open { border-radius: 14px; background: transparent; }
+:root[data-palette="aurora"] .plan-day-open:hover { background: rgba(255, 255, 255, 0.06); }
+:root[data-palette="aurora"] .plan-day-done:not([aria-pressed="true"]) { background: transparent; }
+:root[data-palette="aurora"] .plan-day-done[aria-pressed="true"] { border-color: var(--teal); background: var(--teal); color: #0b0718; }
 :root[data-palette="aurora"] .plan-draft { border-radius: var(--radius-panel); border: 1px solid rgba(167, 139, 250, 0.3); box-shadow: 0 0 60px -25px rgba(167, 139, 250, 0.7); }
-:root[data-palette="aurora"] .recommended-day { border-radius: 14px; }
 :root[data-palette="aurora"] .live-indicator::before { animation: aurora-pulse 2.4s ease-in-out infinite; }
 
 /* ---------- Entrance: each view's panels rise in ---------- */

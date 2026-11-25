@@ -31,7 +31,70 @@
   function mergeActivities(existing, incoming) {
     return [...new Map([...existing, ...incoming].map((run) => [String(run.id), run])).values()];
   }
-  const api = { dayKey, weekStart, rampRate, freshCheckin, mergeActivities };
+  /* ---------- Editing a planned week ---------- */
+
+  // The kinds of day a week can hold. Saved sessions keep their title and kind
+  // (older plans have no type), so the type is read back from the title.
+  const SESSION_TYPES = {
+    rest: { label: "Rest", title: "Rest / mobility", detail: "Leave room to recover", kind: "rest" },
+    easy: { label: "Easy", title: "Easy run", detail: "Conversational effort", kind: "run" },
+    steady: { label: "Steady", title: "Steady run", detail: "Comfortably moderate", kind: "run" },
+    quality: { label: "Quality", title: "Quality option", detail: "Intervals or tempo, if your check-in supports it", kind: "run" },
+    long: { label: "Long", title: "Long run", detail: "Easy pace, time on your feet", kind: "run" },
+    race: { label: "Race", title: "Race day", detail: "Race effort", kind: "run" }
+  };
+  function sessionType(session) {
+    if (session && Object.hasOwn(SESSION_TYPES, session.type)) return session.type;
+    if (!session || session.kind !== "run") return "rest";
+    const title = String(session.title || "");
+    if (/race/i.test(title)) return "race";
+    if (/long/i.test(title)) return "long";
+    if (/quality/i.test(title)) return "quality";
+    if (/steady/i.test(title)) return "steady";
+    return "easy";
+  }
+  // A new distance for a day that becomes a run: the week's typical run, so a
+  // rest day turned into a run does not start at zero.
+  function typicalRunMiles(sessions, except) {
+    const runs = sessions.filter((session) => session !== except && session.kind === "run" && sessionType(session) !== "race" && session.miles > 0);
+    return runs.length ? Number((runs.reduce((sum, session) => sum + session.miles, 0) / runs.length).toFixed(1)) : 3;
+  }
+  // Changing the type keeps the distance and status of a run that stays a run.
+  // A rest day has no distance, status or matched activity.
+  function retypeSession(session, type, sessions = []) {
+    const spec = SESSION_TYPES[type];
+    if (!spec) throw new Error(`Unknown session type: ${type}`);
+    const next = { ...session, type, title: spec.title, detail: spec.detail, kind: spec.kind };
+    if (spec.kind === "rest") Object.assign(next, { miles: 0, status: "planned", matchedId: "" });
+    else if (session.kind !== "run" || !(session.miles > 0)) next.miles = typicalRunMiles(sessions, session);
+    return next;
+  }
+  // Moving a day onto another swaps the two, so a week always has one session
+  // per day. Both lose a completed status and matched run: those belong to the
+  // date the run actually happened.
+  function moveSession(sessions, fromDate, toDate) {
+    if (fromDate === toDate) return sessions.map((session) => ({ ...session }));
+    return sessions.map((session) => {
+      if (session.date !== fromDate && session.date !== toDate) return { ...session };
+      const moved = { ...session, date: session.date === fromDate ? toDate : fromDate };
+      if (moved.status === "completed") moved.status = "planned";
+      moved.matchedId = "";
+      return moved;
+    }).sort((a, b) => a.date.localeCompare(b.date));
+  }
+  function setSessionMiles(session, miles) {
+    if (session.kind !== "run") return { ...session };
+    const value = Math.min(100, Math.max(0, Number(miles) || 0));
+    return { ...session, miles: Number(value.toFixed(2)) };
+  }
+  function weekTotals(sessions) {
+    const runs = sessions.filter((session) => session.kind === "run");
+    const done = runs.filter((session) => session.status === "completed");
+    const sum = (list) => Number(list.reduce((total, session) => total + (Number(session.miles) || 0), 0).toFixed(1));
+    return { miles: sum(runs), runs: runs.length, completedMiles: sum(done), completedRuns: done.length, skippedRuns: runs.filter((session) => session.status === "skipped").length };
+  }
+
+  const api = { dayKey, weekStart, rampRate, freshCheckin, mergeActivities, SESSION_TYPES, sessionType, retypeSession, moveSession, setSessionMiles, weekTotals };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.TrainingCore = api;
 })(typeof globalThis !== "undefined" ? globalThis : this);

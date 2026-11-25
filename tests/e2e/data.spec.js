@@ -90,9 +90,9 @@ test("a three-run draft protects the chosen long-run day before allocating other
     return renderRecommendedCalendar("maintain", { averageRunsPerWeek: 5, longRun: 12 }, 30, null);
   });
   expect(plan).toMatchObject({ plannedRuns: 3, maxRuns: 3, longRunDay: "Sun", longRunMiles: 10.5, hasRace: false });
-  await expect(page.locator("#recommendedCalendar [data-plan-kind='run']")).toHaveCount(3);
-  await expect(page.locator("#recommendedCalendar button").nth(6).locator("strong")).toHaveText("Long run");
-  await expect(page.locator("#recommendedCalendar button").nth(6).locator("small")).toHaveText("At or below 10.5 mi");
+  await expect(page.locator("#recommendedCalendar [data-kind='run']")).toHaveCount(3);
+  await expect(page.locator("#recommendedCalendar .plan-day").nth(6).locator("strong")).toHaveText("Long run");
+  await expect(page.locator("#recommendedCalendar .plan-day").nth(6).locator("small")).toHaveText("At or below 10.5 mi");
 });
 
 test("saved availability and a missed check-in constrain a manually selected build week", async ({ page }) => {
@@ -102,9 +102,9 @@ test("saved availability and a missed check-in constrain a manually selected bui
     return renderRecommendedCalendar("build", { averageRunsPerWeek: 5, longRun: 12 }, 30, null);
   });
   expect(plan).toMatchObject({ plannedRuns: 2, maxRuns: 3, longRunDay: null, longRunMiles: 0, availabilityLimited: true });
-  await expect(page.locator("#recommendedCalendar [data-plan-kind='run']")).toHaveCount(2);
+  await expect(page.locator("#recommendedCalendar [data-kind='run']")).toHaveCount(2);
   await expect(page.locator("#recommendedCalendar")).not.toContainText("Quality option");
-  await expect(page.locator("#recommendedCalendar button").nth(5).locator("strong")).toHaveText("Rest / unavailable");
+  await expect(page.locator("#recommendedCalendar .plan-day").nth(5).locator("strong")).toHaveText("Rest / unavailable");
 });
 
 test("a race reserves one of the limited run days and replaces the separate long run", async ({ page }) => {
@@ -113,13 +113,13 @@ test("a race reserves one of the limited run days and replaces the separate long
     coachingContext = { goal: { runDays: "3", longRunDay: "Sat", availability: "Mon Tue Thu Sat" }, checkin: {}, plan: {} };
     const summary = { averageRunsPerWeek: 5, longRun: 12 };
     renderRecommendedCalendar("maintain", summary, 30, null);
-    coachingContext.goal.raceDate = els.recommendedCalendar.querySelectorAll("button")[6].dataset.planDate;
+    coachingContext.goal.raceDate = els.recommendedCalendar.querySelectorAll(".plan-day")[6].dataset.date;
     return renderRecommendedCalendar("maintain", summary, 30, { label: "Sunday 10K" });
   });
   expect(plan).toMatchObject({ plannedRuns: 3, maxRuns: 3, hasRace: true, longRunDay: null });
-  await expect(page.locator("#recommendedCalendar [data-plan-kind='run']")).toHaveCount(3);
-  await expect(page.locator("#recommendedCalendar .race-day strong")).toHaveText("Race day");
-  await expect(page.locator("#recommendedCalendar .race-day small")).toContainText("Race date takes priority");
+  await expect(page.locator("#recommendedCalendar [data-kind='run']")).toHaveCount(3);
+  await expect(page.locator("#recommendedCalendar .plan-day.type-race strong")).toHaveText("Race day");
+  await expect(page.locator("#recommendedCalendar .plan-day.type-race small")).toContainText("Race date takes priority");
   await expect(page.locator("#recommendedCalendar")).not.toContainText("Long run");
   await expect(page.locator("#recommendedCalendar")).not.toContainText("Quality option");
 });
