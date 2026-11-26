@@ -258,6 +258,91 @@ function renderSyncInfo() {
   const connectParent = state.dataSource === "import" ? document.querySelector("#dataMenuActions") : document.querySelector(".header-actions .actions");
   if (els.connectButton.parentElement !== connectParent) connectParent.prepend(els.connectButton);
 }
+/* ---------- Workouts: structured sessions in the day editor ---------- */
+
+const NOTES_MAX = 2000;
+const WORKOUT_UNIT_LABELS = { mi: "mi", km: "km", m: "m", min: "min", s: "sec" };
+const HARD_INTENSITIES = new Set(["marathon", "threshold", "interval", "repetition"]);
+// The runner's training paces from their fitness estimate, or null without one.
+function workoutPaces() {
+  try { const vdot = fitnessModel()?.fitnessVdot; return vdot ? FitnessCore.trainingPaces(vdot) : null; } catch { return null; }
+}
+function unitSelect(field, value, units = TrainingCore.WORKOUT_UNITS) {
+  return `<select data-field="${field}" aria-label="Unit">${units.map((unit) => `<option value="${unit}"${unit === value ? " selected" : ""}>${WORKOUT_UNIT_LABELS[unit]}</option>`).join("")}</select>`;
+}
+function segmentRow(part, label, segment) {
+  return `<div class="workout-row workout-${part}" data-part="${part}"><span class="workout-row-label">${label}</span><input data-field="amount" type="number" inputmode="decimal" min="0" step="any" value="${segment ? segment.amount : ""}" placeholder="none" aria-label="${label} amount">${unitSelect("unit", segment?.unit || "mi")}</div>`;
+}
+function workoutEditorMarkup(session) {
+  const workout = TrainingCore.sanitizeWorkout(session.workout);
+  const paces = workoutPaces();
+  const templates = TrainingCore.WORKOUT_TEMPLATES.map((template) => `<button type="button" class="workout-template" data-template="${template.key}" title="${escapeHtml(template.text)}">${escapeHtml(template.label)}</button>`).join("");
+  let builder = "";
+  if (workout) {
+    const sets = workout.sets.map((set, index) => {
+      const pace = TrainingCore.workoutTargetPace(set.work.intensity, paces);
+      const target = pace ? `Target ${pace[0] === pace[1] ? formatPace(pace[0]) : `${formatPace(pace[0]).replace(/\/.*/, "")}–${formatPace(pace[1])}`}` : "Add runs with pace data for a target pace";
+      const recovery = set.recovery;
+      return `<div class="workout-set" data-part="set" data-index="${index}" role="group" aria-label="Set ${index + 1}">
+        <div class="workout-row"><input data-field="reps" type="number" inputmode="numeric" min="1" max="50" step="1" value="${set.reps}" aria-label="Repeats"><span aria-hidden="true">×</span><input data-field="amount" type="number" inputmode="decimal" min="0" step="any" value="${set.work.amount}" aria-label="Distance or time of each repeat">${unitSelect("unit", set.work.unit)}<span aria-hidden="true">@</span><select data-field="intensity" aria-label="Effort">${Object.entries(TrainingCore.WORKOUT_INTENSITIES).map(([value, label]) => `<option value="${value}"${value === set.work.intensity ? " selected" : ""}>${label}</option>`).join("")}</select></div>
+        <div class="workout-row"><span class="workout-row-label">Recovery</span><input data-field="recAmount" type="number" inputmode="decimal" min="0" step="any" value="${recovery ? recovery.amount : ""}" placeholder="none" aria-label="Recovery amount">${unitSelect("recUnit", recovery?.unit || "s")}<select data-field="recMode" aria-label="Recovery type">${TrainingCore.RECOVERY_MODES.map((mode) => `<option value="${mode}"${mode === recovery?.mode ? " selected" : ""}>${mode}</option>`).join("")}</select></div>
+        <p class="workout-target">${escapeHtml(target)}</p>
+        <button type="button" class="link-action workout-remove-set" data-workout="remove-set" data-index="${index}">Remove set ${index + 1}</button>
+      </div>`;
+    }).join("");
+    const total = TrainingCore.workoutMiles(workout, paces);
+    const differs = Math.abs(total - (Number(session.miles) || 0)) >= 0.05;
+    builder = `<p class="workout-summary">${escapeHtml(TrainingCore.workoutSummary(workout))}</p>
+      <div class="workout-builder">${segmentRow("warmup", "Warm-up", workout.warmup)}${sets}${segmentRow("cooldown", "Cool-down", workout.cooldown)}</div>
+      <p class="workout-total">Workout ≈ <strong>${escapeHtml(displayDistance(total))}</strong>${differs && total > 0 ? ` · <button type="button" class="link-action" data-workout="use-distance">Use as distance</button>` : ""}</p>
+      <p class="workout-actions"><button type="button" class="link-action" data-workout="add-set">Add a set</button> · <button type="button" class="link-action danger" data-workout="clear">Remove workout</button></p>`;
+  }
+  return `<fieldset class="day-editor-workout"><legend>Workout</legend>
+    <label for="dayWorkoutText">Describe it${workout ? " (replaces the workout below)" : ""}</label>
+    <div class="workout-describe"><input id="dayWorkoutText" type="text" autocomplete="off" maxlength="300" placeholder="4 x 1 mi threshold w/ 75 s jog"><button type="button" data-workout="parse">Build</button></div>
+    <p id="dayWorkoutHint" class="workout-hint" role="status"></p>
+    <div class="workout-templates" role="group" aria-label="Start from a template">${templates}</div>
+    ${builder}
+  </fieldset>`;
+}
+// Reads the builder back into a workout, or reports what is missing.
+function readWorkoutBuilder(container) {
+  const segment = (row, amountField, unitField) => {
+    const amount = Number(row.querySelector(`[data-field="${amountField}"]`).value);
+    return amount > 0 ? { amount, unit: row.querySelector(`[data-field="${unitField}"]`).value } : null;
+  };
+  const sets = [];
+  for (const row of container.querySelectorAll('[data-part="set"]')) {
+    const work = segment(row, "amount", "unit");
+    if (!work) return { error: "Each set needs a distance or time." };
+    const recovery = segment(row, "recAmount", "recUnit");
+    sets.push({ reps: Number(row.querySelector('[data-field="reps"]').value) || 1, work: { ...work, intensity: row.querySelector('[data-field="intensity"]').value }, recovery: recovery && { ...recovery, mode: row.querySelector('[data-field="recMode"]').value } });
+  }
+  return { workout: { warmup: segment(container.querySelector('[data-part="warmup"]'), "amount", "unit"), sets, cooldown: segment(container.querySelector('[data-part="cooldown"]'), "amount", "unit") } };
+}
+// Saves a workout on a day. The distance follows the workout while it matched
+// the old one (or there was none); a distance the runner set themselves stays.
+// An easy or steady day given a hard workout becomes a quality day.
+function setWorkout(session, raw) {
+  const paces = workoutPaces();
+  const workout = TrainingCore.sanitizeWorkout(raw);
+  const next = { ...session };
+  if (!workout) { delete next.workout; return next; }
+  const before = session.workout ? TrainingCore.workoutMiles(session.workout, paces) : null;
+  if (before === null || Math.abs(before - (Number(session.miles) || 0)) < 0.05) next.miles = TrainingCore.workoutMiles(workout, paces) || next.miles;
+  next.workout = workout;
+  const type = TrainingCore.sessionType(session);
+  if ((type === "easy" || type === "steady") && workout.sets.some((set) => HARD_INTENSITIES.has(set.work.intensity))) {
+    const spec = TrainingCore.SESSION_TYPES.quality;
+    Object.assign(next, { type: "quality", title: spec.title, detail: spec.detail });
+  }
+  return next;
+}
+// The line a workout or notes add to a day wherever the plan is shown as text.
+function sessionExtras(session) {
+  return [TrainingCore.workoutSummary(session.workout), session.notes ? `Notes: ${session.notes}` : ""].filter(Boolean);
+}
+
 /* ---------- The week board: one editable week, saved as you edit ---------- */
 
 const PLAN_STATUS_LABELS = { planned: "Planned", completed: "Done", skipped: "Skipped" };
@@ -323,9 +408,10 @@ function renderAcceptedPlan() {
     const run = session.kind === "run";
     const status = PLAN_STATUS_LABELS[session.status] || "Planned";
     const distance = run ? displayDistance(session.miles) : "Rest";
-    const label = `${dayLabel(date, { weekday: "long", month: "short", day: "numeric" })}: ${session.title}, ${distance}${run ? `, ${status.toLowerCase()}` : ""}. Edit`;
+    const workoutText = TrainingCore.workoutSummary(session.workout);
+    const label = `${dayLabel(date, { weekday: "long", month: "short", day: "numeric" })}: ${session.title}, ${distance}${workoutText ? `, ${workoutText}` : ""}${run ? `, ${status.toLowerCase()}` : ""}${session.notes ? ", has notes" : ""}. Edit`;
     return `<li class="plan-day type-${type} status-${escapeHtml(session.status)}${date === today ? " is-today" : ""}" data-date="${date}" data-kind="${run ? "run" : "rest"}" draggable="true">
-      <button type="button" class="plan-day-open" data-action="edit-day" aria-label="${escapeHtml(label)}"><span class="plan-day-name">${escapeHtml(dayLabel(date, { weekday: "short" }))}</span><time datetime="${date}">${escapeHtml(dayLabel(date, { month: "short", day: "numeric" }))}</time><strong>${escapeHtml(session.title)}</strong><span class="plan-day-distance">${escapeHtml(distance)}</span><small>${escapeHtml(session.detail || "")}</small></button>
+      <button type="button" class="plan-day-open" data-action="edit-day" aria-label="${escapeHtml(label)}"><span class="plan-day-name">${escapeHtml(dayLabel(date, { weekday: "short" }))}</span><time datetime="${date}">${escapeHtml(dayLabel(date, { month: "short", day: "numeric" }))}</time><strong>${escapeHtml(session.title)}</strong><span class="plan-day-distance">${escapeHtml(distance)}</span><small${session.workout ? ' class="plan-day-workout"' : ""}>${escapeHtml(TrainingCore.workoutSummary(session.workout) || session.detail || "")}</small>${session.notes ? '<span class="plan-day-notes">Has notes</span>' : ""}</button>
       ${run ? `<button type="button" class="plan-day-done" data-action="toggle-done" aria-pressed="${session.status === "completed"}" aria-label="${escapeHtml(`${session.title} on ${dayLabel(date, { weekday: "long" })} done`)}">${session.status === "completed" ? "✓ Done" : session.status === "skipped" ? "Skipped" : "Mark done"}</button>` : ""}
     </li>`;
   }).join("")}</ol>`;
@@ -363,6 +449,8 @@ function renderDayEditor(date, focus) {
     ${run ? `<div class="day-editor-distance"><label for="dayMiles">Distance (${unit})</label><div class="stepper"><button type="button" data-step="-0.5" aria-label="0.5 ${unit} less">−</button><input id="dayMiles" type="number" inputmode="decimal" min="0" max="160" step="0.1" value="${shown}"><button type="button" data-step="0.5" aria-label="0.5 ${unit} more">+</button></div></div>
     <fieldset class="day-editor-status"><legend>Status</legend>${statuses}</fieldset>
     <label class="day-editor-match">Recorded run<select id="dayMatch"><option value="">${nearby.length ? "Match a run (optional)" : "No runs recorded near this day"}</option>${nearby.map((activity) => `<option value="${escapeHtml(String(activity.id))}"${String(activity.id) === session.matchedId ? " selected" : ""}>${escapeHtml(`${dayLabel(localDateValue(parseActivityDate(activity)))} · ${activity.name || "Run"} · ${displayDistance(miles(activity.distance))}`)}</option>`).join("")}</select></label>` : ""}
+    ${run ? workoutEditorMarkup(session) : ""}
+    <label class="day-editor-notes" for="dayNotes">Notes<textarea id="dayNotes" rows="3" maxlength="${NOTES_MAX}" placeholder="${run ? "How it felt, the route, what to focus on…" : "Mobility, cross-training, how you feel…"}">${escapeHtml(session.notes || "")}</textarea></label>
     <label class="day-editor-move">Move to another day<select id="dayMove"><option value="">Keep on ${escapeHtml(dayLabel(date, { weekday: "long" }))}</option>${moves}</select></label>`;
   if (focus) document.querySelector(`#dayEditorBody ${focus}`)?.focus();
 }
@@ -474,13 +562,46 @@ function setupWeekBoard() {
     else if (target.name === "dayStatus") { saved(replaceSession(dayEditorDate, (session) => ({ ...session, status: target.value, matchedId: target.value === "completed" ? session.matchedId : "" }))); renderDayEditor(dayEditorDate, `input[name=dayStatus][value="${target.value}"]`); }
     else if (target.id === "dayMiles") { saved(replaceSession(dayEditorDate, (session) => TrainingCore.setSessionMiles(session, Number(target.value) / (preferences.units === "metric" ? 1.609344 : 1)))); }
     else if (target.id === "dayMatch") { saved(replaceSession(dayEditorDate, (session) => ({ ...session, matchedId: target.value, status: target.value ? "completed" : session.status }))); renderDayEditor(dayEditorDate, "#dayMatch"); }
+    else if (target.id === "dayNotes") { saved(replaceSession(dayEditorDate, (session) => { const next = { ...session }; const notes = target.value.trim().slice(0, NOTES_MAX); if (notes) next.notes = notes; else delete next.notes; return next; })); }
+    else if (target.closest(".workout-builder")) {
+      const read = readWorkoutBuilder(target.closest(".workout-builder"));
+      if (read.error) { target.setAttribute("aria-invalid", "true"); dialog.querySelector("#dayWorkoutHint").textContent = read.error; return; }
+      const set = target.closest('[data-part="set"]');
+      const focus = `${set ? `[data-part="set"][data-index="${set.dataset.index}"]` : `[data-part="${target.closest("[data-part]").dataset.part}"]`} [data-field="${target.dataset.field}"]`;
+      saved(replaceSession(dayEditorDate, (session) => setWorkout(session, read.workout)));
+      renderDayEditor(dayEditorDate, focus);
+    }
     else if (target.id === "dayMove" && target.value) {
       const to = target.value;
       saved(editWeek((sessions) => TrainingCore.moveSession(sessions, dayEditorDate, to)));
       dayEditorDate = to; renderDayEditor(to, "#dayMove");
     }
   });
+  const buildFromText = (text, source) => {
+    const workout = TrainingCore.parseWorkout(text);
+    if (!workout) { dialog.querySelector("#dayWorkoutHint").textContent = "Couldn't read that. Try e.g. “2 mi warm-up, 4 x 1 mi threshold w/ 75 s jog, 2 mi cool-down”."; return; }
+    saved(replaceSession(dayEditorDate, (session) => setWorkout(session, workout)));
+    renderDayEditor(dayEditorDate, source);
+  };
+  dialog.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" && event.target.id === "dayWorkoutText") { event.preventDefault(); buildFromText(event.target.value, "#dayWorkoutText"); }
+  });
   dialog.addEventListener("click", (event) => {
+    const template = event.target.closest("[data-template]");
+    if (template) { buildFromText(TrainingCore.WORKOUT_TEMPLATES.find((item) => item.key === template.dataset.template)?.text, `[data-template="${template.dataset.template}"]`); return; }
+    const action = event.target.closest("[data-workout]")?.dataset.workout;
+    if (action === "parse") { buildFromText(dialog.querySelector("#dayWorkoutText").value, "#dayWorkoutText"); return; }
+    if (action) {
+      const session = sessionOn(weekSessions(), dayEditorDate);
+      const workout = TrainingCore.sanitizeWorkout(session.workout) || { warmup: null, sets: [], cooldown: null };
+      if (action === "add-set") { const last = workout.sets[workout.sets.length - 1]; workout.sets.push(last ? structuredClone(last) : { reps: 4, work: { amount: 1, unit: "mi", intensity: "threshold" }, recovery: { amount: 90, unit: "s", mode: "jog" } }); }
+      if (action === "remove-set") workout.sets.splice(Number(event.target.closest("[data-index]").dataset.index), 1);
+      if (action === "use-distance") saved(replaceSession(dayEditorDate, (current) => TrainingCore.setSessionMiles(current, TrainingCore.workoutMiles(current.workout, workoutPaces()))));
+      else saved(replaceSession(dayEditorDate, (current) => setWorkout(current, action === "clear" ? null : workout)));
+      const focus = { "add-set": `[data-part="set"][data-index="${workout.sets.length - 1}"] [data-field="reps"]`, "use-distance": "#dayMiles" }[action] || "#dayWorkoutText";
+      renderDayEditor(dayEditorDate, focus);
+      return;
+    }
     const step = event.target.closest("[data-step]");
     if (!step) return;
     const input = dialog.querySelector("#dayMiles");
@@ -720,7 +841,7 @@ function initializeExperience() {
   document.querySelector("#copyPlanButton").addEventListener("click", (event) => {
     const plan = acceptedPlans[planKey()]; if (!plan) return;
     event.stopImmediatePropagation();
-    navigator.clipboard.writeText(boardSessions(plan.sessions).map((session) => `${dayLabel(session.date)}: ${session.title}${session.kind === "run" ? ` · ${displayDistance(session.miles)} · ${PLAN_STATUS_LABELS[session.status].toLowerCase()}` : ""}${session.detail ? ` · ${session.detail}` : ""}`).join("\n")).then(() => setStatus("Plan copied."), () => setStatus("Clipboard unavailable. Your plan remains visible.", true));
+    navigator.clipboard.writeText(boardSessions(plan.sessions).map((session) => `${dayLabel(session.date)}: ${session.title}${session.kind === "run" ? ` · ${displayDistance(session.miles)} · ${PLAN_STATUS_LABELS[session.status].toLowerCase()}` : ""}${session.workout ? "" : session.detail ? ` · ${session.detail}` : ""}${sessionExtras(session).map((extra) => ` · ${extra}`).join("")}`).join("\n")).then(() => setStatus("Plan copied."), () => setStatus("Clipboard unavailable. Your plan remains visible.", true));
   }, true);
   document.querySelector("#backupContextButton").addEventListener("click", () => {
     const url = URL.createObjectURL(new Blob([JSON.stringify({ version: 1, coachingContext, acceptedPlans }, null, 2)], { type: "application/json" }));
@@ -753,7 +874,7 @@ function initializeExperience() {
   new MutationObserver(() => { if (unitQueued) return; unitQueued = true; queueMicrotask(() => { unitQueued = false; applyDisplayUnits(); applyDisplayUnits(els.workoutModalContent); }); }).observe(document.body, { childList: true, characterData: true, subtree: true });
 }
 function validPlans(plans) {
-  return plans && typeof plans === "object" && !Array.isArray(plans) && Object.entries(plans).every(([key, plan]) => /^\d{4}-\d{2}-\d{2}$/.test(key) && typeof plan?.savedAt === "string" && Number.isFinite(Date.parse(plan.savedAt)) && Array.isArray(plan.sessions) && plan.sessions.length <= 21 && plan.sessions.every((session) => session && typeof session.title === "string" && session.title.length <= 100 && /^\d{4}-\d{2}-\d{2}$/.test(session.date) && Number.isFinite(Date.parse(session.date)) && ["run", "rest"].includes(session.kind) && Number.isFinite(session.miles) && session.miles >= 0 && session.miles <= 500 && ["planned", "completed", "skipped"].includes(session.status) && (session.type === undefined || Object.hasOwn(TrainingCore.SESSION_TYPES, session.type))));
+  return plans && typeof plans === "object" && !Array.isArray(plans) && Object.entries(plans).every(([key, plan]) => /^\d{4}-\d{2}-\d{2}$/.test(key) && typeof plan?.savedAt === "string" && Number.isFinite(Date.parse(plan.savedAt)) && Array.isArray(plan.sessions) && plan.sessions.length <= 21 && plan.sessions.every((session) => session && typeof session.title === "string" && session.title.length <= 100 && /^\d{4}-\d{2}-\d{2}$/.test(session.date) && Number.isFinite(Date.parse(session.date)) && ["run", "rest"].includes(session.kind) && Number.isFinite(session.miles) && session.miles >= 0 && session.miles <= 500 && ["planned", "completed", "skipped"].includes(session.status) && (session.type === undefined || Object.hasOwn(TrainingCore.SESSION_TYPES, session.type)) && (session.workout === undefined || session.workout === null || (typeof session.workout === "object" && !Array.isArray(session.workout))) && (session.notes === undefined || (typeof session.notes === "string" && session.notes.length <= NOTES_MAX))));
 }
 
 /* ---------- Installed app ---------- */

@@ -416,7 +416,8 @@ body.is-loading .onboarding { display: none; }
 .plan-day.status-completed { background: oklch(23% .05 188); }
 .plan-day.status-skipped .plan-day-open strong, .plan-day.status-skipped .plan-day-distance { text-decoration: line-through; opacity: .65; }
 .plan-day-done { margin: 0 10px 12px; min-height: 36px; padding: 0 10px; border: 1px solid oklch(46% .02 210); border-radius: 5px; background: transparent; color: var(--board-ink); font-size: .75rem; font-weight: 650; }
-.plan-day-done:hover { border-color: var(--accent); }
+.plan-day-done:hover { border-color: var(--accent); background: transparent; }
+.plan-day-done[aria-pressed="true"]:hover { background: var(--teal); }
 .plan-day-done[aria-pressed="true"] { border-color: var(--teal); background: var(--teal); color: var(--board-ink); }
 .plan-day[draggable="true"] .plan-day-open { cursor: grab; }
 .plan-day.is-dragging { opacity: .45; }
@@ -454,6 +455,31 @@ body.is-loading .onboarding { display: none; }
 .stepper { display: grid; grid-template-columns: 48px minmax(0, 120px) 48px; gap: 8px; align-items: stretch; }
 .stepper button { min-height: 48px; padding: 0; border: 1px solid var(--rule); border-radius: 6px; background: var(--surface); color: var(--ink); font-size: 1.3rem; }
 .stepper input { min-height: 48px; text-align: center; font-size: 1.1rem; font-variant-numeric: tabular-nums; }
+.day-editor-workout { display: grid; gap: 10px; }
+.day-editor-workout > label, .day-editor-notes { color: var(--ink-soft); font-size: .8rem; font-weight: 650; }
+.day-editor-notes { display: grid; gap: 8px; margin: 0; }
+.day-editor-notes textarea { width: 100%; min-height: 72px; padding: 10px 12px; border: 1px solid var(--rule); border-radius: 6px; background: var(--surface); color: var(--ink); font: inherit; font-size: .9rem; font-weight: 400; resize: vertical; }
+.workout-describe { display: flex; gap: 8px; }
+.workout-describe input { flex: 1; min-width: 0; min-height: 44px; padding: 0 12px; }
+.workout-describe button { min-height: 44px; padding: 0 16px; border-radius: 6px; background: var(--ink); color: var(--surface); font-weight: 700; }
+.workout-hint { min-height: 0; margin: 0; color: var(--ink-soft); font-size: .8rem; }
+.workout-hint:empty { display: none; }
+.workout-templates { display: flex; flex-wrap: wrap; gap: 6px; }
+.workout-template { min-height: 36px; padding: 0 12px; border: 1px dashed var(--rule); border-radius: 999px; background: transparent; color: var(--ink); font-size: .82rem; font-weight: 600; }
+.workout-summary { margin: 4px 0 0; padding: 10px 12px; border-left: 3px solid var(--teal); border-radius: 4px; background: color-mix(in oklch, var(--teal) 10%, var(--surface)); font-weight: 650; font-size: .9rem; }
+.workout-builder { display: grid; gap: 8px; }
+.workout-set { display: grid; gap: 6px; padding: 10px; border: 1px solid var(--rule); border-radius: 8px; }
+.workout-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: .88rem; }
+.workout-row input[type="number"] { width: 4.6em; min-height: 40px; padding: 0 8px; }
+.workout-row select { min-height: 40px; }
+.workout-row-label { min-width: 5.2em; color: var(--ink-soft); font-size: .8rem; font-weight: 650; }
+.workout-row [aria-invalid="true"] { border-color: var(--red); }
+.workout-target { margin: 0; color: var(--ink-soft); font-size: .78rem; }
+.workout-set .workout-remove-set, .workout-actions .link-action, .workout-total .link-action { min-height: 32px; height: auto; margin: 0; padding: 0; font-size: .82rem; line-height: 1.2; }
+.workout-remove-set { justify-self: start; }
+.workout-total, .workout-actions { margin: 0; font-size: .86rem; }
+.plan-day small.plan-day-workout { color: var(--board-ink); font-weight: 600; }
+.plan-day-notes { color: oklch(81% .015 198); display: block; margin-top: 4px; font-size: .72rem; font-weight: 650; opacity: .75; }
 .day-editor-saved { min-height: 1.2em; margin: 0; color: var(--teal); font-size: .82rem; }
 .day-editor-done { justify-self: end; min-width: 120px; min-height: 44px; border-radius: 6px; background: var(--ink); color: var(--surface); font-weight: 700; }
 
@@ -475,6 +501,9 @@ body.is-loading .onboarding { display: none; }
   .plan-day strong { grid-column: 2; grid-row: 1 / 3; align-self: center; margin: 0; }
   /* The type and distance are what matter at a glance on a phone; the editor has the rest. */
   .plan-day small { display: none; }
+  /* A workout is worth the space; the generic detail is not. */
+  .plan-day small.plan-day-workout { display: block; grid-column: 2 / 4; grid-row: 3; margin-top: 4px; }
+  .plan-day-notes { grid-column: 1; grid-row: 3; align-self: start; margin-top: 4px; }
   .plan-day-distance { grid-column: 3; grid-row: 1 / 3; align-self: center; text-align: right; font-size: .95rem; }
   .plan-day.is-today .plan-day-name::after { content: ""; }
   .plan-day.is-today .plan-day-name { text-decoration: underline; text-underline-offset: 3px; }

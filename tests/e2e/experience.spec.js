@@ -165,6 +165,65 @@ test("rest days become runs, days swap, and statuses change from the board or th
   await page.reload(); await importHistory(page); await view(page, "Plan");
   await expect(page.locator(`.plan-day[data-date="${longDate}"] .plan-day-done`)).toHaveAttribute("aria-pressed", "true");
 });
+test("a day gets a structured workout from a description, a template or the builder, plus notes", async ({ page }) => {
+  await page.goto("/"); await importHistory(page); await view(page, "Plan");
+  const easy = dayCard(page, "Easy run");
+  const date = await easy.getAttribute("data-date");
+  const card = page.locator(`.plan-day[data-date="${date}"]`);
+  const saved = () => page.evaluate((day) => acceptedPlans[planKey()].sessions.find((session) => session.date === day), date);
+  await easy.locator(".plan-day-open").click();
+  // Described in plain words.
+  await editor(page).getByLabel("Describe it").fill("4 x 1 mile threshold with 75 sec jog recovery");
+  await editor(page).getByLabel("Describe it").press("Enter");
+  await expect(editor(page).locator(".workout-summary")).toHaveText("4 × 1 mi @ threshold, 75 s jog");
+  await expect(editor(page).locator("#dayEditorSaved")).toHaveText("Saved");
+  await expect(editor(page).getByRole("radio", { name: "Quality" })).toBeChecked();
+  await expect(editor(page).locator(".workout-target")).toHaveText(/^Target \d+:\d\d/);
+  expect((await saved()).workout.sets[0]).toEqual({ reps: 4, work: { amount: 1, unit: "mi", intensity: "threshold" }, recovery: { amount: 75, unit: "s", mode: "jog" } });
+  // A template replaces it, and the distance follows the workout.
+  await editor(page).getByRole("button", { name: "VO2 intervals" }).click();
+  await expect(editor(page).locator(".workout-summary")).toHaveText("2 mi warm-up · 6 × 800 m @ interval, 400 m jog · 2 mi cool-down");
+  await expect(editor(page).locator("#dayMiles")).toHaveValue("8.2");
+  // The builder edits a set; a distance the runner set themselves is kept.
+  await editor(page).locator("#dayMiles").fill("9"); await editor(page).locator("#dayMiles").press("Tab");
+  const set = editor(page).getByRole("group", { name: "Set 1" });
+  await set.getByLabel("Repeats").fill("8"); await set.getByLabel("Repeats").press("Tab");
+  await expect(editor(page).locator(".workout-summary")).toContainText("8 × 800 m @ interval");
+  await expect(editor(page).locator("#dayMiles")).toHaveValue("9.0");
+  await expect(editor(page).locator(".workout-total")).toContainText("9.7 mi");
+  await editor(page).getByRole("button", { name: "Use as distance" }).click();
+  await expect(editor(page).locator("#dayMiles")).toHaveValue("9.7");
+  await editor(page).getByRole("button", { name: "Add a set" }).click();
+  await expect(editor(page).getByRole("group", { name: "Set 2" })).toBeVisible();
+  await editor(page).getByRole("button", { name: "Remove set 2" }).click();
+  await expect(editor(page).getByRole("group", { name: "Set 2" })).toHaveCount(0);
+  // Text that can't be read leaves the workout alone.
+  await editor(page).getByLabel("Describe it").fill("feel good"); await editor(page).getByRole("button", { name: "Build" }).click();
+  await expect(editor(page).locator("#dayWorkoutHint")).toContainText("Couldn't read that");
+  await expect(editor(page).locator(".workout-summary")).toContainText("8 × 800 m");
+  // Notes.
+  await editor(page).getByLabel("Notes").fill("Track, lane 3. Shoes: racers.");
+  await editor(page).getByLabel("Notes").press("Tab");
+  await page.keyboard.press("Escape");
+  await expect(card.locator(".plan-day-workout")).toHaveText("2 mi warm-up · 8 × 800 m @ interval, 400 m jog · 2 mi cool-down");
+  await expect(card.locator(".plan-day-notes")).toHaveText("Has notes");
+  await expect(card.locator(".plan-day-open")).toHaveAttribute("aria-label", /8 × 800 m @ interval.*has notes/);
+  // Copy carries both; they survive a reload.
+  await page.context().grantPermissions(["clipboard-read", "clipboard-write"]).catch(() => {});
+  await page.evaluate(() => { window.copied = ""; navigator.clipboard.writeText = async (text) => { window.copied = text; }; });
+  await page.locator("#copyPlanButton").click();
+  await expect.poll(() => page.evaluate(() => window.copied)).toContain("8 × 800 m @ interval, 400 m jog · 2 mi cool-down · Notes: Track, lane 3. Shoes: racers.");
+  await page.reload(); await importHistory(page); await view(page, "Plan");
+  await expect(card.locator(".plan-day-workout")).toContainText("8 × 800 m");
+  expect((await saved()).notes).toBe("Track, lane 3. Shoes: racers.");
+  // A rest day drops the workout and keeps the notes.
+  await card.locator(".plan-day-open").click();
+  await editor(page).getByRole("radio", { name: "Rest" }).check();
+  await expect(editor(page).locator(".day-editor-workout")).toHaveCount(0);
+  await expect(editor(page).getByLabel("Notes")).toHaveValue("Track, lane 3. Shoes: racers.");
+  expect((await saved()).workout).toBeUndefined();
+});
+
 test("a plan saved before the board keeps a second session on one day through edits", async ({ page }) => {
   // The old editor's date picker could put two sessions on one date.
   await page.addInitScript(() => {

@@ -66,3 +66,13 @@ test("malformed saved data is skipped, never thrown", () => {
   assert.deepEqual(events.map((event) => event.summary), ["Easy run · 0.0 mi"]);
   assert.match(core.buildPlanCalendar({ plans: undefined, races: undefined }), /BEGIN:VCALENDAR[\s\S]*END:VCALENDAR/);
 });
+
+test("a day's workout and notes go in its description", () => {
+  const training = require("../public/training-core.js");
+  const workout = training.parseWorkout("4 x 1 mi threshold w/ 75 s jog");
+  const week = { "2026-11-23": { savedAt: "2026-11-20T00:00:00Z", sessions: [{ date: "2026-11-23", type: "quality", title: "Quality option", detail: "Intervals or tempo", kind: "run", miles: 4.4, status: "planned", workout, notes: "Hills, if windy" }] } };
+  const [event] = core.calendarEvents({ plans: week, since: "2026-11-01", describeWorkout: training.workoutSummary });
+  assert.equal(event.description, "4 × 1 mi @ threshold, 75 s jog\nNotes: Hills, if windy\nWeek of 2026-11-23");
+  // Without a describer the detail stays, and notes are still added.
+  assert.equal(core.calendarEvents({ plans: week, since: "2026-11-01", describeWorkout: null })[0].description, "Intervals or tempo\nNotes: Hills, if windy\nWeek of 2026-11-23");
+});
