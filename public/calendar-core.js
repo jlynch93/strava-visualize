@@ -46,7 +46,10 @@
   // Events for the saved weeks from `since` on, plus races from `since` on.
   // Rest days are left out: a calendar full of "Rest" is noise. A race day in
   // the plan is left out when the race itself is on the calendar that day.
-  function calendarEvents({ plans = {}, races = [], units = "imperial", since = "" } = {}) {
+  // A day's workout and notes go in the event's description. The workout text
+  // comes from TrainingCore.workoutSummary, passed in (the Worker) or global
+  // (the browser); without it, only notes are added.
+  function calendarEvents({ plans = {}, races = [], units = "imperial", since = "", describeWorkout = root.TrainingCore?.workoutSummary } = {}) {
     const events = [];
     const raceDates = new Set();
     for (const race of Array.isArray(races) ? races : []) {
@@ -77,14 +80,18 @@
           uid: `plan-${session.date}${count > 1 ? `-${count}` : ""}`,
           date: session.date,
           summary: `${done}${String(session.title || "Run").slice(0, 100)} · ${distanceText(session.miles, units)}${skipped}`,
-          description: [session.detail, `Week of ${week}`].filter(Boolean).join("\n")
+          description: [
+            (describeWorkout && session.workout && describeWorkout(session.workout)) || session.detail,
+            typeof session.notes === "string" && session.notes.trim() ? `Notes: ${session.notes.trim().slice(0, 2000)}` : "",
+            `Week of ${week}`
+          ].filter(Boolean).join("\n")
         });
       }
     }
     return events.sort((a, b) => a.date.localeCompare(b.date) || a.uid.localeCompare(b.uid));
   }
 
-  function buildPlanCalendar({ plans, races, units = "imperial", now = new Date(), since = "", name = "Runlore training plan", domain = "runlore.app" } = {}) {
+  function buildPlanCalendar({ plans, races, units = "imperial", now = new Date(), since = "", name = "Runlore training plan", domain = "runlore.app", describeWorkout } = {}) {
     const lines = [
       "BEGIN:VCALENDAR",
       "VERSION:2.0",
@@ -99,7 +106,7 @@
       "X-PUBLISHED-TTL:PT1H"
     ];
     const dtstamp = stamp(now);
-    for (const event of calendarEvents({ plans, races, units, since })) {
+    for (const event of calendarEvents({ plans, races, units, since, ...(describeWorkout ? { describeWorkout } : {}) })) {
       lines.push(
         "BEGIN:VEVENT",
         `UID:${event.uid}@${domain}`,

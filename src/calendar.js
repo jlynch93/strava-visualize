@@ -6,6 +6,7 @@ import { isMissingTable, requireDb } from "./db.js";
 import { requireUser } from "./auth.js";
 import { decryptSecret, encryptSecret, randomToken, sha256 } from "./crypto.js";
 import CalendarCore from "../public/calendar-core.js";
+import TrainingCore from "../public/training-core.js";
 
 const FEED_PATH = "/api/calendar/feed/";
 // Weeks before this many days ago are left off the feed: old weeks only clutter
@@ -93,7 +94,8 @@ export async function handleCalendarFeed(env, request, token) {
     races: state["run-trends-coaching-context-v1"]?.races || [],
     units: state["run-trends-preferences"]?.units === "metric" ? "metric" : "imperial",
     since,
-    domain: new URL(feedUrl(env, request, token)).hostname
+    domain: new URL(feedUrl(env, request, token)).hostname,
+    describeWorkout: TrainingCore.workoutSummary
   });
   return new Response(request.method === "HEAD" ? null : body, {
     headers: {

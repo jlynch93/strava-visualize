@@ -314,6 +314,20 @@ date it was run. Rest days never complete automatically. Returning to Plan opens
 the current week's plan when one exists, previous/next week controls reopen saved
 plans, and Copy copies the week shown.
 
+**Workouts and notes.** A run day can hold a structured workout. Type it the
+way you'd say it, such as `2 mi warm-up, 4 x 1 mile threshold with 75 sec jog
+recovery, 2 mi cool-down`, `6x800m @ interval, 400m jog` or `10 x 1:30 hard w/
+1:00 walk`, or start from a template (threshold repeats, tempo, VO2 intervals,
+marathon pace, easy + strides). Then adjust it in the builder: warm-up, sets of
+repeats (distance or time, at easy, marathon, threshold, interval or repetition
+effort), recovery (jog, walk or standing rest) and cool-down. Each set shows a
+target pace from your fitness estimate. The workout's distance is estimated, with
+timed parts converted at their pace, and the day's distance follows it until you
+set a distance yourself (**Use as distance** brings it back). An easy or steady
+day given a hard workout becomes a quality day; a day turned into rest drops its
+workout. Any day can have free-text notes. The board, Copy and the calendar feed
+all show the workout and notes.
+
 **Calendar** (in Plan) puts the plan in Apple Calendar, Google Calendar,
 Outlook or any app that subscribes to a URL. Signed in, **Create calendar
 link** makes a secret link (`/api/calendar/feed/<token>.ics`) that serves the

@@ -103,3 +103,56 @@ test("a race day takes the race's own distance when it is known", () => {
   assert.equal(core.retypeSession(easy, "race", sessions, { race: { distance: "Other" } }).miles, 4, "an unknown distance keeps the run's own");
   assert.equal(core.retypeSession(sessions[0], "race", sessions).miles, 6.7, "no race that day: the week's typical run");
 });
+
+test("a plain workout description becomes warm-up, sets and cool-down", () => {
+  const workout = core.parseWorkout("2 mi warm up, 4 x 1 mile threshold with 75 sec jog recovery, 2 mi cool down");
+  assert.deepEqual(workout, {
+    warmup: { amount: 2, unit: "mi" },
+    sets: [{ reps: 4, work: { amount: 1, unit: "mi", intensity: "threshold" }, recovery: { amount: 75, unit: "s", mode: "jog" } }],
+    cooldown: { amount: 2, unit: "mi" }
+  });
+  assert.equal(core.workoutSummary(workout), "2 mi warm-up · 4 × 1 mi @ threshold, 75 s jog · 2 mi cool-down");
+});
+
+test("the parser reads shorthand, times, recovery modes and intensity words", () => {
+  const summary = (text) => core.workoutSummary(core.parseWorkout(text));
+  assert.equal(summary("6x800m @ interval, 400m jog"), "6 × 800 m @ interval, 400 m jog");
+  assert.equal(summary("20 min tempo"), "20 min @ threshold");
+  assert.equal(summary("10 x 1:30 hard w/ 1:00 walk"), "10 × 90 s @ interval, 60 s walk");
+  assert.equal(summary("WU 15 min; 3 x 2 km marathon pace with 2 min rest; CD 10 min"), "15 min warm-up · 3 × 2 km @ marathon pace, 2 min rest · 10 min cool-down");
+  assert.equal(core.parseWorkout("hello there"), null);
+  assert.equal(core.parseWorkout(""), null);
+  for (const template of core.WORKOUT_TEMPLATES) assert.ok(core.parseWorkout(template.text), template.key);
+});
+
+test("saved workouts are rebuilt from known fields only", () => {
+  assert.equal(core.sanitizeWorkout(null), null);
+  assert.equal(core.sanitizeWorkout({ sets: [{ reps: 3, work: { amount: -1, unit: "mi" } }] }), null);
+  const cleaned = core.sanitizeWorkout({
+    warmup: { amount: 1, unit: "furlong" },
+    sets: [{ reps: 500, work: { amount: 400, unit: "m", intensity: "<script>" }, recovery: { amount: 1, unit: "min", mode: "nap" }, extra: "x" }],
+    cooldown: null,
+    html: "<img>"
+  });
+  assert.deepEqual(cleaned, { warmup: null, sets: [{ reps: 50, work: { amount: 400, unit: "m", intensity: "threshold" }, recovery: { amount: 1, unit: "min", mode: "jog" } }], cooldown: null });
+});
+
+test("workout distance converts timed parts at pace and skips standing rest and the last recovery", () => {
+  // 4 x 1 mi plus three 400 m jogs.
+  assert.equal(core.workoutMiles({ sets: [{ reps: 4, work: { amount: 1, unit: "mi", intensity: "threshold" }, recovery: { amount: 400, unit: "m", mode: "jog" } }] }), 4.7);
+  assert.equal(core.workoutMiles({ sets: [{ reps: 4, work: { amount: 1, unit: "mi", intensity: "threshold" }, recovery: { amount: 2, unit: "min", mode: "rest" } }] }), 4);
+  // 20 min at a 6:40/mi threshold pace is 3 miles.
+  const paces = { threshold: [400 / 1609.344, 400 / 1609.344] };
+  assert.equal(core.workoutMiles({ sets: [{ reps: 1, work: { amount: 20, unit: "min", intensity: "threshold" } }] }, paces), 3);
+  assert.deepEqual(core.workoutTargetPace("threshold", paces), [400, 400]);
+  assert.equal(core.workoutTargetPace("threshold", null), null);
+  assert.equal(core.workoutMiles(null), 0);
+});
+
+test("a rest day drops its workout and keeps its notes", () => {
+  const session = { date: "2026-11-23", type: "quality", title: "Quality option", kind: "run", miles: 5, status: "planned", matchedId: "", notes: "Legs heavy", workout: core.parseWorkout("20 min tempo") };
+  const rest = core.retypeSession(session, "rest");
+  assert.equal(rest.workout, undefined);
+  assert.equal(rest.notes, "Legs heavy");
+  assert.deepEqual(core.retypeSession(session, "long").workout, session.workout);
+});

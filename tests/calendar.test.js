@@ -69,9 +69,12 @@ test("a signed-in runner gets one calendar link that serves their saved plan and
 
   // Edits on the site show up in the same feed.
   await worker.fetch(request("/api/state/run-trends-plans-v1", { cookie: session, method: "PUT", body: JSON.stringify({ [week]: { savedAt: new Date().toISOString(), sessions: [
-    { date: week, type: "easy", title: "Easy run", detail: "", kind: "run", miles: 4, status: "planned", matchedId: "" }
+    { date: week, type: "quality", title: "Quality option", detail: "", kind: "run", miles: 8.4, status: "planned", matchedId: "", notes: "Track, lane 3",
+      workout: { warmup: { amount: 2, unit: "mi" }, sets: [{ reps: 4, work: { amount: 1, unit: "mi", intensity: "threshold" }, recovery: { amount: 75, unit: "s", mode: "jog" } }], cooldown: { amount: 2, unit: "mi" } } }
   ] } }) }), testEnv);
-  assert.match(await (await worker.fetch(request(feedPath(url)), testEnv)).text(), /SUMMARY:Easy run · 6\.4 km/);
+  const edited = (await (await worker.fetch(request(feedPath(url)), testEnv)).text()).replace(/\r\n /g, "");
+  assert.match(edited, /SUMMARY:Quality option · 13\.5 km/);
+  assert.match(edited, /DESCRIPTION:2 mi warm-up · 4 × 1 mi @ threshold\\, 75 s jog · 2 mi cool-down\\nNotes: Track\\, lane 3\\n/, "the workout and notes are in the event");
 });
 
 test("a new link retires the old one, stopping removes it, and unknown links are not found", async (t) => {
